@@ -11,6 +11,11 @@ const sessionSchema = new mongoose.Schema({
     required: true,
     unique: true
   },
+  refreshTokenHash: {
+    type: String,
+    unique: true,
+    sparse: true
+  },
   userAgent: String,
   ipAddress: String,
   expiresAt: {
@@ -27,5 +32,7 @@ const sessionSchema = new mongoose.Schema({
 
 // Auto-delete expired sessions
 sessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+// Index for hash-based lookup
+sessionSchema.index({ refreshTokenHash: 1, isRevoked: 1, expiresAt: 1 });
 
 export default mongoose.model('Session', sessionSchema);
