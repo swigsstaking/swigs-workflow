@@ -39,6 +39,33 @@ export const useAuthStore = create(
         }
       },
 
+      // Exchange auth code for tokens (new secure flow)
+      exchangeAuthCode: async (authCode) => {
+        set({ isLoading: true });
+        try {
+          const response = await api.post('/auth/exchange', { authCode });
+          const { accessToken, refreshToken, user } = response.data;
+
+          set((state) => ({
+            user,
+            accessToken,
+            refreshToken,
+            isAuthenticated: true,
+            isLoading: false,
+            sessionVersion: state.sessionVersion + 1
+          }));
+
+          return { success: true, user };
+        } catch (error) {
+          console.error('Auth code exchange failed:', error);
+          set({ isLoading: false });
+          return {
+            success: false,
+            error: error.response?.data?.error || 'Echange du code echoue'
+          };
+        }
+      },
+
       // Rafraichir le token
       refreshAccessToken: async () => {
         const { refreshToken } = get();
@@ -46,9 +73,14 @@ export const useAuthStore = create(
 
         try {
           const response = await api.post('/auth/refresh', { refreshToken });
-          const { accessToken, user } = response.data;
+          const { accessToken, refreshToken: newRefreshToken, user } = response.data;
 
-          set({ accessToken, user });
+          // Store new refresh token from rotation
+          set({
+            accessToken,
+            user,
+            ...(newRefreshToken ? { refreshToken: newRefreshToken } : {})
+          });
           return true;
         } catch (error) {
           console.error('Token refresh failed:', error);

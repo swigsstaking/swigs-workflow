@@ -8,26 +8,67 @@ import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 export default function SsoHandler() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { verifySsoToken, logout } = useAuthStore();
+  const { verifySsoToken, exchangeAuthCode, logout } = useAuthStore();
   const { fetchProjects, fetchStatuses } = useProjectStore();
   const { fetchSettings } = useSettingsStore();
   const [status, setStatus] = useState('checking'); // checking, verifying, loading, success, error
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    const authCode = searchParams.get('auth_code');
     const ssoToken = searchParams.get('sso_token');
 
-    if (!ssoToken) {
+    if (authCode) {
+      // New secure flow: auth code exchange
+      setSearchParams({}, { replace: true });
+      handleAuthCodeExchange(authCode);
+    } else if (ssoToken) {
+      // Legacy flow: SSO token verification
+      setSearchParams({}, { replace: true });
+      handleSsoVerify(ssoToken);
+    } else {
       setStatus('none');
-      return;
     }
-
-    // Supprimer le token de l'URL pour eviter les replays
-    setSearchParams({}, { replace: true });
-
-    // Verifier le token
-    handleSsoVerify(ssoToken);
   }, []);
+
+  const handleAuthCodeExchange = async (authCode) => {
+    setStatus('verifying');
+    await logout();
+
+    const result = await exchangeAuthCode(authCode);
+    await handleAuthResult(result);
+  };
+
+  const handleAuthResult = async (result) => {
+    if (result.success) {
+      setStatus('loading');
+
+      try {
+        await Promise.all([
+          fetchStatuses(),
+          fetchSettings(),
+          fetchProjects()
+        ]);
+
+        setStatus('success');
+
+        setTimeout(() => {
+          setStatus('none');
+          navigate('/', { replace: true });
+        }, 800);
+      } catch (loadError) {
+        console.error('Error loading data after auth:', loadError);
+        setStatus('success');
+        setTimeout(() => {
+          setStatus('none');
+          navigate('/', { replace: true });
+        }, 800);
+      }
+    } else {
+      setStatus('error');
+      setError(result.error);
+    }
+  };
 
   const handleSsoVerify = async (token) => {
     setStatus('verifying');
@@ -37,40 +78,7 @@ export default function SsoHandler() {
     await logout();
 
     const result = await verifySsoToken(token);
-
-    if (result.success) {
-      // Token verifie, maintenant charger les donnees
-      setStatus('loading');
-
-      try {
-        // Charger les donnees en parallele
-        await Promise.all([
-          fetchStatuses(),
-          fetchSettings(),
-          fetchProjects()
-        ]);
-
-        setStatus('success');
-
-        // Rediriger sans recharger la page et cacher le modal
-        setTimeout(() => {
-          setStatus('none'); // Cacher le modal
-          navigate('/', { replace: true });
-        }, 800);
-      } catch (loadError) {
-        console.error('Error loading data after SSO:', loadError);
-        // Meme si le chargement echoue, l'utilisateur est connecte
-        // Les donnees se chargeront au prochain render
-        setStatus('success');
-        setTimeout(() => {
-          setStatus('none'); // Cacher le modal
-          navigate('/', { replace: true });
-        }, 800);
-      }
-    } else {
-      setStatus('error');
-      setError(result.error);
-    }
+    await handleAuthResult(result);
   };
 
   // Ne rien afficher si pas de token SSO
