@@ -207,6 +207,40 @@ const executeSendEmail = async (run, config) => {
 };
 
 /**
+ * Check if a URL targets a private/internal network (SSRF protection)
+ */
+const isUrlAllowed = (urlString) => {
+  try {
+    const parsed = new URL(urlString);
+    const hostname = parsed.hostname.toLowerCase();
+
+    // Block non-http(s) schemes
+    if (!['http:', 'https:'].includes(parsed.protocol)) return false;
+
+    // Block localhost
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') return false;
+
+    // Block .internal / .local domains
+    if (hostname.endsWith('.internal') || hostname.endsWith('.local')) return false;
+
+    // Block private IPs (10.x, 172.16-31.x, 192.168.x, 169.254.x link-local)
+    const parts = hostname.split('.');
+    if (parts.length === 4 && parts.every(p => /^\d+$/.test(p))) {
+      const [a, b] = parts.map(Number);
+      if (a === 10) return false;
+      if (a === 172 && b >= 16 && b <= 31) return false;
+      if (a === 192 && b === 168) return false;
+      if (a === 169 && b === 254) return false;
+      if (a === 0) return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
  * Execute webhook action
  */
 const executeWebhook = async (run, config) => {
@@ -216,18 +250,31 @@ const executeWebhook = async (run, config) => {
     throw new Error('Webhook URL is required');
   }
 
-  const response = await fetch(webhookUrl, {
-    method: webhookMethod,
-    headers: { 'Content-Type': 'application/json' },
-    body: webhookMethod === 'POST' ? JSON.stringify(run.context) : undefined
-  });
+  if (!isUrlAllowed(webhookUrl)) {
+    throw new Error('Webhook URL targets a disallowed address');
+  }
 
-  return {
-    webhookCalled: true,
-    url: webhookUrl,
-    status: response.status,
-    ok: response.ok
-  };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+
+  try {
+    const response = await fetch(webhookUrl, {
+      method: webhookMethod,
+      headers: { 'Content-Type': 'application/json' },
+      body: webhookMethod === 'POST' ? JSON.stringify(run.context) : undefined,
+      signal: controller.signal,
+      redirect: 'error'
+    });
+
+    return {
+      webhookCalled: true,
+      url: webhookUrl,
+      status: response.status,
+      ok: response.ok
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
 };
 
 /**

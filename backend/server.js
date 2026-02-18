@@ -136,8 +136,8 @@ app.use(compression({
 }));
 
 // Body parsing with size limits
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 // =============================================================================
 // REQUEST LOGGING (Development only)
@@ -280,8 +280,5 @@ mongoose.connect(process.env.MONGODB_URI, mongoOptions)
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err) => {
   console.error('Unhandled Promise Rejection:', err);
-  // Don't exit in production, just log
-  if (process.env.NODE_ENV !== 'production') {
-    process.exit(1);
-  }
+  process.exit(1);
 });

@@ -10,12 +10,18 @@ export const getSettings = async (req, res, next) => {
     const settings = await Settings.getSettings(userId);
     const settingsObj = settings.toObject ? settings.toObject() : { ...settings };
 
-    // Decrypt secrets before sending to frontend
-    if (settingsObj.smtp?.pass) {
-      settingsObj.smtp.pass = decrypt(settingsObj.smtp.pass);
+    // Strip secrets from response, add boolean indicators instead
+    if (settingsObj.smtp) {
+      settingsObj.smtp._hasPass = !!settingsObj.smtp.pass;
+      delete settingsObj.smtp.pass;
     }
-    if (settingsObj.abaninja?.apiKey) {
-      settingsObj.abaninja.apiKey = decrypt(settingsObj.abaninja.apiKey);
+    if (settingsObj.abaninja) {
+      settingsObj.abaninja._hasApiKey = !!settingsObj.abaninja.apiKey;
+      delete settingsObj.abaninja.apiKey;
+    }
+    if (settingsObj.cmsIntegration) {
+      settingsObj.cmsIntegration._hasServiceToken = !!settingsObj.cmsIntegration.serviceToken;
+      delete settingsObj.cmsIntegration.serviceToken;
     }
 
     res.json({ success: true, data: settingsObj });
@@ -28,7 +34,7 @@ export const getSettings = async (req, res, next) => {
 // @route   PUT /api/settings
 export const updateSettings = async (req, res, next) => {
   try {
-    const { company, invoicing, personalization, emailTemplates, smtp, abaninja, reminders, cms } = req.body;
+    const { company, invoicing, personalization, emailTemplates, smtp, abaninja, reminders, cms, cmsIntegration } = req.body;
 
     const userId = req.user?._id || null;
     const query = userId ? { userId } : { userId: { $exists: false } };
@@ -57,8 +63,10 @@ export const updateSettings = async (req, res, next) => {
 
     if (smtp) {
       const smtpData = { ...(settings.smtp?.toObject ? settings.smtp.toObject() : {}), ...smtp };
-      // Encrypt SMTP password before saving
-      if (smtpData.pass) {
+      // If pass is empty/absent, keep existing encrypted value
+      if (!smtpData.pass || smtpData.pass === '') {
+        smtpData.pass = settings.smtp?.pass || '';
+      } else {
         smtpData.pass = encrypt(smtpData.pass);
       }
       settings.smtp = smtpData;
@@ -66,8 +74,10 @@ export const updateSettings = async (req, res, next) => {
 
     if (abaninja) {
       const abData = { ...(settings.abaninja?.toObject ? settings.abaninja.toObject() : {}), ...abaninja };
-      // Encrypt API key before saving
-      if (abData.apiKey) {
+      // If apiKey is empty/absent, keep existing encrypted value
+      if (!abData.apiKey || abData.apiKey === '') {
+        abData.apiKey = settings.abaninja?.apiKey || '';
+      } else {
         abData.apiKey = encrypt(abData.apiKey);
       }
       settings.abaninja = abData;
@@ -77,8 +87,17 @@ export const updateSettings = async (req, res, next) => {
       settings.reminders = { ...(settings.reminders?.toObject ? settings.reminders.toObject() : {}), ...reminders };
     }
 
-    if (cms) {
-      settings.cms = { ...(settings.cms?.toObject ? settings.cms.toObject() : {}), ...cms };
+    // Support both `cms` and `cmsIntegration` keys from frontend
+    const cmsPayload = cmsIntegration || cms;
+    if (cmsPayload) {
+      const cmsData = { ...(settings.cmsIntegration?.toObject ? settings.cmsIntegration.toObject() : {}), ...cmsPayload };
+      // If serviceToken is empty/absent, keep existing value
+      if (!cmsData.serviceToken || cmsData.serviceToken === '') {
+        cmsData.serviceToken = settings.cmsIntegration?.serviceToken || '';
+      } else {
+        cmsData.serviceToken = encrypt(cmsData.serviceToken);
+      }
+      settings.cmsIntegration = cmsData;
     }
 
     await settings.save();

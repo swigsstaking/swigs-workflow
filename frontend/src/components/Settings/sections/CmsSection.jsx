@@ -18,12 +18,14 @@ export default function CmsSection({ settings, onSettingsUpdate }) {
   const [testResult, setTestResult] = useState(null);
   const { addToast } = useToastStore();
 
+  const hasServiceToken = settings?.cmsIntegration?._hasServiceToken || false;
+
   useEffect(() => {
     if (settings?.cmsIntegration) {
       setFormData({
         enabled: settings.cmsIntegration.enabled || false,
         apiUrl: settings.cmsIntegration.apiUrl || '',
-        serviceToken: settings.cmsIntegration.serviceToken || '',
+        serviceToken: '',
         pollInterval: settings.cmsIntegration.pollInterval || 60000
       });
       setHasChanges(false);
@@ -36,7 +38,7 @@ export default function CmsSection({ settings, onSettingsUpdate }) {
   };
 
   const handleTestCmsConnection = async () => {
-    if (!formData.apiUrl || !formData.serviceToken) {
+    if (!formData.apiUrl || (!formData.serviceToken && !hasServiceToken)) {
       setTestResult({ success: false, message: 'URL et token requis' });
       return;
     }
@@ -75,7 +77,9 @@ export default function CmsSection({ settings, onSettingsUpdate }) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const { data } = await settingsApi.update({ cmsIntegration: formData });
+      const payload = { ...formData };
+      if (!payload.serviceToken) delete payload.serviceToken;
+      const { data } = await settingsApi.update({ cmsIntegration: payload });
       onSettingsUpdate(data.data);
       setHasChanges(false);
       addToast({ type: 'success', message: 'Configuration CMS enregistrée avec succès' });
@@ -142,11 +146,16 @@ export default function CmsSection({ settings, onSettingsUpdate }) {
             type="password"
             value={formData.serviceToken}
             onChange={(e) => updateField('serviceToken', e.target.value)}
+            placeholder={hasServiceToken ? 'Laisser vide pour conserver' : 'Token de service CMS'}
             className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-dark-card text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 focus:border-transparent outline-none transition-colors"
           />
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            Générez un token via POST /api/auth/generate-token sur le CMS
-          </p>
+          {hasServiceToken && !formData.serviceToken ? (
+            <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">Token de service configuré</p>
+          ) : (
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              Générez un token via POST /api/auth/generate-token sur le CMS
+            </p>
+          )}
         </div>
 
         <div>
@@ -175,7 +184,7 @@ export default function CmsSection({ settings, onSettingsUpdate }) {
             variant="secondary"
             onClick={handleTestCmsConnection}
             loading={testing}
-            disabled={!formData.apiUrl || !formData.serviceToken}
+            disabled={!formData.apiUrl || (!formData.serviceToken && !hasServiceToken)}
           >
             Tester la connexion
           </Button>

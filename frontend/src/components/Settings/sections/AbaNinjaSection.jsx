@@ -20,11 +20,13 @@ export default function AbaNinjaSection({ settings, onSettingsUpdate }) {
   const [testResult, setTestResult] = useState(null);
   const { addToast } = useToastStore();
 
+  const hasApiKey = settings?.abaninja?._hasApiKey || false;
+
   useEffect(() => {
     if (settings?.abaninja) {
       setFormData({
         enabled: settings.abaninja.enabled || false,
-        apiKey: settings.abaninja.apiKey || '',
+        apiKey: '',
         autoSync: settings.abaninja.autoSync || false,
         syncInvoices: settings.abaninja.syncInvoices !== false,
         syncQuotes: settings.abaninja.syncQuotes !== false,
@@ -87,7 +89,9 @@ export default function AbaNinjaSection({ settings, onSettingsUpdate }) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const { data } = await settingsApi.update({ abaninja: formData });
+      const payload = { ...formData };
+      if (!payload.apiKey) delete payload.apiKey;
+      const { data } = await settingsApi.update({ abaninja: payload });
       onSettingsUpdate(data.data);
       setHasChanges(false);
       addToast({ type: 'success', message: 'Configuration AbaNinja enregistrée avec succès' });
@@ -147,9 +151,12 @@ export default function AbaNinjaSection({ settings, onSettingsUpdate }) {
             type="password"
             value={formData.apiKey}
             onChange={(e) => updateField('apiKey', e.target.value)}
-            placeholder="Votre clé API AbaNinja"
+            placeholder={hasApiKey ? 'Laisser vide pour conserver' : 'Votre clé API AbaNinja'}
             className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-dark-card text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 focus:border-transparent outline-none transition-colors"
           />
+          {hasApiKey && !formData.apiKey && (
+            <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">Clé API configurée</p>
+          )}
         </div>
 
         {/* Sync Options */}
@@ -213,7 +220,7 @@ export default function AbaNinjaSection({ settings, onSettingsUpdate }) {
             variant="secondary"
             onClick={handleTestAbaNinja}
             loading={testing}
-            disabled={!formData.apiKey}
+            disabled={!formData.apiKey && !hasApiKey}
           >
             Tester la connexion
           </Button>
@@ -250,7 +257,7 @@ export default function AbaNinjaSection({ settings, onSettingsUpdate }) {
               icon={RefreshCw}
               onClick={handleSyncAll}
               loading={syncing}
-              disabled={!formData.apiKey}
+              disabled={!formData.apiKey && !hasApiKey}
             >
               Synchroniser
             </Button>

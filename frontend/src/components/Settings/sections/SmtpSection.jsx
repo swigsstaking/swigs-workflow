@@ -17,6 +17,8 @@ export default function SmtpSection({ settings, onSettingsUpdate }) {
   const [saving, setSaving] = useState(false);
   const { addToast } = useToastStore();
 
+  const hasPassword = settings?.smtp?._hasPass || false;
+
   useEffect(() => {
     if (settings?.smtp) {
       setFormData({
@@ -24,7 +26,7 @@ export default function SmtpSection({ settings, onSettingsUpdate }) {
         port: settings.smtp.port || 587,
         secure: settings.smtp.secure || false,
         user: settings.smtp.user || '',
-        pass: settings.smtp.pass || ''
+        pass: ''
       });
       setHasChanges(false);
     }
@@ -38,7 +40,10 @@ export default function SmtpSection({ settings, onSettingsUpdate }) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const { data } = await settingsApi.update({ smtp: formData });
+      // Don't send pass if empty (backend keeps existing)
+      const payload = { ...formData };
+      if (!payload.pass) delete payload.pass;
+      const { data } = await settingsApi.update({ smtp: payload });
       onSettingsUpdate(data.data);
       setHasChanges(false);
       addToast({ type: 'success', message: 'Configuration SMTP sauvegardée' });
@@ -51,7 +56,9 @@ export default function SmtpSection({ settings, onSettingsUpdate }) {
 
   const handleTestEmail = async () => {
     try {
-      await settingsApi.update({ smtp: formData });
+      const payload = { ...formData };
+      if (!payload.pass) delete payload.pass;
+      await settingsApi.update({ smtp: payload });
       addToast({
         type: 'success',
         message: 'Configuration SMTP sauvegardée. Envoyez un email de test depuis les templates.'
@@ -121,13 +128,18 @@ export default function SmtpSection({ settings, onSettingsUpdate }) {
             placeholder="user@example.com"
           />
 
-          <Input
-            label="Mot de passe"
-            type="password"
-            value={formData.pass}
-            onChange={(e) => updateField('pass', e.target.value)}
-            placeholder="••••••••"
-          />
+          <div>
+            <Input
+              label="Mot de passe"
+              type="password"
+              value={formData.pass}
+              onChange={(e) => updateField('pass', e.target.value)}
+              placeholder={hasPassword ? 'Laisser vide pour conserver' : 'Entrez le mot de passe'}
+            />
+            {hasPassword && !formData.pass && (
+              <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">Mot de passe configuré</p>
+            )}
+          </div>
         </div>
 
         {hasChanges && (

@@ -28,8 +28,9 @@ export const errorHandler = (err, req, res, next) => {
   }
 
   // Default error
-  res.status(err.statusCode || 500).json({
+  const statusCode = err.statusCode || 500;
+  res.status(statusCode).json({
     success: false,
-    error: err.message || 'Server Error'
+    error: statusCode >= 500 ? 'Internal server error' : (err.message || 'Server Error')
   });
 };
