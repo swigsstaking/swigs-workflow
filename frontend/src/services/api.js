@@ -132,6 +132,11 @@ export const planningApi = {
   delete: (id) => api.delete(`/planning/${id}`)
 };
 
+// Dashboard
+export const dashboardApi = {
+  get: () => api.get('/dashboard')
+};
+
 // Analytics
 export const analyticsApi = {
   getRevenue: () => api.get('/analytics/revenue'),

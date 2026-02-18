@@ -8,6 +8,7 @@ import Workflow from './pages/Workflow';
 import SsoHandler from './components/auth/SsoHandler';
 
 // Lazy-loaded pages
+const Secretary = lazy(() => import('./pages/Secretary'));
 const Planning = lazy(() => import('./pages/Planning'));
 const Analytics = lazy(() => import('./pages/Analytics'));
 const Automations = lazy(() => import('./pages/Automations'));
@@ -53,6 +54,11 @@ function App() {
           </ErrorBoundary>
         }>
           <Route index element={<Workflow />} />
+          <Route path="secretary" element={
+            <Suspense fallback={suspenseFallback}>
+              <Secretary />
+            </Suspense>
+          } />
           <Route path="planning" element={
             <Suspense fallback={suspenseFallback}>
               <Planning />
