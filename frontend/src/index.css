@@ -1,0 +1,104 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f8fafc;
+  color: #1e293b;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+/* Dark mode body */
+.dark body,
+.dark {
+  background-color: #0f1419;
+  color: #e2e8f0;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+/* Custom scrollbar - Light */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Custom scrollbar - Dark */
+.dark ::-webkit-scrollbar-track {
+  background: #1a1f2e;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #4a5568;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #718096;
+}
+
+/* Smooth transitions */
+.transition-smooth {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Card hover effect */
+.card-hover {
+  @apply transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5;
+}
+
+/* Status border */
+.status-border {
+  border-left-width: 4px;
+}
+
+/* Dark mode form overrides */
+.dark input,
+.dark textarea,
+.dark select {
+  background-color: #1a1f2e !important;
+  border-color: #2d3748 !important;
+  color: #e2e8f0 !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #718096 !important;
+}
+
+.dark input:focus,
+.dark textarea:focus,
+.dark select:focus {
+  border-color: #0ea5e9 !important;
+  --tw-ring-color: #0ea5e9 !important;
+}
+
+/* Dark mode select options */
+.dark select option {
+  background-color: #1a1f2e;
+  color: #e2e8f0;
+}
