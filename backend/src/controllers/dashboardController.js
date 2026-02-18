@@ -17,7 +17,16 @@ const getUserProjectIds = async (userId) => {
  */
 export const getDashboard = async (req, res, next) => {
   try {
-    const projectIds = await getUserProjectIds(req.user?._id);
+    // No user = return empty dashboard
+    if (!req.user?._id) {
+      return res.json({ success: true, data: {
+        overview: { totalOverdue: 0, overdueCount: 0, recoveryRate: 100, unbilledTotal: 0, unbilledHours: 0, pendingQuotes: 0, pendingQuotesTotal: 0, globalAvgPaymentDays: null },
+        criticalOverdue: [], remindersDue: [], upcomingReminders: [], paymentsThisWeek: { count: 0, total: 0, invoices: [] },
+        clientIntelligence: [], cashFlowForecast: [], recentActions: [], pendingQuotesList: []
+      }});
+    }
+
+    const projectIds = await getUserProjectIds(req.user._id);
     const projectFilter = projectIds ? { project: { $in: projectIds } } : {};
     const now = new Date();
 

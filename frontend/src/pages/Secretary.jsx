@@ -180,7 +180,7 @@ export default function Secretary() {
           <KpiPill
             icon={BarChart3}
             label="Délai moyen"
-            value={`${o.globalAvgPaymentDays || '-'}j`}
+            value={o.globalAvgPaymentDays != null ? `${o.globalAvgPaymentDays}j` : '—'}
             sub="Tous clients confondus"
             color="from-violet-500/20 to-violet-600/10"
           />

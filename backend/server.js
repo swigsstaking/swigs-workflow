@@ -189,7 +189,7 @@ app.use('/api/events', requireAuth, eventRoutes);
 app.use('/api/invoices', requireAuth, invoiceRoutes);
 app.use('/api/quotes', requireAuth, quoteRoutes);
 app.use('/api/settings', requireAuth, settingsRoutes);
-app.use('/api/dashboard', requireAuth, dashboardRoutes);
+app.use('/api/dashboard', optionalAuth, dashboardRoutes);
 app.use('/api/clients', requireAuth, clientRoutes);
 app.use('/api/planning', requireAuth, planningRoutes);
 app.use('/api/analytics', requireAuth, analyticsRoutes);
