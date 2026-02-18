@@ -1,6 +1,7 @@
 import CmsEventCache from '../../models/CmsEventCache.js';
 import Settings from '../../models/Settings.js';
 import { fireTrigger } from './triggerService.js';
+import { decrypt } from '../../utils/crypto.js';
 
 let pollingInterval = null;
 let isPolling = false;
@@ -85,7 +86,8 @@ const pollAllUsers = async () => {
  */
 const pollForUser = async (settings) => {
   const userId = settings.userId;
-  const { apiUrl, serviceToken } = settings.cmsIntegration;
+  const { apiUrl, serviceToken: rawToken } = settings.cmsIntegration;
+  const serviceToken = decrypt(rawToken);
 
   try {
     // Get last checkpoint for this user
