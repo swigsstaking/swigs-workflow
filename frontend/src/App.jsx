@@ -53,12 +53,12 @@ function App() {
             <Layout />
           </ErrorBoundary>
         }>
-          <Route index element={<Workflow />} />
-          <Route path="secretary" element={
+          <Route index element={
             <Suspense fallback={suspenseFallback}>
               <Secretary />
             </Suspense>
           } />
+          <Route path="workflow" element={<Workflow />} />
           <Route path="planning" element={
             <Suspense fallback={suspenseFallback}>
               <Planning />

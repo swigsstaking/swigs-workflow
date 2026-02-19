@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutGrid, Settings, Plus, Search, Archive, Sun, Moon, Calendar, BarChart3, Zap, LogIn, LogOut, BrainCircuit } from 'lucide-react';
+import { LayoutGrid, Settings, Plus, Search, Archive, Sun, Moon, Calendar, BarChart3, Zap, LogIn, LogOut } from 'lucide-react';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import Button from '../ui/Button';
@@ -37,29 +37,16 @@ export default function Header() {
 
             <nav className="flex items-center gap-1">
               <Link
-                to="/"
+                to="/workflow"
                 className={`
                   px-3 py-2 text-sm font-medium rounded-lg transition-colors
-                  ${currentPath === '/'
+                  ${currentPath === '/workflow'
                     ? 'bg-primary-600 text-white'
                     : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-hover'
                   }
                 `}
               >
                 Workflow
-              </Link>
-              <Link
-                to="/secretary"
-                className={`
-                  flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg transition-colors
-                  ${currentPath === '/secretary'
-                    ? 'bg-primary-600 text-white'
-                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-hover'
-                  }
-                `}
-              >
-                <BrainCircuit className="w-4 h-4" />
-                <span className="hidden md:inline">Secrétaire</span>
               </Link>
               <Link
                 to="/planning"
@@ -117,7 +104,7 @@ export default function Header() {
 
           {/* Actions */}
           <div className="flex items-center gap-4">
-            {currentPath === '/' && (
+            {currentPath === '/workflow' && (
               <>
                 {/* Search */}
                 <div className="relative hidden md:block">
