@@ -31,6 +31,12 @@ export const getDashboard = async (req, res, next) => {
     const now = new Date();
 
     // Run all queries in parallel
+    // Compute current quarter boundaries
+    const quarterMonth = Math.floor(now.getMonth() / 3) * 3;
+    const quarterStart = new Date(now.getFullYear(), quarterMonth, 1);
+    const quarterEnd = new Date(now.getFullYear(), quarterMonth + 3, 0, 23, 59, 59, 999);
+    const quarterLabel = `T${Math.floor(now.getMonth() / 3) + 1}`;
+
     const [
       overdueInvoices,
       recentPayments,
@@ -38,7 +44,8 @@ export const getDashboard = async (req, res, next) => {
       unbilledEvents,
       allPaidInvoices,
       allSentInvoices,
-      settings
+      settings,
+      vatAgg
     ] = await Promise.all([
       // Overdue invoices (sent, past due date)
       Invoice.find({
@@ -80,7 +87,17 @@ export const getDashboard = async (req, res, next) => {
       }).lean(),
 
       // User settings (for reminder schedule)
-      Settings.getSettings(req.user?._id || null)
+      Settings.getSettings(req.user?._id || null),
+
+      // VAT collected this quarter (paid invoices)
+      Invoice.aggregate([
+        { $match: {
+          ...projectFilter,
+          status: 'paid',
+          paidAt: { $gte: quarterStart, $lte: quarterEnd }
+        }},
+        { $group: { _id: null, total: { $sum: '$vatAmount' } } }
+      ])
     ]);
 
     // --- Compute dashboard sections ---
@@ -329,7 +346,9 @@ export const getDashboard = async (req, res, next) => {
           unbilledHours,
           pendingQuotes: pendingQuotes.length,
           pendingQuotesTotal: pendingQuotes.reduce((sum, q) => sum + q.total, 0),
-          globalAvgPaymentDays
+          globalAvgPaymentDays,
+          vatCollected: vatAgg[0]?.total || 0,
+          vatQuarter: quarterLabel
         },
         criticalOverdue: criticalOverdue.slice(0, 10).map(inv => ({
           _id: inv._id,

@@ -219,6 +219,24 @@ export const remindersApi = {
   send: (invoiceId) => api.post(`/reminders/${invoiceId}/send`)
 };
 
+// Bank Import
+export const bankApi = {
+  import: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/bank/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
+  getImports: () => api.get('/bank/imports'),
+  getTransactions: (importId, params) => api.get(`/bank/imports/${importId}/transactions`, { params }),
+  getUnmatched: () => api.get('/bank/unmatched'),
+  matchTransaction: (id, invoiceId) => api.patch(`/bank/transactions/${id}/match`, { invoiceId }),
+  ignoreTransaction: (id) => api.patch(`/bank/transactions/${id}/ignore`),
+  testImap: (config) => api.post('/bank/imap/test', config),
+  fetchImapNow: () => api.post('/bank/imap/fetch')
+};
+
 // AbaNinja
 export const abaninjaApi = {
   testConnection: () => api.post('/abaninja/test-connection'),

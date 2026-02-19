@@ -92,5 +92,13 @@ export const historyService = {
 
   async invoiceDeleted(projectId, invoiceNumber) {
     return this.log(projectId, 'invoice_deleted', `Facture ${invoiceNumber} supprimée`, { invoiceNumber });
+  },
+
+  async bankImported(projectId, importId, filename, count) {
+    return this.log(projectId, 'bank_import', `Import bancaire ${filename} (${count} transactions)`, { importId, filename, count });
+  },
+
+  async bankReconciled(projectId, invoiceNumber, method, confidence) {
+    return this.log(projectId, 'bank_reconciled', `Facture ${invoiceNumber} rapprochée (${method}, ${confidence}%)`, { invoiceNumber, method, confidence });
   }
 };

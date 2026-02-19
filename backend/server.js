@@ -27,11 +27,13 @@ import portalRoutes from './src/routes/portal.js';
 import exportRoutes from './src/routes/exports.js';
 import reminderRoutes from './src/routes/reminders.js';
 import abaninjaRoutes from './src/routes/abaninja.js';
+import bankRoutes from './src/routes/bank.js';
 import { errorHandler } from './src/middleware/errorHandler.js';
 import { requireAuth, optionalAuth } from './src/middleware/auth.js';
 import { initializeAutomationServices } from './src/services/automation/index.js';
 import { initEventBus, eventBus } from './src/services/eventBus.service.js';
 import { initialize as initReminders } from './src/services/reminder.service.js';
+import { initBankImapCron } from './src/services/bankImapFetcher.service.js';
 
 const app = express();
 
@@ -212,6 +214,9 @@ app.use('/api/reminders', requireAuth, reminderRoutes);
 // AbaNinja integration routes (protected)
 app.use('/api/abaninja', requireAuth, abaninjaRoutes);
 
+// Bank import routes (protected)
+app.use('/api/bank', requireAuth, bankRoutes);
+
 // =============================================================================
 // ERROR HANDLING
 // =============================================================================
@@ -251,6 +256,9 @@ mongoose.connect(process.env.MONGODB_URI, mongoOptions)
 
     // Initialize reminder service
     initReminders();
+
+    // Initialize bank IMAP auto-fetch
+    initBankImapCron();
 
     const PORT = process.env.PORT || 3003;
     const server = app.listen(PORT, () => {

@@ -199,6 +199,41 @@ const remindersSchema = new mongoose.Schema({
   }
 }, { _id: false });
 
+const bankImapSchema = new mongoose.Schema({
+  enabled: {
+    type: Boolean,
+    default: false
+  },
+  host: {
+    type: String,
+    default: ''
+  },
+  port: {
+    type: Number,
+    default: 993
+  },
+  tls: {
+    type: Boolean,
+    default: true
+  },
+  user: {
+    type: String,
+    default: ''
+  },
+  pass: {
+    type: String,
+    default: ''
+  },
+  folder: {
+    type: String,
+    default: 'INBOX'
+  },
+  lastCheckedAt: {
+    type: Date,
+    default: null
+  }
+}, { _id: false });
+
 const abaninjaSchema = new mongoose.Schema({
   enabled: {
     type: Boolean,
@@ -268,6 +303,10 @@ const settingsSchema = new mongoose.Schema({
   },
   abaninja: {
     type: abaninjaSchema,
+    default: () => ({})
+  },
+  bankImap: {
+    type: bankImapSchema,
     default: () => ({})
   }
 }, {

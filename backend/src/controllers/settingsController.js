@@ -23,6 +23,10 @@ export const getSettings = async (req, res, next) => {
       settingsObj.cmsIntegration._hasServiceToken = !!settingsObj.cmsIntegration.serviceToken;
       delete settingsObj.cmsIntegration.serviceToken;
     }
+    if (settingsObj.bankImap) {
+      settingsObj.bankImap._hasPass = !!settingsObj.bankImap.pass;
+      delete settingsObj.bankImap.pass;
+    }
 
     res.json({ success: true, data: settingsObj });
   } catch (error) {
@@ -34,7 +38,7 @@ export const getSettings = async (req, res, next) => {
 // @route   PUT /api/settings
 export const updateSettings = async (req, res, next) => {
   try {
-    const { company, invoicing, personalization, emailTemplates, smtp, abaninja, reminders, cms, cmsIntegration } = req.body;
+    const { company, invoicing, personalization, emailTemplates, smtp, abaninja, reminders, cms, cmsIntegration, bankImap } = req.body;
 
     const userId = req.user?._id || null;
     const query = userId ? { userId } : { userId: { $exists: false } };
@@ -98,6 +102,16 @@ export const updateSettings = async (req, res, next) => {
         cmsData.serviceToken = encrypt(cmsData.serviceToken);
       }
       settings.cmsIntegration = cmsData;
+    }
+
+    if (bankImap) {
+      const imapData = { ...(settings.bankImap?.toObject ? settings.bankImap.toObject() : {}), ...bankImap };
+      if (!imapData.pass || imapData.pass === '') {
+        imapData.pass = settings.bankImap?.pass || '';
+      } else {
+        imapData.pass = encrypt(imapData.pass);
+      }
+      settings.bankImap = imapData;
     }
 
     await settings.save();

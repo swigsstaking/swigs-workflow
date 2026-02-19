@@ -1,4 +1,4 @@
-import { Building2, Receipt, Palette, Users, Package, Tag, Server, Mail, Bell, Link2 } from 'lucide-react';
+import { Building2, Receipt, Palette, Users, Package, Tag, Server, Mail, Bell, Link2, Landmark } from 'lucide-react';
 
 const settingsNav = [
   {
@@ -30,6 +30,7 @@ const settingsNav = [
     items: [
       { id: 'abaninja', label: 'AbaNinja', icon: Link2 },
       { id: 'cms', label: 'CMS E-commerce', icon: Link2 },
+      { id: 'bank', label: 'Import bancaire', icon: Landmark },
     ]
   }
 ];
