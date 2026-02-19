@@ -3,6 +3,7 @@ import { Plus, Edit2, Trash2, Eye, Sparkles } from 'lucide-react';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 import Input, { Textarea } from '../ui/Input';
+import ConfirmDialog from '../ui/ConfirmDialog';
 import { emailTemplatesApi } from '../../services/api';
 import { useToastStore } from '../../stores/toastStore';
 
@@ -32,6 +33,7 @@ export default function EmailTemplatesTab() {
   const [loading, setLoading] = useState(true);
   const [editingTemplate, setEditingTemplate] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
   const [previewHtml, setPreviewHtml] = useState('');
   const [formData, setFormData] = useState({
@@ -108,14 +110,20 @@ export default function EmailTemplatesTab() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!confirm('Supprimer ce template ?')) return;
+  const handleDelete = (template) => {
+    setDeleteTarget(template);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
     try {
-      await emailTemplatesApi.delete(id);
+      await emailTemplatesApi.delete(deleteTarget._id);
       await loadTemplates();
       addToast({ type: 'success', message: 'Template supprimé' });
     } catch (error) {
       addToast({ type: 'error', message: 'Erreur lors de la suppression' });
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
@@ -219,7 +227,7 @@ export default function EmailTemplatesTab() {
                     <Edit2 className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => handleDelete(template._id)}
+                    onClick={() => handleDelete(template)}
                     className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -322,6 +330,16 @@ export default function EmailTemplatesTab() {
           />
         </div>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteConfirm}
+        title="Supprimer le template"
+        message={`Êtes-vous sûr de vouloir supprimer le template "${deleteTarget?.name}" ?`}
+        confirmLabel="Supprimer"
+        variant="danger"
+      />
     </div>
   );
 }

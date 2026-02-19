@@ -75,7 +75,7 @@ export default function ProjectSidebar({ project, isOpen, onClose }) {
           exit={{ x: '100%' }}
           transition={{ type: 'spring', damping: 25, stiffness: 200 }}
           className="
-            fixed top-[73px] right-0 bottom-0
+            fixed top-[41px] right-0 bottom-0
             w-full md:w-[480px] max-w-full bg-white dark:bg-dark-card
             border-l border-slate-200 dark:border-dark-border
             shadow-xl

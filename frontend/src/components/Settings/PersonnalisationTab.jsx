@@ -120,7 +120,7 @@ export default function PersonnalisationTab() {
         {/* Preview */}
         <div className="bg-slate-50 dark:bg-dark-bg rounded-lg p-6">
           <p className="text-xs text-slate-400 dark:text-slate-500 mb-3 uppercase tracking-wide">
-            Apercu
+            Aperçu
           </p>
           <div className="max-w-[200px]">
             <CardPreview style={currentStyle} size={currentSize} />
@@ -134,7 +134,7 @@ export default function PersonnalisationTab() {
           Taille des cartes
         </h3>
         <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
-          Ajustez la taille des cartes selon vos preferences.
+          Ajustez la taille des cartes selon vos préférences.
         </p>
 
         <div className="flex gap-4">
@@ -174,8 +174,8 @@ export default function PersonnalisationTab() {
           Repositionnement des cartes
         </h3>
         <p className="text-sm text-blue-700 dark:text-blue-300">
-          Maintenez un clic long sur une carte dans le workflow pour la deplacer.
-          Les positions sont sauvegardees automatiquement.
+          Maintenez un clic long sur une carte dans le workflow pour la déplacer.
+          Les positions sont sauvegardées automatiquement.
         </p>
       </div>
     </div>

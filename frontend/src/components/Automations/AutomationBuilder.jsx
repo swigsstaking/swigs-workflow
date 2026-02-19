@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import Button from '../ui/Button';
 import { useAutomationStore } from '../../stores/automationStore';
+import { useToastStore } from '../../stores/toastStore';
 
 // Custom Node Components
 import TriggerNode from './nodes/TriggerNode';
@@ -59,6 +60,7 @@ const NODE_TEMPLATES = [
 
 export default function AutomationBuilder({ automation, onClose }) {
   const { updateAutomation, runAutomation } = useAutomationStore();
+  const { addToast } = useToastStore();
   const reactFlowWrapper = useRef(null);
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
 
@@ -69,17 +71,29 @@ export default function AutomationBuilder({ automation, onClose }) {
   const [activeTab, setActiveTab] = useState('canvas');
 
   // Convert automation nodes to React Flow format
-  // Align to 15px grid
-  const initialNodes = (automation.nodes || []).map((node, index) => ({
-    id: node.id || `node-${index}`,
-    type: node.type,
-    position: snapToGrid(node.position || { x: 300, y: 90 + index * 150 }),
-    data: {
-      label: node.label,
-      config: node.config || {},
-      subType: node.subType
+  // Read from typed sub-schemas (backend format) with fallback to flat config (legacy)
+  const initialNodes = (automation.nodes || []).map((node, index) => {
+    let config = node.config || {};
+    let subType = node.subType;
+
+    if (node.type === 'action') {
+      config = node.actionConfig || config;
+      subType = node.actionType || subType;
+    } else if (node.type === 'condition') {
+      config = node.conditionConfig || config;
+    } else if (node.type === 'wait') {
+      config = node.waitConfig || config;
+    } else if (node.type === 'trigger') {
+      config = node.triggerConfig || config;
     }
-  }));
+
+    return {
+      id: node.id || `node-${index}`,
+      type: node.type,
+      position: snapToGrid(node.position || { x: 300, y: 90 + index * 150 }),
+      data: { label: node.label, config, subType }
+    };
+  });
 
   // Convert connections to React Flow edges
   // Handle both old format (array of strings) and new format (array of objects with targetId)
@@ -176,24 +190,36 @@ export default function AutomationBuilder({ automation, onClose }) {
     setSaving(true);
     try {
       // Convert React Flow format back to automation format
-      // Ensure positions are aligned to 15px grid
+      // Map to typed sub-schemas expected by backend Mongoose model
       const automationNodes = nodes.map(node => {
         const outgoingEdges = edges.filter(e => e.source === node.id);
-        return {
+        const baseNode = {
           id: node.id,
           type: node.type,
           label: node.data.label,
           position: snapToGrid(node.position),
-          config: node.data.config || {},
-          subType: node.data.subType,
-          // Save connections as objects with targetId (matches backend schema)
           connections: outgoingEdges.map(e => ({ targetId: e.target, condition: 'default' }))
         };
+
+        if (node.type === 'action') {
+          baseNode.actionType = node.data.subType;
+          baseNode.actionConfig = node.data.config || {};
+        } else if (node.type === 'condition') {
+          baseNode.conditionConfig = node.data.config || {};
+        } else if (node.type === 'wait') {
+          baseNode.waitConfig = node.data.config || {};
+        } else if (node.type === 'trigger') {
+          baseNode.triggerConfig = node.data.config || {};
+        }
+
+        return baseNode;
       });
 
       await updateAutomation(automation._id, { nodes: automationNodes });
+      addToast({ type: 'success', message: 'Automation sauvegardée' });
     } catch (error) {
       console.error('Save error:', error);
+      addToast({ type: 'error', message: 'Erreur lors de la sauvegarde' });
     } finally {
       setSaving(false);
     }
@@ -204,8 +230,10 @@ export default function AutomationBuilder({ automation, onClose }) {
     try {
       await handleSave();
       await runAutomation(automation._id, { test: true });
+      addToast({ type: 'success', message: 'Test lancé avec succès' });
     } catch (error) {
       console.error('Run error:', error);
+      addToast({ type: 'error', message: 'Erreur lors du test' });
     } finally {
       setRunning(false);
     }

@@ -7,6 +7,7 @@ import {
   Tooltip,
   ResponsiveContainer
 } from 'recharts';
+import { Clock } from 'lucide-react';
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
@@ -48,6 +49,8 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export default function HoursChart({ data }) {
+  const allZero = !data?.monthly?.length || data.monthly.every(m => (m.hours ?? 0) === 0);
+
   if (!data?.monthly?.length) {
     return (
       <div className="bg-white dark:bg-slate-800/50 rounded-2xl p-6 border border-slate-200/50 dark:border-slate-700/50">
@@ -56,6 +59,20 @@ export default function HoursChart({ data }) {
         </h3>
         <div className="flex items-center justify-center h-[250px] text-slate-400">
           Aucune donnée
+        </div>
+      </div>
+    );
+  }
+
+  if (allZero) {
+    return (
+      <div className="bg-white dark:bg-slate-800/50 rounded-2xl p-6 border border-slate-200/50 dark:border-slate-700/50">
+        <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+          Heures Travaillées
+        </h3>
+        <div className="flex flex-col items-center justify-center h-[250px] gap-3 text-slate-400 dark:text-slate-500">
+          <Clock className="w-10 h-10" />
+          <span className="text-sm">Aucune heure enregistrée</span>
         </div>
       </div>
     );

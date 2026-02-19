@@ -80,6 +80,7 @@ export default function EventsTab({ project }) {
       resetForm();
     } catch (error) {
       console.error('Error saving event:', error);
+      addToast({ type: 'error', message: 'Erreur lors de l\'enregistrement de l\'événement' });
     }
   };
 
@@ -321,13 +322,13 @@ export default function EventsTab({ project }) {
                       <div className="flex gap-1">
                         <button
                           onClick={() => handleEdit(event)}
-                          className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                          className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-hover rounded transition-colors"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => setDeleteConfirm(event._id)}
-                          className="p-1 text-slate-400 hover:text-red-500"
+                          className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -380,7 +381,7 @@ export default function EventsTab({ project }) {
                     {quote.status === 'draft' && (
                       <button
                         onClick={() => updateQuoteStatus(quote._id, 'sent')}
-                        className="p-1 text-slate-400 hover:text-blue-500"
+                        className="p-1 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
                         title="Marquer comme envoyé"
                       >
                         <Send className="w-3.5 h-3.5" />
@@ -389,7 +390,7 @@ export default function EventsTab({ project }) {
                     {quote.status === 'sent' && (
                       <button
                         onClick={() => updateQuoteStatus(quote._id, 'signed')}
-                        className="p-1 text-slate-400 hover:text-emerald-500"
+                        className="p-1 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded transition-colors"
                         title="Marquer comme signé"
                       >
                         <FileSignature className="w-3.5 h-3.5" />
@@ -397,7 +398,7 @@ export default function EventsTab({ project }) {
                     )}
                     <button
                       onClick={() => handleDuplicateQuote(quote)}
-                      className="p-1 text-slate-400 hover:text-primary-500"
+                      className="p-1 text-slate-400 hover:text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded transition-colors"
                       title="Dupliquer ce devis"
                     >
                       <Copy className="w-3.5 h-3.5" />

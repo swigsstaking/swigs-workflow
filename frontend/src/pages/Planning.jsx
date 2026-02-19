@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
@@ -54,6 +54,14 @@ export default function Planning() {
       activationConstraint: { distance: 5 }
     })
   );
+
+  const totalPlannedHours = useMemo(() => {
+    return blocks.reduce((sum, block) => {
+      const start = new Date(block.start);
+      const end = new Date(block.end);
+      return sum + (end - start) / (1000 * 60 * 60);
+    }, 0);
+  }, [blocks]);
 
   // Load data on mount
   useEffect(() => {
@@ -321,7 +329,7 @@ export default function Planning() {
 
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="flex flex-col h-[calc(100vh-73px)]">
+      <div className="flex flex-col h-[calc(100vh-41px)]">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-dark-border bg-white dark:bg-dark-card">
           <div className="flex items-center gap-4">
@@ -358,6 +366,9 @@ export default function Planning() {
             <span className="text-slate-600 dark:text-slate-400 capitalize">
               {formatHeaderDate()}
             </span>
+            {totalPlannedHours > 0 && (
+              <span className="text-sm text-slate-500 dark:text-slate-400 ml-3">{totalPlannedHours.toFixed(1)}h planifiées</span>
+            )}
           </div>
 
           {/* View mode toggle */}

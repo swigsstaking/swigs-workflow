@@ -8,6 +8,7 @@ import Button from '../ui/Button';
 import Input from '../ui/Input';
 import { useAutomationStore } from '../../stores/automationStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { useToastStore } from '../../stores/toastStore';
 
 // CMS trigger types that require CMS connection
 const CMS_TRIGGERS = ['order.created', 'order.paid', 'order.shipped', 'order.delivered', 'customer.created', 'customer.updated'];
@@ -44,6 +45,7 @@ const TRIGGER_OPTIONS = [
 export default function NewAutomationModal({ isOpen, onClose, onCreated }) {
   const { createAutomation } = useAutomationStore();
   const { settings } = useSettingsStore();
+  const { addToast } = useToastStore();
 
   const [step, setStep] = useState(1);
   const [name, setName] = useState('');
@@ -88,6 +90,7 @@ export default function NewAutomationModal({ isOpen, onClose, onCreated }) {
       onCreated(automation);
     } catch (error) {
       console.error('Create error:', error);
+      addToast({ type: 'error', message: error.response?.data?.error || 'Erreur lors de la création de l\'automation' });
     } finally {
       setLoading(false);
     }

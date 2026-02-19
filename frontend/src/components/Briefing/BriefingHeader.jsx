@@ -15,22 +15,25 @@ export default function BriefingHeader({ greeting, summary, chips, loading, onRe
       variants={headerVariants}
       initial="hidden"
       animate="visible"
-      className="mb-8"
+      className="mb-6"
     >
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">
+          <p className="text-white/30 text-xs font-medium uppercase tracking-wider mb-1">
+            {new Date().toLocaleDateString('fr-CH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          </p>
+          <h1 className="text-2xl font-bold text-white tracking-tight">
             {greeting}
           </h1>
-          <p className="text-white/50 text-sm mt-1.5 max-w-[600px]">
+          <p className="text-white/40 text-sm mt-1 max-w-[600px]">
             {summary}
           </p>
         </div>
         <button
           onClick={onRefresh}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white/60 hover:text-white hover:bg-white/[0.1] transition-all text-sm flex-shrink-0"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.06] border border-white/[0.08] text-white/50 hover:text-white hover:bg-white/[0.1] transition-all text-xs flex-shrink-0"
         >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           <span className="hidden sm:inline">Actualiser</span>
         </button>
       </div>
@@ -40,13 +43,13 @@ export default function BriefingHeader({ greeting, summary, chips, loading, onRe
           variants={chipContainer}
           initial="hidden"
           animate="visible"
-          className="flex flex-wrap gap-2 mt-4"
+          className="flex flex-wrap gap-1.5 mt-3"
         >
           {chips.map((chip) => (
             <motion.span
               key={chip.id}
               variants={chipItem}
-              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${chipColors[chip.color] || chipColors.green}`}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${chipColors[chip.color] || chipColors.green}`}
             >
               <span className="text-white/40">{chip.label}</span>
               <span className="font-semibold">{chip.value}</span>

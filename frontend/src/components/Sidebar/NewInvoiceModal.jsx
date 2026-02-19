@@ -8,7 +8,7 @@ import StandardInvoiceForm from './invoice/StandardInvoiceForm';
 import CustomInvoiceForm from './invoice/CustomInvoiceForm';
 import InvoiceSummary from './invoice/InvoiceSummary';
 
-export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQuoteId }) {
+export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQuoteId, vatRate }) {
   const { createInvoice } = useProjectStore();
 
   const [loading, setLoading] = useState(false);
@@ -331,6 +331,7 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
             setShowAdvanced={setShowAdvanced}
             customIssueDate={customIssueDate}
             setCustomIssueDate={setCustomIssueDate}
+            vatRate={vatRate}
           />
         </div>
 

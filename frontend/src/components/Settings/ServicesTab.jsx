@@ -4,6 +4,8 @@ import { servicesApi } from '../../services/api';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Modal from '../ui/Modal';
+import ConfirmDialog from '../ui/ConfirmDialog';
+import { useToastStore } from '../../stores/toastStore';
 
 const CATEGORIES = [
   { value: 'development', label: 'Développement', color: 'bg-blue-500' },
@@ -101,7 +103,7 @@ const ServiceModal = ({ isOpen, onClose, service, onSave }) => {
         />
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">Catégorie</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Catégorie</label>
           <div className="grid grid-cols-3 gap-2">
             {CATEGORIES.map((cat) => (
               <button
@@ -111,7 +113,7 @@ const ServiceModal = ({ isOpen, onClose, service, onSave }) => {
                 className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                   formData.category === cat.value
                     ? `${cat.color} text-white`
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
                 }`}
               >
                 {cat.label}
@@ -121,7 +123,7 @@ const ServiceModal = ({ isOpen, onClose, service, onSave }) => {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">Type de tarification</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Type de tarification</label>
           <div className="grid grid-cols-2 gap-2">
             {PRICE_TYPES.map((type) => {
               const Icon = type.icon;
@@ -132,8 +134,8 @@ const ServiceModal = ({ isOpen, onClose, service, onSave }) => {
                   onClick={() => setFormData({ ...formData, priceType: type.value })}
                   className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                     formData.priceType === type.value
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
                   }`}
                 >
                   <Icon size={16} />
@@ -178,9 +180,9 @@ const ServiceModal = ({ isOpen, onClose, service, onSave }) => {
         </div>
 
         {formData.priceType === 'hourly' && formData.unitPrice && formData.estimatedHours && (
-          <div className="bg-gray-700/50 rounded-lg p-3">
-            <p className="text-sm text-gray-400">
-              Estimation totale: <span className="text-white font-medium">
+          <div className="bg-slate-100 dark:bg-slate-700/50 rounded-lg p-3">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Estimation totale: <span className="text-slate-900 dark:text-white font-medium">
                 {(parseFloat(formData.unitPrice) * parseFloat(formData.estimatedHours)).toLocaleString('fr-CH')} CHF
               </span>
             </p>
@@ -201,11 +203,13 @@ const ServiceModal = ({ isOpen, onClose, service, onSave }) => {
 };
 
 const ServicesTab = () => {
+  const { addToast } = useToastStore();
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingService, setEditingService] = useState(null);
   const [filterCategory, setFilterCategory] = useState('all');
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const fetchServices = async () => {
     try {
@@ -227,13 +231,20 @@ const ServicesTab = () => {
     setModalOpen(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!confirm('Supprimer ce service ?')) return;
+  const handleDelete = (service) => {
+    setDeleteTarget(service);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
     try {
-      await servicesApi.delete(id);
+      await servicesApi.delete(deleteTarget._id);
+      addToast({ type: 'success', message: 'Service supprimé' });
       fetchServices();
     } catch (error) {
-      console.error('Error deleting service:', error);
+      addToast({ type: 'error', message: 'Erreur lors de la suppression' });
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
@@ -273,13 +284,13 @@ const ServicesTab = () => {
   };
 
   if (loading) {
-    return <div className="text-gray-400 p-4">Chargement...</div>;
+    return <div className="text-slate-500 dark:text-slate-400 p-4">Chargement...</div>;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <p className="text-gray-400">
+        <p className="text-slate-500 dark:text-slate-400">
           Définissez vos services pour les ajouter rapidement aux devis.
         </p>
         <Button onClick={handleNewService} className="flex items-center gap-2">
@@ -294,8 +305,8 @@ const ServicesTab = () => {
           onClick={() => setFilterCategory('all')}
           className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
             filterCategory === 'all'
-              ? 'bg-gray-600 text-white'
-              : 'bg-gray-700/50 text-gray-400 hover:bg-gray-700'
+              ? 'bg-slate-200 dark:bg-slate-600 text-slate-900 dark:text-white'
+              : 'bg-slate-100 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
           }`}
         >
           Tous ({services.length})
@@ -310,7 +321,7 @@ const ServicesTab = () => {
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
                 filterCategory === cat.value
                   ? `${cat.color} text-white`
-                  : 'bg-gray-700/50 text-gray-400 hover:bg-gray-700'
+                  : 'bg-slate-100 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
               }`}
             >
               {cat.label} ({count})
@@ -321,7 +332,7 @@ const ServicesTab = () => {
 
       {/* Services list */}
       {filteredServices.length === 0 ? (
-        <div className="text-center py-12 text-gray-500">
+        <div className="text-center py-12 text-slate-500 dark:text-slate-400">
           <Package size={48} className="mx-auto mb-4 opacity-50" />
           <p>Aucun service défini</p>
           <p className="text-sm mt-1">Créez votre premier service pour commencer</p>
@@ -336,38 +347,38 @@ const ServicesTab = () => {
             return (
               <div
                 key={service._id}
-                className={`bg-gray-800 rounded-xl p-4 border border-gray-700 ${
+                className={`bg-white dark:bg-dark-card rounded-xl p-4 border border-slate-200 dark:border-dark-border ${
                   !service.isActive ? 'opacity-50' : ''
                 }`}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-1">
-                      <h3 className="font-semibold text-white">{service.name}</h3>
+                      <h3 className="font-semibold text-slate-900 dark:text-white">{service.name}</h3>
                       <span className={`px-2 py-0.5 rounded text-xs font-medium ${catInfo.color} text-white`}>
                         {catInfo.label}
                       </span>
                       {!service.isActive && (
-                        <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-600 text-gray-300">
+                        <span className="px-2 py-0.5 rounded text-xs font-medium bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300">
                           Inactif
                         </span>
                       )}
                     </div>
                     {service.description && (
-                      <p className="text-sm text-gray-400 mb-2">{service.description}</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">{service.description}</p>
                     )}
                     <div className="flex items-center gap-4 text-sm">
-                      <span className="flex items-center gap-1 text-emerald-400 font-medium">
+                      <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
                         <PriceIcon size={14} />
                         {formatPrice(service)}
                       </span>
                       {service.priceType === 'hourly' && service.estimatedHours && (
-                        <span className="text-gray-400">
+                        <span className="text-slate-500 dark:text-slate-400">
                           ~{service.estimatedHours}h estimées ({(service.unitPrice * service.estimatedHours).toLocaleString('fr-CH')} CHF)
                         </span>
                       )}
                       {service.defaultQuantity > 1 && (
-                        <span className="text-gray-400">
+                        <span className="text-slate-500 dark:text-slate-400">
                           Qté par défaut: {service.defaultQuantity}
                         </span>
                       )}
@@ -376,20 +387,20 @@ const ServicesTab = () => {
                   <div className="flex items-center gap-2 ml-4">
                     <button
                       onClick={() => handleToggle(service._id)}
-                      className="p-2 text-gray-400 hover:text-white transition-colors"
+                      className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors"
                       title={service.isActive ? 'Désactiver' : 'Activer'}
                     >
-                      {service.isActive ? <ToggleRight size={20} className="text-emerald-400" /> : <ToggleLeft size={20} />}
+                      {service.isActive ? <ToggleRight size={20} className="text-emerald-500" /> : <ToggleLeft size={20} />}
                     </button>
                     <button
                       onClick={() => handleEdit(service)}
-                      className="p-2 text-gray-400 hover:text-blue-400 transition-colors"
+                      className="p-2 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
                     >
                       <Pencil size={16} />
                     </button>
                     <button
-                      onClick={() => handleDelete(service._id)}
-                      className="p-2 text-gray-400 hover:text-red-400 transition-colors"
+                      onClick={() => handleDelete(service)}
+                      className="p-2 text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
                     >
                       <Trash2 size={16} />
                     </button>
@@ -406,6 +417,16 @@ const ServicesTab = () => {
         onClose={() => setModalOpen(false)}
         service={editingService}
         onSave={fetchServices}
+      />
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteConfirm}
+        title="Supprimer le service"
+        message={`Êtes-vous sûr de vouloir supprimer le service "${deleteTarget?.name}" ?`}
+        confirmLabel="Supprimer"
+        variant="danger"
       />
     </div>
   );

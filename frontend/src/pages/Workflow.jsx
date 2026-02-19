@@ -98,7 +98,7 @@ export default function Workflow() {
   };
 
   return (
-    <div className="relative min-h-[calc(100vh-73px)]">
+    <div className="relative min-h-[calc(100vh-41px)]">
       {/* Main content */}
       <div
         className={`

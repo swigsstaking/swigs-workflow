@@ -39,6 +39,20 @@ const STATUS_CONFIG = {
     icon: AlertCircle,
     bgClass: 'bg-slate-100 dark:bg-slate-700',
     textClass: 'text-slate-700 dark:text-slate-300'
+  },
+  success: {
+    label: 'Réussi',
+    color: 'emerald',
+    icon: CheckCircle,
+    bgClass: 'bg-emerald-100 dark:bg-emerald-900/30',
+    textClass: 'text-emerald-700 dark:text-emerald-400'
+  },
+  skipped: {
+    label: 'Ignoré',
+    color: 'slate',
+    icon: AlertCircle,
+    bgClass: 'bg-slate-100 dark:bg-slate-700',
+    textClass: 'text-slate-600 dark:text-slate-400'
   }
 };
 
@@ -189,6 +203,7 @@ export default function AutomationRunsPanel({ automationId }) {
 
   const loadRuns = async () => {
     if (!automationId) return;
+    setLoading(true);
 
     try {
       const { data } = await automationsApi.getRuns(automationId);

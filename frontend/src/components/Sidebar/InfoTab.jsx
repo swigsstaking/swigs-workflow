@@ -87,15 +87,15 @@ export default function InfoTab({ project }) {
     <div className="p-6 space-y-6">
       {/* Stats */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="bg-amber-50 rounded-xl p-4">
-          <p className="text-sm text-amber-600 font-medium">Non facturé</p>
-          <p className="text-2xl font-bold text-amber-700">
+        <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-4">
+          <p className="text-sm text-amber-600 dark:text-amber-400 font-medium">Non facturé</p>
+          <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">
             {formatCurrency(project.stats?.unbilledTotal || 0)}
           </p>
         </div>
-        <div className="bg-emerald-50 rounded-xl p-4">
-          <p className="text-sm text-emerald-600 font-medium">Facturé</p>
-          <p className="text-2xl font-bold text-emerald-700">
+        <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4">
+          <p className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">Facturé</p>
+          <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">
             {formatCurrency(project.stats?.billedTotal || 0)}
           </p>
         </div>
@@ -138,21 +138,32 @@ export default function InfoTab({ project }) {
           {!editing ? (
             <button
               onClick={() => setEditing(true)}
-              className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-hover rounded-lg transition-colors"
             >
               <Edit2 className="w-4 h-4" />
             </button>
           ) : (
             <div className="flex gap-1">
               <button
-                onClick={() => setEditing(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                onClick={() => {
+                  setEditing(false);
+                  setFormData({
+                    name: project.name,
+                    description: project.description || '',
+                    clientName: project.client?.name || '',
+                    clientEmail: project.client?.email || '',
+                    clientPhone: project.client?.phone || '',
+                    clientCompany: project.client?.company || '',
+                    clientAddress: project.client?.address || ''
+                  });
+                }}
+                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-hover rounded-lg transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
               <button
                 onClick={handleSave}
-                className="p-1.5 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                className="p-1.5 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors"
               >
                 <Save className="w-4 h-4" />
               </button>

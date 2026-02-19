@@ -5,7 +5,7 @@ import StatusSection from './sections/StatusSection';
 import AllClearState from './AllClearState';
 import { feedContainer } from './utils/animations';
 
-export default function BriefingFeed({ briefing, onSendReminder, onSendAll }) {
+export default function BriefingFeed({ briefing, onSendReminder, onSendAll, onItemClick }) {
   const { urgent, watch, status, allClear } = briefing;
 
   return (
@@ -13,7 +13,7 @@ export default function BriefingFeed({ briefing, onSendReminder, onSendAll }) {
       variants={feedContainer}
       initial="hidden"
       animate="visible"
-      className="space-y-6"
+      className="space-y-5"
     >
       {allClear && <AllClearState />}
 
@@ -21,9 +21,10 @@ export default function BriefingFeed({ briefing, onSendReminder, onSendAll }) {
         items={urgent}
         onSendReminder={onSendReminder}
         onSendAll={onSendAll}
+        onItemClick={onItemClick}
       />
 
-      <WatchSection items={watch} />
+      <WatchSection items={watch} onItemClick={onItemClick} />
 
       {status.length > 0 && <StatusSection items={status} />}
     </motion.div>

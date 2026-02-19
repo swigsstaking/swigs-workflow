@@ -38,14 +38,24 @@ const accentColors = {
   },
 };
 
-export default function BriefingItem({ item, accent = 'red', onSendReminder }) {
+export default function BriefingItem({ item, accent = 'red', onSendReminder, onClick }) {
   const Icon = iconMap[item.icon] || Bell;
   const colors = accentColors[accent] || accentColors.red;
+
+  const handleClick = () => {
+    if (onClick) onClick(item);
+  };
+
+  const handleSend = (e) => {
+    e.stopPropagation();
+    if (onSendReminder) onSendReminder(item.invoiceId);
+  };
 
   return (
     <motion.div
       variants={itemVariant}
-      className="flex items-center gap-3 py-3 px-4 bg-white/[0.04] backdrop-blur-sm border border-white/[0.06] rounded-xl hover:bg-white/[0.07] transition-colors"
+      onClick={handleClick}
+      className={`flex items-center gap-3 py-2.5 px-3.5 bg-white/[0.04] backdrop-blur-sm border border-white/[0.06] rounded-xl hover:bg-white/[0.07] transition-colors ${onClick ? 'cursor-pointer' : ''}`}
     >
       <div className={`flex-shrink-0 ${colors.icon}`}>
         <Icon className="w-4 h-4" />
@@ -55,20 +65,20 @@ export default function BriefingItem({ item, accent = 'red', onSendReminder }) {
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-white truncate">{item.title}</span>
           {item.subtitle && (
-            <span className="text-xs text-white/30 truncate hidden sm:inline">{item.subtitle}</span>
+            <span className="text-xs text-white/50 truncate hidden sm:inline">{item.subtitle}</span>
           )}
           {item.badge && (
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${colors.badge}`}>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${colors.badge}`}>
               {item.badge}
             </span>
           )}
         </div>
         {item.detail && (
-          <p className="text-xs text-white/40 mt-0.5 truncate">{item.detail}</p>
+          <p className="text-xs text-white/50 mt-0.5 truncate">{item.detail}</p>
         )}
       </div>
 
-      <div className="flex items-center gap-3 flex-shrink-0 ml-2">
+      <div className="flex items-center gap-2 flex-shrink-0 ml-1">
         {item.amount != null && (
           <span className="text-sm font-semibold text-white whitespace-nowrap">
             {fmt(item.amount)}
@@ -76,8 +86,8 @@ export default function BriefingItem({ item, accent = 'red', onSendReminder }) {
         )}
         {item.actionType === 'send' && onSendReminder && (
           <button
-            onClick={() => onSendReminder(item.invoiceId)}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${colors.action}`}
+            onClick={handleSend}
+            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors ${colors.action}`}
           >
             <Send className="w-3 h-3" />
             Envoyer

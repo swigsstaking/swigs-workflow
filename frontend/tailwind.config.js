@@ -22,10 +22,10 @@ export default {
           950: '#082f49',
         },
         dark: {
-          bg: '#0f1419',
-          card: '#1a1f2e',
-          border: '#2d3748',
-          hover: '#252d3d',
+          bg: '#0d1117',
+          card: '#161b22',
+          border: '#21262d',
+          hover: '#1c2128',
         }
       },
       fontFamily: {

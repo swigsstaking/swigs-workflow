@@ -7,6 +7,7 @@ import {
   FileText, Receipt, PenTool, Hand
 } from 'lucide-react';
 import Button from '../components/ui/Button';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useAutomationStore } from '../stores/automationStore';
 import { useToastStore } from '../stores/toastStore';
 import AutomationBuilder from '../components/Automations/AutomationBuilder';
@@ -88,15 +89,22 @@ export default function Automations() {
     }
   };
 
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
   const handleDelete = async (automation) => {
-    if (confirm(`Supprimer l'automation "${automation.name}" ?`)) {
-      try {
-        await deleteAutomation(automation._id);
-        addToast({ type: 'success', message: 'Automation supprimée' });
-        setActiveMenu(null);
-      } catch (error) {
-        addToast({ type: 'error', message: 'Erreur lors de la suppression' });
-      }
+    setDeleteTarget(automation);
+    setActiveMenu(null);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteAutomation(deleteTarget._id);
+      addToast({ type: 'success', message: 'Automation supprimée' });
+    } catch (error) {
+      addToast({ type: 'error', message: 'Erreur lors de la suppression' });
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
@@ -298,6 +306,17 @@ export default function Automations() {
             setShowNewModal(false);
             setEditingAutomation(automation);
           }}
+        />
+
+        {/* Delete Confirmation */}
+        <ConfirmDialog
+          isOpen={!!deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={handleDeleteConfirm}
+          title="Supprimer l'automation"
+          message={`Êtes-vous sûr de vouloir supprimer "${deleteTarget?.name}" ? Cette action est irréversible.`}
+          confirmLabel="Supprimer"
+          variant="danger"
         />
       </div>
   );

@@ -27,11 +27,11 @@ const reminderLabels = {
   final_notice: 'Mise en demeure',
 };
 
-function getGreeting() {
+function getGreeting(user) {
   const h = new Date().getHours();
-  if (h < 12) return 'Bonjour';
-  if (h < 18) return 'Bon après-midi';
-  return 'Bonsoir';
+  const firstName = user?.name?.split(' ')[0] || '';
+  const base = h < 12 ? 'Bonjour' : h < 18 ? 'Bon après-midi' : 'Bonsoir';
+  return firstName ? `${base}, ${firstName}` : base;
 }
 
 function buildSummary(urgent, watch) {
@@ -242,10 +242,10 @@ function buildStatusItems(data) {
   return items;
 }
 
-export function computeBriefing(data) {
+export function computeBriefing(data, user) {
   if (!data) {
     return {
-      greeting: getGreeting(),
+      greeting: getGreeting(user),
       summary: 'Chargement des données...',
       chips: [],
       urgent: [],
@@ -263,7 +263,7 @@ export function computeBriefing(data) {
   const status = buildStatusItems(data);
 
   return {
-    greeting: getGreeting(),
+    greeting: getGreeting(user),
     summary: buildSummary(urgent, watch),
     chips: buildChips(data.overview),
     urgent,

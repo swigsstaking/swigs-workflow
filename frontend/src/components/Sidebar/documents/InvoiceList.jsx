@@ -26,6 +26,10 @@ export default function InvoiceList({
 }) {
   return (
     <section>
+      {/* Click-outside overlay to close dropdown */}
+      {activeMenu?.startsWith('invoice-') && (
+        <div className="fixed inset-0 z-[5]" onClick={() => setActiveMenu(null)} />
+      )}
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold text-slate-900 dark:text-white">Factures</h3>
         <Button
@@ -100,7 +104,7 @@ export default function InvoiceList({
                   <div className="relative">
                     <button
                       onClick={() => setActiveMenu(activeMenu === `invoice-${invoice._id}` ? null : `invoice-${invoice._id}`)}
-                      className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded"
+                      className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-hover rounded transition-colors"
                     >
                       <MoreVertical className="w-4 h-4" />
                     </button>
@@ -150,7 +154,7 @@ export default function InvoiceList({
                         {invoice.status === 'sent' && (
                           <button
                             onClick={() => onStatusChange(invoice._id, 'paid')}
-                            className="w-full px-4 py-2 text-sm text-left text-emerald-600 hover:bg-emerald-50 flex items-center gap-2"
+                            className="w-full px-4 py-2 text-sm text-left text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 flex items-center gap-2"
                           >
                             <Check className="w-4 h-4" />
                             Marquer payée

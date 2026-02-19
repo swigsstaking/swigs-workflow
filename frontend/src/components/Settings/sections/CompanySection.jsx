@@ -90,7 +90,7 @@ export default function CompanySection({ settings, onSettingsUpdate }) {
           />
 
           <Input
-            label="SIRET"
+            label="N° IDE"
             value={formData.siret}
             onChange={(e) => updateField('siret', e.target.value)}
             placeholder="CHE-123.456.789"
@@ -125,18 +125,16 @@ export default function CompanySection({ settings, onSettingsUpdate }) {
           />
         </div>
 
-        {hasChanges && (
-          <div className="mt-6 pt-6 border-t border-slate-200 dark:border-dark-border flex justify-end">
-            <Button
-              onClick={handleSave}
-              icon={Save}
-              loading={saving}
-              disabled={saving}
-            >
-              Enregistrer les modifications
-            </Button>
-          </div>
-        )}
+        <div className="mt-6 pt-6 border-t border-slate-200 dark:border-dark-border flex justify-end">
+          <Button
+            onClick={handleSave}
+            icon={Save}
+            loading={saving}
+            disabled={saving || !hasChanges}
+          >
+            Enregistrer
+          </Button>
+        </div>
       </div>
     </div>
   );

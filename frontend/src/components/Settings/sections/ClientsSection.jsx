@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Users, Plus, Trash2, Edit2, X, Save } from 'lucide-react';
 import Button from '../../ui/Button';
 import Input, { Textarea } from '../../ui/Input';
+import ConfirmDialog from '../../ui/ConfirmDialog';
 import { clientsApi } from '../../../services/api';
 import { useToastStore } from '../../../stores/toastStore';
 
@@ -9,6 +10,7 @@ export default function ClientsSection() {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingClient, setEditingClient] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [newClient, setNewClient] = useState({
     name: '',
     email: '',
@@ -74,17 +76,20 @@ export default function ClientsSection() {
     }
   };
 
-  const handleDeleteClient = async (id) => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer ce client ?')) {
-      return;
-    }
+  const handleDeleteClient = (client) => {
+    setDeleteTarget(client);
+  };
 
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
     try {
-      await clientsApi.delete(id);
+      await clientsApi.delete(deleteTarget._id);
       await loadClients();
       addToast({ type: 'success', message: 'Client supprimé avec succès' });
     } catch (error) {
       addToast({ type: 'error', message: 'Erreur lors de la suppression du client' });
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
@@ -283,7 +288,7 @@ export default function ClientsSection() {
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => handleDeleteClient(client._id)}
+                        onClick={() => handleDeleteClient(client)}
                         className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -316,6 +321,16 @@ export default function ClientsSection() {
           ))
         )}
       </div>
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteConfirm}
+        title="Supprimer le client"
+        message={`Êtes-vous sûr de vouloir supprimer le client "${deleteTarget?.name}" ?`}
+        confirmLabel="Supprimer"
+        variant="danger"
+      />
     </div>
   );
 }

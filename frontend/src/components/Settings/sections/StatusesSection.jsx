@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { List, Plus, Trash2, GripVertical } from 'lucide-react';
 import Button from '../../ui/Button';
 import Input from '../../ui/Input';
+import ConfirmDialog from '../../ui/ConfirmDialog';
 import { useProjectStore } from '../../../stores/projectStore';
 import { statusesApi } from '../../../services/api';
 import { useToastStore } from '../../../stores/toastStore';
@@ -83,6 +84,7 @@ export default function StatusesSection() {
   const { addToast } = useToastStore();
   const [newStatus, setNewStatus] = useState({ name: '', color: '#6B7280' });
   const [creating, setCreating] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -134,23 +136,25 @@ export default function StatusesSection() {
     }
   };
 
-  const handleDeleteStatus = async (id) => {
+  const handleDeleteStatus = (id) => {
     const status = statuses.find((s) => s._id === id);
     if (status?.isDefault) {
       addToast({ type: 'error', message: 'Impossible de supprimer le statut par défaut' });
       return;
     }
+    setDeleteTarget(status);
+  };
 
-    if (!confirm('Êtes-vous sûr de vouloir supprimer ce statut ?')) {
-      return;
-    }
-
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
     try {
-      await statusesApi.delete(id);
+      await statusesApi.delete(deleteTarget._id);
       await fetchStatuses();
       addToast({ type: 'success', message: 'Statut supprimé avec succès' });
     } catch (error) {
       addToast({ type: 'error', message: 'Erreur lors de la suppression du statut' });
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
@@ -265,6 +269,16 @@ export default function StatusesSection() {
           en les glissant-déposant pour modifier leur ordre d'affichage.
         </p>
       </div>
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteConfirm}
+        title="Supprimer le statut"
+        message={`Êtes-vous sûr de vouloir supprimer le statut "${deleteTarget?.name}" ?`}
+        confirmLabel="Supprimer"
+        variant="danger"
+      />
     </div>
   );
 }

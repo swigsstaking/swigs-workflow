@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutGrid, Settings, Plus, Search, Archive, Sun, Moon, Calendar, BarChart3, Zap, LogIn, LogOut } from 'lucide-react';
+import { LayoutGrid, Settings, Plus, Search, Archive, Sun, Moon, Calendar, BarChart3, Zap, LogIn, LogOut, Home } from 'lucide-react';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import Button from '../ui/Button';
@@ -20,106 +20,81 @@ export default function Header() {
 
   const currentPath = location.pathname;
 
+  const navLink = (to, label, Icon, exact = false) => {
+    const isActive = exact ? currentPath === to : currentPath.startsWith(to);
+    return (
+      <Link
+        to={to}
+        aria-current={isActive ? 'page' : undefined}
+        className={`
+          flex items-center gap-1.5 px-2.5 py-1 text-[13px] font-medium rounded-md transition-colors
+          ${isActive
+            ? 'text-white bg-white/[0.12]'
+            : 'text-slate-400 hover:text-white hover:bg-white/[0.06]'
+          }
+        `}
+      >
+        {Icon && <Icon className="w-3.5 h-3.5" />}
+        <span className={Icon ? 'hidden md:inline' : ''}>{label}</span>
+      </Link>
+    );
+  };
+
   return (
-    <header className="sticky top-0 z-40 bg-white dark:bg-dark-card border-b border-slate-200 dark:border-dark-border transition-colors">
-      <div className="px-6 py-4">
+    <header className="sticky top-0 z-40 bg-[#0d1117] border-b border-white/[0.06] transition-colors">
+      <div className="px-4 py-1.5">
         <div className="flex items-center justify-between">
           {/* Logo & Nav */}
-          <div className="flex items-center gap-8">
-            <Link to="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
-                <LayoutGrid className="w-5 h-5 text-white" />
+          <div className="flex items-center gap-1">
+            <Link to="/" className="flex items-center gap-2 mr-4">
+              <div className="w-6 h-6 bg-primary-500 rounded-md flex items-center justify-center">
+                <LayoutGrid className="w-3.5 h-3.5 text-white" />
               </div>
-              <span className="text-xl font-semibold text-slate-900 dark:text-white">
-                Swigs Workflow
+              <span className="text-sm font-semibold text-white hidden sm:inline">
+                Swigs
               </span>
             </Link>
 
-            <nav className="flex items-center gap-1">
-              <Link
-                to="/workflow"
-                className={`
-                  px-3 py-2 text-sm font-medium rounded-lg transition-colors
-                  ${currentPath === '/workflow'
-                    ? 'bg-primary-600 text-white'
-                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-hover'
-                  }
-                `}
-              >
-                Workflow
-              </Link>
-              <Link
-                to="/planning"
-                className={`
-                  flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg transition-colors
-                  ${currentPath === '/planning'
-                    ? 'bg-primary-600 text-white'
-                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-hover'
-                  }
-                `}
-              >
-                <Calendar className="w-4 h-4" />
-                <span className="hidden md:inline">Planning</span>
-              </Link>
-              <Link
-                to="/analytics"
-                className={`
-                  flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg transition-colors
-                  ${currentPath === '/analytics'
-                    ? 'bg-primary-600 text-white'
-                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-hover'
-                  }
-                `}
-              >
-                <BarChart3 className="w-4 h-4" />
-                <span className="hidden md:inline">Analytics</span>
-              </Link>
-              <Link
-                to="/automations"
-                className={`
-                  flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg transition-colors
-                  ${currentPath === '/automations'
-                    ? 'bg-primary-600 text-white'
-                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-hover'
-                  }
-                `}
-              >
-                <Zap className="w-4 h-4" />
-                <span className="hidden md:inline">Automations</span>
-              </Link>
+            <nav className="flex items-center gap-0.5">
+              {navLink('/', 'Accueil', Home, true)}
+              {navLink('/workflow', 'Workflow')}
+              {navLink('/planning', 'Planning', Calendar)}
+              {navLink('/analytics', 'Analytics', BarChart3)}
+              {navLink('/automations', 'Automations', Zap)}
               <Link
                 to="/settings"
+                aria-current={currentPath === '/settings' ? 'page' : undefined}
                 className={`
-                  px-3 py-2 text-sm font-medium rounded-lg transition-colors
+                  p-1.5 rounded-md transition-colors
                   ${currentPath === '/settings'
-                    ? 'bg-primary-600 text-white'
-                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-hover'
+                    ? 'text-white bg-white/[0.12]'
+                    : 'text-slate-400 hover:text-white hover:bg-white/[0.06]'
                   }
                 `}
               >
-                <Settings className="w-4 h-4" />
+                <Settings className="w-3.5 h-3.5" />
               </Link>
             </nav>
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
             {currentPath === '/workflow' && (
               <>
                 {/* Search */}
                 <div className="relative hidden md:block">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
                   <input
                     type="text"
-                    placeholder="Rechercher un projet..."
+                    placeholder="Rechercher..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="
-                      w-64 pl-10 pr-4 py-2
-                      text-sm bg-slate-50 dark:bg-dark-bg border border-slate-200 dark:border-dark-border rounded-lg
-                      text-slate-900 dark:text-white
-                      placeholder:text-slate-400 dark:placeholder:text-slate-500
-                      focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent
+                      w-48 pl-8 pr-3 py-1
+                      text-[13px] bg-white/[0.06] border border-white/[0.08] rounded-md
+                      text-white
+                      placeholder:text-slate-500
+                      focus:outline-none focus:ring-1 focus:ring-primary-500/50 focus:border-primary-500/50
                       transition-colors
                     "
                   />
@@ -129,49 +104,51 @@ export default function Header() {
                 <button
                   onClick={toggleShowArchived}
                   className={`
-                    p-2 rounded-lg transition-colors
+                    p-1.5 rounded-md transition-colors
                     ${showArchived
-                      ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
-                      : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-hover hover:text-slate-600 dark:hover:text-slate-300'
+                      ? 'bg-amber-500/20 text-amber-400'
+                      : 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.06]'
                     }
                   `}
                   title={showArchived ? 'Masquer les archivés' : 'Voir les archivés'}
                   aria-label={showArchived ? 'Masquer les archivés' : 'Voir les archivés'}
                 >
-                  <Archive className="w-5 h-5" />
+                  <Archive className="w-4 h-4" />
                 </button>
 
                 {/* New Project */}
                 <Button
                   onClick={toggleNewProjectModal}
                   icon={Plus}
+                  size="sm"
+                  className="!py-1 !px-2.5 !text-[13px] !rounded-md"
                 >
-                  <span className="hidden sm:inline">Nouveau projet</span>
+                  <span className="hidden sm:inline">Nouveau</span>
                 </Button>
               </>
             )}
 
             {/* Auth */}
             {isAuthenticated ? (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-slate-600 dark:text-slate-300">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[13px] text-slate-400 hidden sm:inline">
                   {user?.name}
                 </span>
                 <button
                   onClick={logout}
-                  className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-dark-hover transition-colors"
-                  title="Deconnexion"
+                  className="p-1.5 rounded-md hover:bg-white/[0.06] transition-colors"
+                  title="Déconnexion"
                   aria-label="Déconnexion"
                 >
-                  <LogOut className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+                  <LogOut className="w-4 h-4 text-slate-500" />
                 </button>
               </div>
             ) : (
               <button
                 onClick={loginWithHub}
-                className="flex items-center gap-2 px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition-colors"
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-primary-500 hover:bg-primary-600 text-white rounded-md text-[13px] font-medium transition-colors"
               >
-                <LogIn className="w-4 h-4" />
+                <LogIn className="w-3.5 h-3.5" />
                 Connexion
               </button>
             )}
@@ -179,11 +156,11 @@ export default function Header() {
             {/* Dark mode toggle */}
             <button
               onClick={toggleDarkMode}
-              className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-hover hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+              className="p-1.5 rounded-md text-slate-500 hover:text-slate-300 hover:bg-white/[0.06] transition-colors"
               title={darkMode ? 'Mode clair' : 'Mode sombre'}
               aria-label={darkMode ? 'Activer le mode clair' : 'Activer le mode sombre'}
             >
-              {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
           </div>
         </div>

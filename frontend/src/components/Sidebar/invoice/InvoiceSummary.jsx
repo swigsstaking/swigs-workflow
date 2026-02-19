@@ -15,7 +15,8 @@ export default function InvoiceSummary({
   showAdvanced,
   setShowAdvanced,
   customIssueDate,
-  setCustomIssueDate
+  setCustomIssueDate,
+  vatRate = 0.081
 }) {
   return (
     <div className="w-full lg:w-80 flex-shrink-0 px-6 py-4 bg-slate-50/50 dark:bg-slate-800/20 overflow-y-auto max-h-[50vh] lg:max-h-none">
@@ -108,15 +109,15 @@ export default function InvoiceSummary({
                 </span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-slate-500">TVA 8.1%</span>
+                <span className="text-slate-500">TVA {(vatRate * 100).toFixed(1)}%</span>
                 <span className="text-slate-600 dark:text-slate-400">
-                  {formatCurrency(getSelectedTotal() * 0.081)}
+                  {formatCurrency(getSelectedTotal() * vatRate)}
                 </span>
               </div>
               <div className="flex justify-between pt-2 border-t border-slate-200/50 dark:border-slate-700/30">
                 <span className="text-slate-700 dark:text-slate-300 font-medium">Total TTC</span>
                 <span className="text-xl font-bold text-primary-600 dark:text-primary-400">
-                  {formatCurrency(getSelectedTotal() * 1.081)}
+                  {formatCurrency(getSelectedTotal() * (1 + vatRate))}
                 </span>
               </div>
             </div>

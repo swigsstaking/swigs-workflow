@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useProjectStore } from '../../stores/projectStore';
 import { useToastStore } from '../../stores/toastStore';
 import { settingsApi, remindersApi, portalApi, abaninjaApi } from '../../services/api';
+import ConfirmDialog from '../ui/ConfirmDialog';
 import NewInvoiceModal from './NewInvoiceModal';
 import NewQuoteModal from './NewQuoteModal';
 import InvoiceList from './documents/InvoiceList';
@@ -43,18 +44,20 @@ export default function DocumentsTab({ project }) {
   const handleInvoiceStatusChange = async (id, status) => {
     try {
       await updateInvoiceStatus(id, status);
+      addToast({ type: 'success', message: 'Statut de la facture mis à jour' });
       setActiveMenu(null);
     } catch (error) {
-      console.error('Error updating invoice status:', error);
+      addToast({ type: 'error', message: 'Erreur lors du changement de statut' });
     }
   };
 
   const handleQuoteStatusChange = async (id, status) => {
     try {
       await updateQuoteStatus(id, status);
+      addToast({ type: 'success', message: 'Statut du devis mis à jour' });
       setActiveMenu(null);
     } catch (error) {
-      console.error('Error updating quote status:', error);
+      addToast({ type: 'error', message: 'Erreur lors du changement de statut' });
     }
   };
 
@@ -92,7 +95,7 @@ export default function DocumentsTab({ project }) {
       setActiveMenu(null);
     } catch (error) {
       console.error('Error deleting quote:', error);
-      alert(error.response?.data?.error || 'Erreur lors de la suppression du devis');
+      addToast({ type: 'error', message: error.response?.data?.error || 'Erreur lors de la suppression du devis' });
     }
   };
 
@@ -252,6 +255,7 @@ export default function DocumentsTab({ project }) {
         isOpen={showInvoiceModal}
         onClose={handleCloseInvoiceModal}
         preselectedQuoteId={preselectedQuoteId}
+        vatRate={settings?.invoicing?.defaultVatRate != null ? settings.invoicing.defaultVatRate / 100 : undefined}
       />
       <NewQuoteModal
         project={project}
@@ -260,67 +264,27 @@ export default function DocumentsTab({ project }) {
         editQuote={editingQuote}
       />
 
-      {/* Delete Invoice Confirmation Modal */}
-      {deleteConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-dark-card rounded-xl shadow-xl p-6 max-w-sm w-full mx-4">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
-              Supprimer la facture ?
-            </h3>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-              La facture <span className="font-medium">{deleteConfirm.number}</span> sera supprimée
-              et tous les événements/devis associés redeviendront non facturés.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setDeleteConfirm(null)}
-                className="flex-1 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-dark-bg rounded-lg hover:bg-slate-200 dark:hover:bg-dark-hover transition-colors"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={() => handleDeleteInvoice(deleteConfirm._id)}
-                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
-              >
-                Supprimer
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Delete Invoice Confirmation */}
+      <ConfirmDialog
+        isOpen={!!deleteConfirm}
+        onClose={() => setDeleteConfirm(null)}
+        onConfirm={() => handleDeleteInvoice(deleteConfirm?._id)}
+        title="Supprimer la facture"
+        message={`La facture ${deleteConfirm?.number || ''} sera supprimée et tous les événements/devis associés redeviendront non facturés.`}
+        confirmLabel="Supprimer"
+        variant="danger"
+      />
 
-      {/* Delete Quote Confirmation Modal */}
-      {deleteQuoteConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-dark-card rounded-xl shadow-xl p-6 max-w-sm w-full mx-4">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
-              Supprimer le devis ?
-            </h3>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-              Le devis <span className="font-medium">{deleteQuoteConfirm.number}</span> sera définitivement supprimé.
-              {deleteQuoteConfirm.status === 'signed' && (
-                <span className="block mt-2 text-amber-600 dark:text-amber-400">
-                  ⚠️ Ce devis est signé mais pas encore facturé.
-                </span>
-              )}
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setDeleteQuoteConfirm(null)}
-                className="flex-1 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-dark-bg rounded-lg hover:bg-slate-200 dark:hover:bg-dark-hover transition-colors"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={() => handleDeleteQuote(deleteQuoteConfirm._id)}
-                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
-              >
-                Supprimer
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Delete Quote Confirmation */}
+      <ConfirmDialog
+        isOpen={!!deleteQuoteConfirm}
+        onClose={() => setDeleteQuoteConfirm(null)}
+        onConfirm={() => handleDeleteQuote(deleteQuoteConfirm?._id)}
+        title="Supprimer le devis"
+        message={`Le devis ${deleteQuoteConfirm?.number || ''} sera définitivement supprimé.${deleteQuoteConfirm?.status === 'signed' ? ' ⚠️ Ce devis est signé mais pas encore facturé.' : ''}`}
+        confirmLabel="Supprimer"
+        variant="danger"
+      />
     </div>
   );
 }
