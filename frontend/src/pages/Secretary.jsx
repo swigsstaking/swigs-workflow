@@ -1,8 +1,9 @@
-import { useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Loader2, Sparkles, X, Building2, FileText, Palette, ChevronRight } from 'lucide-react';
 import { useDashboardStore } from '../stores/dashboardStore';
 import { useAuthStore } from '../stores/authStore';
+import { useSettingsStore } from '../stores/settingsStore';
 import { remindersApi } from '../services/api';
 import { useToastStore } from '../stores/toastStore';
 import { computeBriefing } from '../components/Briefing/utils/briefingLogic';
@@ -10,15 +11,49 @@ import BriefingHeader from '../components/Briefing/BriefingHeader';
 import BriefingFeed from '../components/Briefing/BriefingFeed';
 import BriefingSidebar from '../components/Briefing/sidebar/BriefingSidebar';
 
+const ONBOARDING_STEPS = [
+  {
+    icon: Building2,
+    label: 'Mon entreprise',
+    href: '/settings?tab=company',
+    description: 'Nom, adresse, contact'
+  },
+  {
+    icon: FileText,
+    label: 'Facturation',
+    href: '/settings?tab=invoicing',
+    description: 'TVA, IBAN, conditions'
+  },
+  {
+    icon: Palette,
+    label: 'Design PDF',
+    href: '/settings?tab=design',
+    description: 'Logo, couleurs, template'
+  }
+];
+
 export default function Secretary() {
   const { data, loading, fetchDashboard } = useDashboardStore();
   const { user } = useAuthStore();
+  const { settings, fetchSettings } = useSettingsStore();
   const { addToast } = useToastStore();
   const navigate = useNavigate();
 
+  const [onboardingDismissed, setOnboardingDismissed] = useState(
+    () => localStorage.getItem('onboarding_dismissed') === 'true'
+  );
+
   useEffect(() => {
     fetchDashboard();
-  }, []);
+    if (!settings) fetchSettings();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const showOnboarding = !onboardingDismissed && settings && !settings?.company?.name;
+
+  const handleDismissOnboarding = () => {
+    localStorage.setItem('onboarding_dismissed', 'true');
+    setOnboardingDismissed(true);
+  };
 
   const briefing = useMemo(() => computeBriefing(data, user), [data, user]);
 
@@ -67,6 +102,47 @@ export default function Secretary() {
       </div>
 
       <div className="relative z-10 max-w-[1440px] mx-auto px-6 py-6">
+        {/* Onboarding banner */}
+        {showOnboarding && (
+          <div className="mb-6 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-xl p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-primary-100 dark:bg-primary-900/40 rounded-lg flex-shrink-0">
+                  <Sparkles className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-primary-900 dark:text-primary-100 mb-1">
+                    Bienvenue ! Configurez votre espace en 3 étapes
+                  </h3>
+                  <p className="text-xs text-primary-700 dark:text-primary-300 mb-3">
+                    Complétez votre profil pour générer des factures professionnelles.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {ONBOARDING_STEPS.map(({ icon: Icon, label, href, description }) => (
+                      <Link
+                        key={href}
+                        to={href}
+                        className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-primary-900/30 border border-primary-200 dark:border-primary-700 rounded-lg text-xs font-medium text-primary-700 dark:text-primary-300 hover:bg-primary-100 dark:hover:bg-primary-900/50 hover:border-primary-300 dark:hover:border-primary-600 transition-colors group"
+                      >
+                        <Icon className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span>{label}</span>
+                        <ChevronRight className="w-3 h-3 opacity-50 group-hover:opacity-100 transition-opacity" />
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={handleDismissOnboarding}
+                className="p-1.5 rounded-lg text-primary-500 dark:text-primary-400 hover:bg-primary-100 dark:hover:bg-primary-900/40 transition-colors flex-shrink-0"
+                title="Fermer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
         <BriefingHeader
           greeting={briefing.greeting}
           summary={briefing.summary}

@@ -77,10 +77,10 @@ export default function TimerWidget() {
     <div className="relative flex items-center">
       {/* Stop confirmation popover */}
       {showStopConfirm && (
-        <div className="absolute top-full right-0 mt-2 w-72 bg-[#161b22] border border-white/[0.12] rounded-lg shadow-xl p-3 z-50">
-          <p className="text-xs font-medium text-slate-300 mb-2">Arreter le timer</p>
+        <div className="absolute top-full right-0 mt-2 w-72 bg-slate-800 dark:bg-slate-900 border border-white/[0.12] rounded-lg shadow-xl p-3 z-50">
+          <p className="text-xs font-medium text-slate-300 mb-2">Arrêter le timer</p>
           <p className="text-xs text-slate-500 mb-2">
-            {formatElapsed(elapsed)} travaillees sur {projectName}
+            {formatElapsed(elapsed)} travaillées sur {projectName}
           </p>
           <input
             type="text"
@@ -109,9 +109,9 @@ export default function TimerWidget() {
 
       {/* Discard confirmation popover */}
       {showDiscardConfirm && (
-        <div className="absolute top-full right-0 mt-2 w-60 bg-[#161b22] border border-white/[0.12] rounded-lg shadow-xl p-3 z-50">
+        <div className="absolute top-full right-0 mt-2 w-60 bg-slate-800 dark:bg-slate-900 border border-white/[0.12] rounded-lg shadow-xl p-3 z-50">
           <p className="text-xs font-medium text-slate-300 mb-1">Supprimer le timer ?</p>
-          <p className="text-xs text-slate-500 mb-2">Le temps enregistre sera perdu.</p>
+          <p className="text-xs text-slate-500 mb-2">Le temps enregistré sera perdu.</p>
           <div className="flex gap-1.5">
             <button
               onClick={handleDiscardConfirm}
@@ -153,7 +153,7 @@ export default function TimerWidget() {
         <button
           onClick={handleStopOpen}
           className="p-1 rounded-md hover:bg-white/[0.08] text-slate-400 hover:text-emerald-400 transition-colors"
-          title="Arreter et enregistrer"
+          title="Arrêter et enregistrer"
         >
           <Square className="w-3.5 h-3.5" />
         </button>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Bell, Save, Edit2, X, Clock, AlertTriangle, Mail, ChevronDown, ChevronUp } from 'lucide-react';
 import { settingsApi } from '../../../services/api';
 import { useToastStore } from '../../../stores/toastStore';
@@ -96,6 +96,7 @@ export default function RemindersSection({ settings, onSettingsUpdate }) {
   const [expandedIndex, setExpandedIndex] = useState(null);
   const [editingIndex, setEditingIndex] = useState(null);
   const [editDraft, setEditDraft] = useState(null);
+  const bodyTextareaRef = useRef(null);
   const { addToast } = useToastStore();
 
   useEffect(() => {
@@ -133,6 +134,24 @@ export default function RemindersSection({ settings, onSettingsUpdate }) {
   const handleCancelEdit = () => {
     setEditingIndex(null);
     setEditDraft(null);
+  };
+
+  const handleInsertVariable = (varName) => {
+    const textarea = bodyTextareaRef.current?.querySelector('textarea');
+    if (!textarea) {
+      setEditDraft((prev) => ({ ...prev, body: (prev.body || '') + varName }));
+      return;
+    }
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const currentBody = editDraft?.body || '';
+    const newBody = currentBody.slice(0, start) + varName + currentBody.slice(end);
+    setEditDraft((prev) => ({ ...prev, body: newBody }));
+    // Restore cursor position after React re-render
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + varName.length, start + varName.length);
+    });
   };
 
   const handleSave = async () => {
@@ -391,30 +410,37 @@ export default function RemindersSection({ settings, onSettingsUpdate }) {
                 placeholder={TIER_META[editingIndex].defaultSubject}
               />
 
-              <Textarea
-                label="Corps de l'email"
-                value={editDraft.body}
-                onChange={(e) => setEditDraft((prev) => ({ ...prev, body: e.target.value }))}
-                rows={10}
-                placeholder={TIER_META[editingIndex].defaultBody}
-              />
+              <div ref={bodyTextareaRef}>
+                <Textarea
+                  label="Corps de l'email"
+                  value={editDraft.body}
+                  onChange={(e) => setEditDraft((prev) => ({ ...prev, body: e.target.value }))}
+                  rows={10}
+                  placeholder={TIER_META[editingIndex].defaultBody}
+                />
+              </div>
 
-              {/* Variables hint inside modal */}
+              {/* Variables hint inside modal — clickable to insert */}
               <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg">
                 <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
-                  Variables disponibles :
+                  Cliquez sur une variable pour l'insérer dans le corps :
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {VARIABLES.map((v) => (
-                    <code
+                    <button
                       key={v.name}
+                      type="button"
                       title={v.desc}
-                      className="px-2 py-0.5 text-xs bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded text-slate-700 dark:text-slate-300 font-mono cursor-default"
+                      onClick={() => handleInsertVariable(v.name)}
+                      className="px-2 py-0.5 text-xs bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded text-slate-700 dark:text-slate-300 font-mono hover:bg-primary-50 dark:hover:bg-primary-900/20 hover:border-primary-300 dark:hover:border-primary-700 hover:text-primary-700 dark:hover:text-primary-300 transition-colors cursor-pointer"
                     >
                       {v.name}
-                    </code>
+                    </button>
                   ))}
                 </div>
+                <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
+                  Survolez pour voir la description
+                </p>
               </div>
             </div>
 

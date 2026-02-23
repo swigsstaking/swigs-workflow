@@ -124,6 +124,7 @@ const authLimiter = rateLimit({
   legacyHeaders: false
 });
 
+
 // Apply global limiter
 app.use(globalLimiter);
 

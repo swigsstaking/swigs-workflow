@@ -2,6 +2,19 @@ import Settings from '../models/Settings.js';
 import History from '../models/History.js';
 import { encrypt, decrypt } from '../utils/crypto.js';
 
+function isValidIBAN(iban) {
+  if (!iban) return true; // Optional field
+  const cleaned = iban.replace(/\s/g, '').toUpperCase();
+  if (!/^[A-Z]{2}\d{2}[A-Z0-9]{5,30}$/.test(cleaned)) return false;
+  const rearranged = cleaned.slice(4) + cleaned.slice(0, 4);
+  const numeric = rearranged.replace(/[A-Z]/g, c => String(c.charCodeAt(0) - 55));
+  let remainder = '';
+  for (const digit of numeric) {
+    remainder = String(Number(remainder + digit) % 97);
+  }
+  return Number(remainder) === 1;
+}
+
 // @desc    Get settings
 // @route   GET /api/settings
 export const getSettings = async (req, res, next) => {
@@ -50,6 +63,9 @@ export const updateSettings = async (req, res, next) => {
     }
 
     if (company) {
+      if (company.iban !== undefined && !isValidIBAN(company.iban)) {
+        return res.status(400).json({ success: false, error: 'IBAN invalide' });
+      }
       settings.company = { ...settings.company.toObject(), ...company };
     }
 

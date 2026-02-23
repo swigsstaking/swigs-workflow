@@ -6,6 +6,23 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+const TEMPLATES_DIR = path.join(__dirname, 'templates');
+const STYLES_DIR = path.join(__dirname, 'styles');
+
+// Cache compiled templates and CSS at module load time
+const templateCache = {};
+const styleCache = {};
+
+function loadTemplates() {
+  styleCache['invoice'] = fs.readFileSync(path.join(STYLES_DIR, 'invoice.css'), 'utf8');
+  for (const name of ['invoice', 'quote', 'reminder']) {
+    const src = fs.readFileSync(path.join(TEMPLATES_DIR, `${name}.hbs`), 'utf8');
+    templateCache[name] = Handlebars.compile(src);
+  }
+}
+
+loadTemplates();
+
 let browser = null;
 
 // Register Handlebars helpers
@@ -40,15 +57,10 @@ async function getBrowser() {
   return browser;
 }
 
-function loadCSS() {
-  return fs.readFileSync(path.join(__dirname, 'styles', 'invoice.css'), 'utf-8');
-}
-
 function compileTemplate(templateName, data) {
-  const templatePath = path.join(__dirname, 'templates', `${templateName}.hbs`);
-  const templateSource = fs.readFileSync(templatePath, 'utf-8');
-  const css = loadCSS();
-  const template = Handlebars.compile(templateSource);
+  const template = templateCache[templateName];
+  if (!template) throw new Error(`Unknown PDF template: ${templateName}`);
+  const css = styleCache['invoice'];
   return template({ ...data, css });
 }
 

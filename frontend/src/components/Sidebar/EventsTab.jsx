@@ -47,6 +47,7 @@ export default function EventsTab({ project }) {
   const [showQuoteModal, setShowQuoteModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [quoteStatusConfirm, setQuoteStatusConfirm] = useState(null); // { quoteId, status, number }
   const [formData, setFormData] = useState({
     type: 'hours',
     description: '',
@@ -152,10 +153,22 @@ export default function EventsTab({ project }) {
     });
   };
 
+  const handleQuoteStatusConfirm = async () => {
+    if (!quoteStatusConfirm) return;
+    try {
+      await updateQuoteStatus(quoteStatusConfirm.quoteId, quoteStatusConfirm.status);
+      await fetchProjectQuotes(project._id);
+    } catch (error) {
+      addToast({ type: 'error', message: 'Erreur lors du changement de statut du devis' });
+    } finally {
+      setQuoteStatusConfirm(null);
+    }
+  };
+
   const handleStartTimer = async () => {
     try {
       await startTimer({ projectId: project._id });
-      addToast({ type: 'success', message: `Timer demarré pour ${project.name}` });
+      addToast({ type: 'success', message: `Timer démarré pour ${project.name}` });
     } catch (err) {
       addToast({
         type: 'error',
@@ -406,7 +419,7 @@ export default function EventsTab({ project }) {
                     </span>
                     {quote.status === 'draft' && (
                       <button
-                        onClick={() => updateQuoteStatus(quote._id, 'sent')}
+                        onClick={() => setQuoteStatusConfirm({ quoteId: quote._id, status: 'sent', number: quote.number })}
                         className="p-1 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
                         title="Marquer comme envoyé"
                       >
@@ -415,7 +428,7 @@ export default function EventsTab({ project }) {
                     )}
                     {quote.status === 'sent' && (
                       <button
-                        onClick={() => updateQuoteStatus(quote._id, 'signed')}
+                        onClick={() => setQuoteStatusConfirm({ quoteId: quote._id, status: 'signed', number: quote.number })}
                         className="p-1 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded transition-colors"
                         title="Marquer comme signé"
                       >
@@ -441,7 +454,8 @@ export default function EventsTab({ project }) {
       {projectEvents.length === 0 && projectQuotes.length === 0 && (
         <div className="flex flex-col items-center py-8 text-center">
           <Clock className="w-10 h-10 text-slate-300 dark:text-slate-600 mb-3" />
-          <p className="text-sm text-slate-400">Aucune heure ou dépense enregistrée</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Aucune heure ou dépense enregistrée</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500">Ajoutez un événement ou créez un devis pour ce projet</p>
         </div>
       )}
 
@@ -462,6 +476,21 @@ export default function EventsTab({ project }) {
         confirmLabel="Supprimer"
         cancelLabel="Annuler"
         variant="danger"
+      />
+
+      {/* Quote Status Confirmation */}
+      <ConfirmDialog
+        isOpen={!!quoteStatusConfirm}
+        onClose={() => setQuoteStatusConfirm(null)}
+        onConfirm={handleQuoteStatusConfirm}
+        title={quoteStatusConfirm?.status === 'sent' ? 'Marquer le devis comme envoyé' : 'Marquer le devis comme signé'}
+        message={
+          quoteStatusConfirm?.status === 'sent'
+            ? `Marquer le devis ${quoteStatusConfirm?.number} comme envoyé au client ?`
+            : `Marquer le devis ${quoteStatusConfirm?.number} comme signé ? Le devis pourra ensuite être facturé.`
+        }
+        confirmLabel={quoteStatusConfirm?.status === 'sent' ? 'Marquer envoyé' : 'Marquer signé'}
+        cancelLabel="Annuler"
       />
     </div>
   );

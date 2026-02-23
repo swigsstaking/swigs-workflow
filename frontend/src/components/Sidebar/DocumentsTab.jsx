@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useProjectStore } from '../../stores/projectStore';
 import { useToastStore } from '../../stores/toastStore';
-import { settingsApi, remindersApi, portalApi, abaninjaApi } from '../../services/api';
+import { useSettingsStore } from '../../stores/settingsStore';
+import { remindersApi, portalApi, abaninjaApi } from '../../services/api';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import { Skeleton } from '../ui/Skeleton';
 import NewInvoiceModal from './NewInvoiceModal';
 import NewQuoteModal from './NewQuoteModal';
 import InvoiceList from './documents/InvoiceList';
@@ -11,6 +13,7 @@ import QuoteList from './documents/QuoteList';
 export default function DocumentsTab({ project }) {
   const { projectInvoices, projectQuotes, updateInvoiceStatus, updateQuoteStatus, deleteInvoice, deleteQuote, fetchProjectInvoices, fetchProjectQuotes } = useProjectStore();
   const { addToast } = useToastStore();
+  const { settings, fetchSettings } = useSettingsStore();
 
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [showQuoteModal, setShowQuoteModal] = useState(false);
@@ -19,20 +22,20 @@ export default function DocumentsTab({ project }) {
   const [activeMenu, setActiveMenu] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [deleteQuoteConfirm, setDeleteQuoteConfirm] = useState(null);
-  const [settings, setSettings] = useState(null);
+  const [docsLoading, setDocsLoading] = useState(true);
 
   useEffect(() => {
-    loadSettings();
+    if (!settings) fetchSettings();
   }, []);
 
-  const loadSettings = async () => {
-    try {
-      const { data } = await settingsApi.get();
-      setSettings(data.data);
-    } catch (error) {
-      console.error('Error loading settings:', error);
-    }
-  };
+  useEffect(() => {
+    if (!project?._id) return;
+    setDocsLoading(true);
+    Promise.all([
+      fetchProjectInvoices(project._id),
+      fetchProjectQuotes(project._id)
+    ]).finally(() => setDocsLoading(false));
+  }, [project?._id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('fr-CH', {
@@ -205,6 +208,24 @@ export default function DocumentsTab({ project }) {
       addToast({ type: 'error', message: 'Erreur de synchronisation AbaNinja' });
     }
   };
+
+  if (docsLoading) {
+    return (
+      <div className="p-6 space-y-8">
+        <div className="space-y-3">
+          <Skeleton className="h-5 w-24" />
+          <Skeleton className="h-14 w-full" />
+          <Skeleton className="h-14 w-full" />
+          <Skeleton className="h-14 w-4/5" />
+        </div>
+        <div className="space-y-3">
+          <Skeleton className="h-5 w-24" />
+          <Skeleton className="h-14 w-full" />
+          <Skeleton className="h-14 w-3/4" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-8">

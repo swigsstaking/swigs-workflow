@@ -1,6 +1,15 @@
 import express from 'express';
 import multer from 'multer';
+import rateLimit from 'express-rate-limit';
 import { getSettings, updateSettings, getStats, uploadLogo, deleteLogo, getInvoicePreview, getInvoicePreviewHTML, sendTestEmail, sendTestReminder } from '../controllers/settingsController.js';
+
+const pdfLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { success: false, error: 'Trop de générations PDF. Réessayez dans une minute.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 const router = express.Router();
 
@@ -27,9 +36,9 @@ router.route('/stats')
 
 router.post('/logo', logoUpload.single('logo'), uploadLogo);
 router.delete('/logo', deleteLogo);
-router.get('/invoice-preview', getInvoicePreview);
+router.get('/invoice-preview', pdfLimiter, getInvoicePreview);
 router.get('/invoice-preview-html', getInvoicePreviewHTML);
-router.post('/test-email', sendTestEmail);
-router.post('/test-reminder', sendTestReminder);
+router.post('/test-email', pdfLimiter, sendTestEmail);
+router.post('/test-reminder', pdfLimiter, sendTestReminder);
 
 export default router;

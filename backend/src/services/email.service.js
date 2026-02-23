@@ -64,6 +64,42 @@ const formatCurrency = (amount) => {
 };
 
 /**
+ * Build a simple but readable HTML email body for invoices and quotes.
+ */
+const buildEmailHTML = ({ title, clientName, body, amount, companyName }) => {
+  const escapedBody = body
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br>');
+  return `<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,Helvetica,sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:30px 0">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08)">
+        <tr><td style="background:#1a1a2e;padding:24px 32px">
+          <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600">${title}</h1>
+        </td></tr>
+        <tr><td style="padding:32px">
+          <p style="margin:0 0 20px;color:#333;font-size:15px;line-height:1.6">${escapedBody}</p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:24px 0;border:1px solid #e8e8e8;border-radius:6px;overflow:hidden">
+            <tr style="background:#f8f8f8">
+              <td style="padding:12px 16px;color:#555;font-size:14px;font-weight:600">Montant total</td>
+              <td style="padding:12px 16px;color:#1a1a2e;font-size:16px;font-weight:700;text-align:right">${amount}</td>
+            </tr>
+          </table>
+          <p style="margin:24px 0 0;color:#888;font-size:12px;border-top:1px solid #eee;padding-top:16px">${companyName}</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+};
+
+/**
  * Send quote email
  * @param {Object} quote - Quote document
  * @param {Object} project - Project document (populated)
@@ -117,6 +153,13 @@ export const sendQuoteEmail = async (quote, project, settings, pdfBuffer) => {
     to: client.email,
     subject,
     text: body,
+    html: buildEmailHTML({
+      title: `Devis ${variables.number}`,
+      clientName: variables.clientName,
+      body,
+      amount: variables.total,
+      companyName: variables.companyName
+    }),
     attachments: [
       {
         filename: `Devis-${quote.number}.pdf`,
@@ -185,6 +228,13 @@ export const sendInvoiceEmail = async (invoice, project, settings, pdfBuffer) =>
     to: client.email,
     subject,
     text: body,
+    html: buildEmailHTML({
+      title: `Facture ${variables.number}`,
+      clientName: variables.clientName,
+      body,
+      amount: variables.total,
+      companyName: variables.companyName
+    }),
     attachments: [
       {
         filename: `Facture-${invoice.number}.pdf`,

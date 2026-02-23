@@ -43,7 +43,11 @@ export default function InvoiceList({
       </div>
 
       {invoices.length === 0 ? (
-        <p className="text-sm text-slate-400 dark:text-slate-500 text-center py-4">Aucune facture</p>
+        <div className="flex flex-col items-center py-8 text-center">
+          <Receipt className="w-10 h-10 text-slate-300 dark:text-slate-600 mb-3" />
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Aucune facture</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500">Créez votre première facture depuis les événements</p>
+        </div>
       ) : (
         <div className="space-y-2">
           {invoices.map(invoice => {

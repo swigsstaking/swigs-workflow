@@ -293,7 +293,7 @@ export default function InvoiceDesignTab({ settings, onSettingsUpdate }) {
   useEffect(() => {
     if (settings?.invoiceDesign) {
       const d = settings.invoiceDesign;
-      setFormData({
+      const nextData = {
         template:           d.template           || DEFAULTS.template,
         primaryColor:       d.primaryColor       || DEFAULTS.primaryColor,
         accentColor:        d.accentColor        || DEFAULTS.accentColor,
@@ -320,13 +320,16 @@ export default function InvoiceDesignTab({ settings, onSettingsUpdate }) {
         labelInvoice:       d.labelInvoice       || DEFAULTS.labelInvoice,
         labelQuote:         d.labelQuote         || DEFAULTS.labelQuote,
         labelServices:      d.labelServices      || DEFAULTS.labelServices
-      });
+      };
+      setFormData(nextData);
       setHasChanges(false);
+      // Auto-load preview once on mount when settings are ready
+      refreshPreview(nextData);
     }
     if (settings?.company?.logo) {
       setLogo(settings.company.logo);
     }
-  }, [settings]);
+  }, [settings]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // -------------------------------------------------------------------------
   // Field update + debounced auto-save + auto-preview

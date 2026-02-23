@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { FileText, Receipt, Download, CheckCircle, AlertCircle } from 'lucide-react';
+import { FileText, Receipt, Download, CheckCircle, AlertCircle, XCircle } from 'lucide-react';
 import { portalApi } from '../services/api';
 
 export default function PortalView() {
@@ -11,6 +11,10 @@ export default function PortalView() {
   const [showSignModal, setShowSignModal] = useState(false);
   const [signature, setSignature] = useState('');
   const [signing, setSigning] = useState(false);
+  const [signed, setSigned] = useState(false);
+  const [signedBy, setSignedBy] = useState('');
+  const [downloadError, setDownloadError] = useState(null);
+  const [signError, setSignError] = useState(null);
 
   // Detect dark mode from system preference
   const [isDark, setIsDark] = useState(false);
@@ -42,32 +46,35 @@ export default function PortalView() {
   };
 
   const handleDownloadPDF = async () => {
+    setDownloadError(null);
     try {
       const response = await portalApi.downloadPDF(token);
       const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
       const link = window.document.createElement('a');
       link.href = blobUrl;
-      const prefix = portalData.type === 'invoice' ? 'Facture' : 'Devis';
+      const prefix = portalData?.type === 'invoice' ? 'Facture' : 'Devis';
       link.setAttribute('download', `${prefix}_${portalData?.document?.number}.pdf`);
       window.document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(blobUrl);
     } catch (err) {
-      alert('Erreur lors du téléchargement du PDF');
+      setDownloadError('Erreur lors du téléchargement du PDF. Veuillez réessayer.');
     }
   };
 
   const handleSign = async () => {
     if (!signature.trim()) return;
+    setSignError(null);
 
     try {
       setSigning(true);
       await portalApi.signQuote(token, { signature: signature.trim() });
+      setSignedBy(signature.trim());
       setShowSignModal(false);
-      loadDocument();
+      setSigned(true);
     } catch (err) {
-      alert('Erreur lors de la signature');
+      setSignError(err.response?.data?.error || 'Erreur lors de la signature. Veuillez réessayer.');
     } finally {
       setSigning(false);
     }
@@ -104,9 +111,46 @@ export default function PortalView() {
     );
   }
 
+  // Signed thank-you screen
+  if (signed) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-slate-900' : 'bg-slate-50'} px-4`}>
+        <div className={`max-w-md mx-auto text-center p-8 rounded-2xl shadow-xl border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+          <CheckCircle className="w-16 h-16 text-emerald-500 mx-auto mb-4" />
+          <h1 className={`text-2xl font-bold mb-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+            Devis signé avec succès
+          </h1>
+          <p className={`mb-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+            Signé par <strong>{signedBy}</strong>
+          </p>
+          <p className={`text-sm mb-6 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+            Nous avons été notifiés. Vous pouvez fermer cette page.
+          </p>
+          <button
+            onClick={handleDownloadPDF}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Télécharger le PDF
+          </button>
+          {downloadError && (
+            <div className="mt-4 flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm">
+              <XCircle className="w-4 h-4 flex-shrink-0" />
+              {downloadError}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   const { type, document: doc, project, company } = portalData;
   const isQuote = type === 'quote';
   const canSign = isQuote && doc.status === 'sent';
+
+  // Use company's primaryColor if available, otherwise default blue
+  const primaryColor = company?.primaryColor || '#2563EB';
+  const headerStyle = { background: `linear-gradient(to right, ${primaryColor}, ${primaryColor}cc)` };
 
   // Build lines from document data
   let lines = [];
@@ -142,7 +186,7 @@ export default function PortalView() {
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className={`rounded-xl ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white'} border shadow-xl overflow-hidden`}>
-          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-8 py-6">
+          <div className="px-8 py-6" style={headerStyle}>
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-2xl font-bold text-white mb-1">
@@ -262,35 +306,44 @@ export default function PortalView() {
           </div>
 
           {/* Actions */}
-          <div className={`px-8 py-6 border-t ${isDark ? 'border-slate-700 bg-slate-800/50' : 'border-slate-200 bg-slate-50'} flex justify-between items-center gap-4`}>
-            <div>
-              {doc.status === 'signed' && (
-                <div className="flex items-center gap-2 text-emerald-600">
-                  <CheckCircle className="w-5 h-5" />
-                  <span className="font-medium">Devis signé</span>
-                </div>
-              )}
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={handleDownloadPDF}
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  isDark
-                    ? 'bg-slate-700 text-slate-200 hover:bg-slate-600'
-                    : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
-                }`}
-              >
-                <Download className="w-4 h-4" />
-                Télécharger PDF
-              </button>
-              {canSign && (
+          <div className={`px-8 py-6 border-t ${isDark ? 'border-slate-700 bg-slate-800/50' : 'border-slate-200 bg-slate-50'} space-y-3`}>
+            {downloadError && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm">
+                <XCircle className="w-4 h-4 flex-shrink-0" />
+                {downloadError}
+              </div>
+            )}
+            <div className="flex justify-between items-center gap-4">
+              <div>
+                {doc.status === 'signed' && (
+                  <div className="flex items-center gap-2 text-emerald-600">
+                    <CheckCircle className="w-5 h-5" />
+                    <span className="font-medium">Devis signé</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-3">
                 <button
-                  onClick={() => setShowSignModal(true)}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                  onClick={handleDownloadPDF}
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isDark
+                      ? 'bg-slate-700 text-slate-200 hover:bg-slate-600'
+                      : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
+                  }`}
                 >
-                  Signer ce devis
+                  <Download className="w-4 h-4" />
+                  Télécharger PDF
                 </button>
-              )}
+                {canSign && (
+                  <button
+                    onClick={() => setShowSignModal(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-white rounded-lg text-sm font-medium transition-opacity hover:opacity-90"
+                    style={{ backgroundColor: primaryColor }}
+                  >
+                    Signer ce devis
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -314,7 +367,7 @@ export default function PortalView() {
             <input
               type="text"
               value={signature}
-              onChange={(e) => setSignature(e.target.value)}
+              onChange={(e) => { setSignature(e.target.value); setSignError(null); }}
               placeholder="Votre nom complet"
               className={`w-full px-3 py-2 rounded-lg border text-sm ${
                 isDark
@@ -322,9 +375,15 @@ export default function PortalView() {
                   : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
               } focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
             />
+            {signError && (
+              <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm">
+                <XCircle className="w-4 h-4 flex-shrink-0" />
+                {signError}
+              </div>
+            )}
             <div className="flex gap-3 mt-6">
               <button
-                onClick={() => setShowSignModal(false)}
+                onClick={() => { setShowSignModal(false); setSignError(null); }}
                 disabled={signing}
                 className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                   isDark
@@ -337,7 +396,8 @@ export default function PortalView() {
               <button
                 onClick={handleSign}
                 disabled={!signature.trim() || signing}
-                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-4 py-2 text-sm font-medium text-white rounded-lg transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ backgroundColor: primaryColor }}
               >
                 {signing ? 'Signature...' : 'Confirmer la signature'}
               </button>

@@ -1,4 +1,5 @@
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import {
   getAllInvoices,
   getInvoice,
@@ -9,6 +10,14 @@ import {
   sendInvoice
 } from '../controllers/invoiceController.js';
 import { validate } from '../middleware/validate.js';
+
+const pdfLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { success: false, error: 'Trop de générations PDF. Réessayez dans une minute.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 const router = express.Router();
 
@@ -27,7 +36,7 @@ router.route('/:id/status')
   );
 
 router.route('/:id/pdf')
-  .get(getInvoicePDF);
+  .get(pdfLimiter, getInvoicePDF);
 
 router.route('/:id/send')
   .post(sendInvoice);

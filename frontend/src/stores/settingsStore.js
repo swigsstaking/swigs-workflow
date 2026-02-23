@@ -14,6 +14,7 @@ export const useSettingsStore = create(
       error: null,
 
       fetchSettings: async () => {
+        if (get().loading) return;
         set({ loading: true, error: null });
         try {
           const { data } = await settingsApi.get();
@@ -28,6 +29,16 @@ export const useSettingsStore = create(
           });
         } catch (error) {
           set({ loading: false, error: error.message });
+        }
+      },
+
+      updateSettings: async (updates) => {
+        try {
+          const { data } = await settingsApi.update(updates);
+          set({ settings: data.data });
+          return data.data;
+        } catch (err) {
+          throw err;
         }
       },
 

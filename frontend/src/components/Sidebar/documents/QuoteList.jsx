@@ -44,7 +44,11 @@ export default function QuoteList({
       </div>
 
       {quotes.length === 0 ? (
-        <p className="text-sm text-slate-400 dark:text-slate-500 text-center py-4">Aucun devis</p>
+        <div className="flex flex-col items-center py-8 text-center">
+          <FileText className="w-10 h-10 text-slate-300 dark:text-slate-600 mb-3" />
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Aucun devis</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500">Créez un devis pour ce projet</p>
+        </div>
       ) : (
         <div className="space-y-2">
           {quotes.map(quote => {

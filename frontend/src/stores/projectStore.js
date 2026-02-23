@@ -239,9 +239,8 @@ export const useProjectStore = create((set, get) => ({
       set(state => ({
         projectEvents: [data.data, ...state.projectEvents]
       }));
-      // Refresh project to update unbilled totals
+      // Refresh only the current project to update unbilled totals
       get().fetchProject(projectId);
-      get().fetchProjects();
       return data.data;
     } catch (error) {
       set({ error: error.message });
@@ -288,12 +287,14 @@ export const useProjectStore = create((set, get) => ({
     try {
       const { data } = await invoicesApi.create(projectId, invoiceData);
       set(state => ({
-        projectInvoices: [data.data, ...state.projectInvoices]
+        projectInvoices: [data.data, ...state.projectInvoices],
+        // Optimistic update: increment invoice count on the selected project
+        selectedProject: state.selectedProject?._id === projectId
+          ? { ...state.selectedProject, invoiceCount: (state.selectedProject.invoiceCount || 0) + 1 }
+          : state.selectedProject
       }));
-      // Refresh events to update billed status
+      // Refresh events to update billed status — no need to refetch all projects
       get().fetchProjectEvents(projectId);
-      get().fetchProject(projectId);
-      get().fetchProjects();
       return data.data;
     } catch (error) {
       set({ error: error.message });
@@ -320,12 +321,10 @@ export const useProjectStore = create((set, get) => ({
       set(state => ({
         projectInvoices: state.projectInvoices.filter(i => i._id !== id)
       }));
-      // Refresh events to update billed status
+      // Refresh events and quotes to restore unbilled status — no full fetchProjects needed
       if (projectId) {
         get().fetchProjectEvents(projectId);
         get().fetchProjectQuotes(projectId);
-        get().fetchProject(projectId);
-        get().fetchProjects();
       }
     } catch (error) {
       set({ error: error.message });
@@ -385,15 +384,13 @@ export const useProjectStore = create((set, get) => ({
   deleteQuote: async (id, projectId) => {
     try {
       await quotesApi.delete(id);
-      // Mise à jour locale immédiate
+      // Optimistic local removal
       set(state => ({
         projectQuotes: state.projectQuotes.filter(q => q._id !== id)
       }));
-      // Refresh toutes les données du projet
+      // Refresh only quotes for this project — no full fetchProjects needed
       if (projectId) {
-        await get().fetchProjectQuotes(projectId);
-        get().fetchProject(projectId);
-        get().fetchProjects();
+        get().fetchProjectQuotes(projectId);
       }
     } catch (error) {
       set({ error: error.message });
