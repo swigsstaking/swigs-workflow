@@ -13,6 +13,7 @@ import StatusesSection from '../components/Settings/sections/StatusesSection';
 import SmtpSection from '../components/Settings/sections/SmtpSection';
 import EmailsSection from '../components/Settings/sections/EmailsSection';
 import RemindersSection from '../components/Settings/sections/RemindersSection';
+import RecurringSection from '../components/Settings/sections/RecurringSection';
 import AbaNinjaSection from '../components/Settings/sections/AbaNinjaSection';
 import CmsSection from '../components/Settings/sections/CmsSection';
 import BankSection from '../components/Settings/sections/BankSection';
@@ -66,6 +67,8 @@ export default function Settings() {
             onSettingsUpdate={handleSettingsUpdate}
           />
         );
+      case 'recurring':
+        return <RecurringSection settings={settings} />;
       case 'personalization':
         return <PersonnalisationTab />;
       case 'invoice-design':

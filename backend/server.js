@@ -29,12 +29,14 @@ import reminderRoutes from './src/routes/reminders.js';
 import abaninjaRoutes from './src/routes/abaninja.js';
 import bankRoutes from './src/routes/bank.js';
 import timerRoutes from './src/routes/timer.js';
+import recurringInvoiceRoutes from './src/routes/recurringInvoices.js';
 import { errorHandler } from './src/middleware/errorHandler.js';
 import { requireAuth, optionalAuth } from './src/middleware/auth.js';
 import { initializeAutomationServices } from './src/services/automation/index.js';
 import { initEventBus, eventBus } from './src/services/eventBus.service.js';
 import { initialize as initReminders } from './src/services/reminder.service.js';
 import { initBankImapCron } from './src/services/bankImapFetcher.service.js';
+import { initRecurringInvoices } from './src/services/recurringInvoice.service.js';
 
 const app = express();
 
@@ -221,6 +223,9 @@ app.use('/api/bank', requireAuth, bankRoutes);
 // Timer routes (protected)
 app.use('/api/timer', requireAuth, timerRoutes);
 
+// Recurring invoice routes (protected)
+app.use('/api/recurring-invoices', requireAuth, recurringInvoiceRoutes);
+
 // =============================================================================
 // ERROR HANDLING
 // =============================================================================
@@ -263,6 +268,9 @@ mongoose.connect(process.env.MONGODB_URI, mongoOptions)
 
     // Initialize bank IMAP auto-fetch
     initBankImapCron();
+
+    // Initialize recurring invoice generation
+    initRecurringInvoices();
 
     const PORT = process.env.PORT || 3003;
     const server = app.listen(PORT, () => {
