@@ -48,7 +48,7 @@ export default function PortalView() {
       const link = window.document.createElement('a');
       link.href = blobUrl;
       const prefix = portalData.type === 'invoice' ? 'Facture' : 'Devis';
-      link.setAttribute('download', `${prefix}_${doc.number}.pdf`);
+      link.setAttribute('download', `${prefix}_${portalData?.document?.number}.pdf`);
       window.document.body.appendChild(link);
       link.click();
       link.remove();

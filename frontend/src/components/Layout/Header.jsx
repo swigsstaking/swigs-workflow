@@ -1,8 +1,11 @@
+import { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { LayoutGrid, Settings, Plus, Search, Archive, Sun, Moon, Calendar, BarChart3, Zap, LogIn, LogOut, Home } from 'lucide-react';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
+import { useTimerStore } from '../../stores/timerStore';
 import Button from '../ui/Button';
+import TimerWidget from './TimerWidget';
 
 export default function Header() {
   const location = useLocation();
@@ -17,8 +20,15 @@ export default function Header() {
   } = useUIStore();
 
   const { user, isAuthenticated, logout, loginWithHub } = useAuthStore();
+  const { activeTimer, fetchActive } = useTimerStore();
 
   const currentPath = location.pathname;
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchActive();
+    }
+  }, [isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const navLink = (to, label, Icon, exact = false) => {
     const isActive = exact ? currentPath === to : currentPath.startsWith(to);
@@ -79,6 +89,8 @@ export default function Header() {
 
           {/* Actions */}
           <div className="flex items-center gap-2">
+            {/* Timer Widget */}
+            {activeTimer && <TimerWidget />}
             {currentPath === '/workflow' && (
               <>
                 {/* Search */}

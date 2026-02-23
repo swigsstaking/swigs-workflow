@@ -53,7 +53,7 @@ export default function Secretary() {
   if (loading && !data) {
     return (
       <div className="flex items-center justify-center" style={{ minHeight: 'calc(100vh - 41px)' }}>
-        <Loader2 className="w-8 h-8 animate-spin text-white/40" />
+        <Loader2 className="w-8 h-8 animate-spin text-slate-400 dark:text-white/40" />
       </div>
     );
   }

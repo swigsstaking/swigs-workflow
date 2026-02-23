@@ -3,6 +3,7 @@ import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import { eventsApi, quotesApi } from '../../services/api';
 import { useProjectStore } from '../../stores/projectStore';
+import { useToastStore } from '../../stores/toastStore';
 import InvoiceModeSelector from './invoice/InvoiceModeSelector';
 import StandardInvoiceForm from './invoice/StandardInvoiceForm';
 import CustomInvoiceForm from './invoice/CustomInvoiceForm';
@@ -10,6 +11,7 @@ import InvoiceSummary from './invoice/InvoiceSummary';
 
 export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQuoteId, vatRate }) {
   const { createInvoice } = useProjectStore();
+  const { addToast } = useToastStore();
 
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState('standard'); // 'standard' or 'custom'
@@ -239,10 +241,11 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
       }
 
       await createInvoice(project._id, invoiceData);
-      onClose();
       resetForm();
+      onClose();
     } catch (error) {
       console.error('Error creating invoice:', error);
+      addToast({ type: 'error', message: error.response?.data?.error || 'Erreur lors de la création de la facture' });
     } finally {
       setLoading(false);
     }

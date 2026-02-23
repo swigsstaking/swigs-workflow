@@ -3,10 +3,11 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import {
   Plus, Clock, Receipt, Briefcase, Trash2,
-  Check, X, Edit2, FileText, Send, FileSignature, Copy
+  Check, X, Edit2, FileText, Send, FileSignature, Copy, Timer
 } from 'lucide-react';
 import { useProjectStore } from '../../stores/projectStore';
 import { useToastStore } from '../../stores/toastStore';
+import { useTimerStore } from '../../stores/timerStore';
 import Button from '../ui/Button';
 import Input, { Textarea, Select } from '../ui/Input';
 import ConfirmDialog from '../ui/ConfirmDialog';
@@ -40,6 +41,7 @@ export default function EventsTab({ project }) {
     createQuote
   } = useProjectStore();
   const { addToast } = useToastStore();
+  const { activeTimer, start: startTimer, loading: timerLoading } = useTimerStore();
 
   const [showForm, setShowForm] = useState(false);
   const [showQuoteModal, setShowQuoteModal] = useState(false);
@@ -150,6 +152,18 @@ export default function EventsTab({ project }) {
     });
   };
 
+  const handleStartTimer = async () => {
+    try {
+      await startTimer({ projectId: project._id });
+      addToast({ type: 'success', message: `Timer demarré pour ${project.name}` });
+    } catch (err) {
+      addToast({
+        type: 'error',
+        message: err.response?.data?.error || 'Erreur lors du démarrage du timer'
+      });
+    }
+  };
+
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('fr-CH', {
       style: 'currency',
@@ -187,6 +201,18 @@ export default function EventsTab({ project }) {
           >
             Devis
           </Button>
+          {!activeTimer && (
+            <Button
+              onClick={handleStartTimer}
+              variant="secondary"
+              icon={Timer}
+              loading={timerLoading}
+              className="flex-1"
+              title="Demarrer un timer pour ce projet"
+            >
+              Timer
+            </Button>
+          )}
         </div>
       )}
 

@@ -2,13 +2,18 @@ import History from '../models/History.js';
 
 export const historyService = {
   async log(projectId, action, description, metadata = {}, user = 'system') {
-    return await History.create({
-      project: projectId,
-      action,
-      description,
-      metadata,
-      user
-    });
+    try {
+      await History.create({
+        project: projectId,
+        action,
+        description,
+        metadata,
+        user
+      });
+    } catch (err) {
+      console.error('[historyService] Failed to create history entry:', err.message);
+      // Fire-and-forget: never propagate to caller
+    }
   },
 
   // Project actions
@@ -50,7 +55,7 @@ export const historyService = {
 
   // Quote actions
   async quoteCreated(projectId, quoteNumber, total) {
-    return this.log(projectId, 'quote_created', `Devis ${quoteNumber} créé (${total}€)`, { quoteNumber, total });
+    return this.log(projectId, 'quote_created', `Devis ${quoteNumber} créé (${total} CHF)`, { quoteNumber, total });
   },
 
   async quoteSent(projectId, quoteNumber) {
@@ -75,7 +80,7 @@ export const historyService = {
 
   // Invoice actions
   async invoiceCreated(projectId, invoiceNumber, total) {
-    return this.log(projectId, 'invoice_created', `Facture ${invoiceNumber} créée (${total}€)`, { invoiceNumber, total });
+    return this.log(projectId, 'invoice_created', `Facture ${invoiceNumber} créée (${total} CHF)`, { invoiceNumber, total });
   },
 
   async invoiceSent(projectId, invoiceNumber) {

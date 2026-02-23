@@ -38,7 +38,7 @@ export const getSettings = async (req, res, next) => {
 // @route   PUT /api/settings
 export const updateSettings = async (req, res, next) => {
   try {
-    const { company, invoicing, personalization, emailTemplates, smtp, abaninja, reminders, cms, cmsIntegration, bankImap } = req.body;
+    const { company, invoicing, personalization, emailTemplates, smtp, abaninja, reminders, cms, cmsIntegration, bankImap, invoiceDesign } = req.body;
 
     const userId = req.user?._id || null;
     const query = userId ? { userId } : { userId: { $exists: false } };
@@ -104,6 +104,10 @@ export const updateSettings = async (req, res, next) => {
       settings.cmsIntegration = cmsData;
     }
 
+    if (invoiceDesign) {
+      settings.invoiceDesign = { ...(settings.invoiceDesign?.toObject ? settings.invoiceDesign.toObject() : {}), ...invoiceDesign };
+    }
+
     if (bankImap) {
       const imapData = { ...(settings.bankImap?.toObject ? settings.bankImap.toObject() : {}), ...bankImap };
       if (!imapData.pass || imapData.pass === '') {
@@ -116,7 +120,340 @@ export const updateSettings = async (req, res, next) => {
 
     await settings.save();
 
-    res.json({ success: true, data: settings });
+    // Strip secrets from response, add boolean indicators instead
+    const settingsObj = settings.toObject ? settings.toObject() : { ...settings };
+    if (settingsObj.smtp) {
+      settingsObj.smtp._hasPass = !!settingsObj.smtp.pass;
+      delete settingsObj.smtp.pass;
+    }
+    if (settingsObj.abaninja) {
+      settingsObj.abaninja._hasApiKey = !!settingsObj.abaninja.apiKey;
+      delete settingsObj.abaninja.apiKey;
+    }
+    if (settingsObj.cmsIntegration) {
+      settingsObj.cmsIntegration._hasServiceToken = !!settingsObj.cmsIntegration.serviceToken;
+      delete settingsObj.cmsIntegration.serviceToken;
+    }
+    if (settingsObj.bankImap) {
+      settingsObj.bankImap._hasPass = !!settingsObj.bankImap.pass;
+      delete settingsObj.bankImap.pass;
+    }
+
+    res.json({ success: true, data: settingsObj });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Upload company logo
+// @route   POST /api/settings/logo
+export const uploadLogo = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'Aucun fichier fourni' });
+    }
+
+    const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+
+    const userId = req.user?._id || null;
+    const settings = await Settings.getSettings(userId);
+    settings.company.logo = base64;
+    await settings.save();
+
+    res.json({ success: true, data: { logo: base64 } });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Delete company logo
+// @route   DELETE /api/settings/logo
+export const deleteLogo = async (req, res, next) => {
+  try {
+    const userId = req.user?._id || null;
+    const settings = await Settings.getSettings(userId);
+    settings.company.logo = null;
+    await settings.save();
+
+    res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Generate invoice preview PDF with fake data
+// @route   GET /api/settings/invoice-preview
+export const getInvoicePreview = async (req, res, next) => {
+  try {
+    const userId = req.user?._id || null;
+    const settings = await Settings.getSettings(userId);
+
+    // Use dynamic import to avoid circular deps
+    const { generateInvoicePDF } = await import('../services/pdf.service.js');
+
+    // Fake data for preview
+    const fakeInvoice = {
+      number: 'FAC-2026-001',
+      issueDate: new Date(),
+      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      status: 'sent',
+      subtotal: 3750,
+      vatRate: settings.invoicing?.defaultVatRate || 8.1,
+      vatAmount: 303.75,
+      total: 4053.75,
+      notes: settings.invoiceDesign?.notesTemplate || 'Merci pour votre confiance.',
+      events: [
+        { type: 'hours', description: 'Développement frontend', hours: 20, hourlyRate: 150, amount: 3000 },
+        { type: 'expense', description: 'Licence logiciel annuelle', amount: 250 }
+      ],
+      quotes: [],
+      customLines: [
+        { description: 'Hébergement serveur (mensuel)', quantity: 1, unitPrice: 500, total: 500 }
+      ]
+    };
+
+    const fakeProject = {
+      name: 'Projet exemple',
+      client: {
+        name: 'Entreprise Exemple SA',
+        email: 'contact@exemple.ch',
+        phone: '+41 22 123 45 67',
+        address: 'Rue de la Poste 1, 1200 Genève'
+      }
+    };
+
+    const pdfBuffer = await generateInvoicePDF(fakeInvoice, fakeProject, settings);
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="preview.pdf"',
+      'Content-Length': pdfBuffer.length
+    });
+    res.send(pdfBuffer);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Send test invoice email with current design settings
+// @route   POST /api/settings/test-email
+export const sendTestEmail = async (req, res, next) => {
+  try {
+    const { to } = req.body;
+
+    if (!to) {
+      return res.status(400).json({ success: false, error: 'Adresse email requise (champ "to")' });
+    }
+
+    const userId = req.user?._id || null;
+    const settings = await Settings.getSettings(userId);
+
+    // Validate SMTP config
+    if (!settings.smtp || !settings.smtp.host || !settings.smtp.user || !settings.smtp.pass) {
+      return res.status(400).json({
+        success: false,
+        error: 'Configuration SMTP manquante. Configurez votre serveur SMTP dans les paramètres.'
+      });
+    }
+
+    const { generateInvoicePDF } = await import('../services/pdf.service.js');
+    const { createTransporter } = await import('../services/email.service.js');
+
+    // Fake invoice for testing
+    const fakeInvoice = {
+      number: 'FAC-2026-TEST',
+      issueDate: new Date(),
+      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      status: 'sent',
+      subtotal: 4250,
+      vatRate: settings.invoicing?.defaultVatRate || 8.1,
+      vatAmount: 344.25,
+      total: 4594.25,
+      notes: settings.invoiceDesign?.notesTemplate || 'Ceci est une facture test pour vérifier le design et l\'envoi.',
+      events: [
+        { type: 'hours', description: 'Développement frontend React', hours: 16, hourlyRate: 150, amount: 2400 },
+        { type: 'hours', description: 'Intégration API backend', hours: 8, hourlyRate: 150, amount: 1200 },
+        { type: 'expense', description: 'Licence Adobe Creative Suite', amount: 150 }
+      ],
+      quotes: [],
+      customLines: [
+        { description: 'Hébergement serveur (mensuel)', quantity: 1, unitPrice: 500, total: 500 }
+      ]
+    };
+
+    const fakeProject = {
+      name: 'Projet Test SWIGS',
+      client: {
+        name: 'Test Client SA',
+        email: to,
+        phone: '+41 79 123 45 67',
+        address: 'Avenue de la Gare 10, 1003 Lausanne'
+      }
+    };
+
+    // Generate PDF
+    const pdfBuffer = await generateInvoicePDF(fakeInvoice, fakeProject, settings);
+
+    // Send email
+    const transporter = createTransporter(settings.smtp);
+    const company = settings.company || {};
+
+    await transporter.sendMail({
+      from: `"${company.name || 'SWIGS'}" <${settings.smtp.user}>`,
+      to,
+      subject: `[TEST] Facture FAC-2026-TEST — ${company.name || 'SWIGS'}`,
+      text: `Bonjour,\n\nCeci est un email test pour vérifier le design des factures et le bon fonctionnement de l'envoi.\n\nVeuillez trouver ci-joint une facture test (FAC-2026-TEST) d'un montant de 4'594.25 CHF.\n\nCordialement,\n${company.name || 'SWIGS'}\n\n`,
+      attachments: [
+        {
+          filename: 'Facture-FAC-2026-TEST.pdf',
+          content: pdfBuffer,
+          contentType: 'application/pdf',
+          contentDisposition: 'attachment'
+        }
+      ]
+    });
+
+    res.json({
+      success: true,
+      message: `Email test envoyé à ${to} avec la facture PDF en pièce jointe`
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Send test reminder email (with RAPPEL PDF attached)
+// @route   POST /api/settings/test-reminder
+export const sendTestReminder = async (req, res, next) => {
+  try {
+    const { to } = req.body;
+
+    if (!to) {
+      return res.status(400).json({ success: false, error: 'Adresse email requise (champ "to")' });
+    }
+
+    const userId = req.user?._id || null;
+    const settings = await Settings.getSettings(userId);
+
+    // Validate SMTP config
+    if (!settings.smtp || !settings.smtp.host || !settings.smtp.user || !settings.smtp.pass) {
+      return res.status(400).json({
+        success: false,
+        error: 'Configuration SMTP manquante.'
+      });
+    }
+
+    const { createTransporter, textToHtml } = await import('../services/email.service.js');
+    const { generateReminderPDF } = await import('../services/pdf.service.js');
+    const company = settings.company || {};
+
+    // Build fake variables for the first reminder template
+    const schedule = settings.reminders?.schedule || [];
+    const firstReminder = schedule[0] || {
+      subject: 'Rappel : Facture {number} échue',
+      body: 'Bonjour {clientName},\n\nNous vous rappelons que la facture {number} d\'un montant de {total} est échue depuis le {dueDate}.\n\nMerci de procéder au règlement dans un délai de 15 jours.\n\nCordialement,\n{companyName}'
+    };
+
+    const fmtCurrency = (n) => new Intl.NumberFormat('fr-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n) + ' CHF';
+
+    const variables = {
+      clientName: 'Test Client SA',
+      number: 'FAC-2026-TEST',
+      total: fmtCurrency(4594.25),
+      dueDate: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-CH'),
+      daysOverdue: '10',
+      companyName: company.name || 'SWIGS'
+    };
+
+    let subject = firstReminder.subject || '';
+    let body = firstReminder.body || '';
+    for (const [key, value] of Object.entries(variables)) {
+      const regex = new RegExp(`\\{${key}\\}`, 'g');
+      subject = subject.replace(regex, value);
+      body = body.replace(regex, value);
+    }
+    // Fix double currency suffix ("{total} CHF" where {total} already includes "CHF")
+    subject = subject.replace(/CHF\s+CHF/g, 'CHF');
+    body = body.replace(/CHF\s+CHF/g, 'CHF');
+
+    subject = `[TEST] ${subject}`;
+
+    // Generate fake overdue invoice for REMINDER PDF
+    const fakeInvoice = {
+      number: 'FAC-2026-TEST',
+      issueDate: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000),
+      dueDate: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+      status: 'sent',
+      subtotal: 4250,
+      vatRate: settings.invoicing?.defaultVatRate || 8.1,
+      vatAmount: 344.25,
+      total: 4594.25,
+      notes: '',
+      events: [
+        { type: 'hours', description: 'Développement frontend React', hours: 16, hourlyRate: 150, amount: 2400 },
+        { type: 'hours', description: 'Intégration API backend', hours: 8, hourlyRate: 150, amount: 1200 },
+        { type: 'expense', description: 'Licence Adobe Creative Suite', amount: 150 }
+      ],
+      quotes: [],
+      customLines: [
+        { description: 'Hébergement serveur (mensuel)', quantity: 1, unitPrice: 500, total: 500 }
+      ]
+    };
+
+    const fakeProject = {
+      name: 'Projet Test SWIGS',
+      client: {
+        name: 'Test Client SA',
+        email: to,
+        phone: '+41 79 123 45 67',
+        address: 'Avenue de la Gare 10, 1003 Lausanne'
+      }
+    };
+
+    const pdfBuffer = await generateReminderPDF(fakeInvoice, fakeProject, settings, {
+      tier: 'reminder_1',
+      daysOverdue: 10
+    });
+
+    const transporter = createTransporter(settings.smtp);
+
+    await transporter.sendMail({
+      from: `"${company.name || 'SWIGS'}" <${settings.smtp.user}>`,
+      to,
+      subject,
+      text: body,
+      html: textToHtml(body),
+      attachments: [
+        {
+          filename: 'Rappel-FAC-2026-TEST.pdf',
+          content: pdfBuffer,
+          contentType: 'application/pdf',
+          contentDisposition: 'attachment'
+        }
+      ]
+    });
+
+    res.json({
+      success: true,
+      message: `Rappel test envoyé à ${to} avec PDF "1er Rappel" en pièce jointe`
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get invoice preview as HTML (for live preview)
+// @route   GET /api/settings/invoice-preview-html
+export const getInvoicePreviewHTML = async (req, res, next) => {
+  try {
+    const userId = req.user?._id || null;
+    const settings = await Settings.getSettings(userId);
+
+    const { generatePreviewHTML } = await import('../services/pdf.service.js');
+    const html = generatePreviewHTML(settings);
+
+    res.set({ 'Content-Type': 'text/html; charset=utf-8' });
+    res.send(html);
   } catch (error) {
     next(error);
   }

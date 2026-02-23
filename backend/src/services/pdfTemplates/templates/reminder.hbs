@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RAPPEL {{document.originalNumber}}</title>
+  <style>
+    {{{css}}}
+  </style>
+</head>
+<body class="template-{{design.template}} table-header-{{design.tableHeaderStyle}} logo-{{design.logoPosition}}" style="--primary-color: {{design.primaryColor}}; --accent-color: {{design.accentColor}}; --font-family: '{{design.fontFamily}}', 'Helvetica Neue', Helvetica, Arial, sans-serif; --logo-size: {{design.logoSize}}mm; --logo-offset-x: {{design.logoOffsetX}}mm; --logo-offset-y: {{design.logoOffsetY}}mm;">
+<div class="page">
+
+  <!-- ===== HEADER ===== -->
+  <header class="doc-header">
+    <!-- Company Block -->
+    <div class="company-block">
+      {{#if design.showLogo}}
+        {{#if company.logo}}
+          <img class="company-logo" src="{{company.logo}}" alt="Logo {{company.name}}">
+        {{/if}}
+      {{/if}}
+      {{#if design.showCompanyName}}
+        <div class="company-name">{{company.name}}</div>
+      {{/if}}
+      {{#if design.showCompanyAddress}}
+        <div class="company-details">
+          {{#if company.address}}<span>{{company.address}}</span>{{/if}}
+        </div>
+      {{/if}}
+      {{#if design.showCompanyContact}}
+        <div class="company-details">
+          {{#if company.email}}<span>{{company.email}}</span>{{/if}}
+          {{#if company.phone}}<span>{{company.phone}}</span>{{/if}}
+        </div>
+      {{/if}}
+      <div class="company-meta">
+        {{#if design.showSiret}}{{#if company.siret}}<span>IDE/SIRET: {{company.siret}}</span>{{/if}}{{/if}}
+        {{#if design.showVatNumber}}{{#if company.vatNumber}}<span>N° TVA: {{company.vatNumber}}</span>{{/if}}{{/if}}
+        {{#if design.showIban}}{{#if company.iban}}<span>IBAN: {{company.iban}}</span>{{/if}}{{/if}}
+      </div>
+    </div>
+
+    <!-- Document Title Block -->
+    <div class="doc-title-block">
+      <div class="doc-type reminder-type">{{document.reminderLabel}}</div>
+      <div class="doc-number">Réf. {{document.originalNumber}}</div>
+      <div class="doc-status status-overdue">En retard</div>
+    </div>
+  </header>
+
+  <!-- ===== REMINDER NOTICE ===== -->
+  <div class="reminder-notice">
+    <div class="reminder-notice-title">{{document.reminderLabel}}</div>
+    <div class="reminder-notice-text">
+      Malgré notre relance, la facture <strong>{{document.originalNumber}}</strong> d'un montant de
+      <strong>{{formatCurrency totals.total}}</strong> reste impayée.
+      Elle était due le <strong>{{formatDate document.originalDueDate}}</strong>,
+      soit un retard de <strong>{{document.daysOverdue}} jours</strong>.
+    </div>
+    <div class="reminder-notice-text" style="margin-top: 2mm;">
+      Nous vous prions de bien vouloir procéder au règlement dans un délai de <strong>15 jours</strong>
+      à compter de la réception de ce rappel, soit avant le <strong>{{formatDate document.newDueDate}}</strong>.
+    </div>
+  </div>
+
+  <!-- ===== DATES + CLIENT INFO ROW ===== -->
+  <div class="info-row">
+    <!-- Client Block -->
+    <div class="info-block" style="flex: 1.3;">
+      <div class="envelope-sender-line">{{company.name}}{{#if company.address}} — {{company.address}}{{/if}}</div>
+      <div class="info-block-title">Destinataire</div>
+      <div class="info-block-content">
+        <strong>{{client.name}}</strong>
+        {{#if client.address}}<br>{{client.address}}{{/if}}
+        {{#if client.email}}<br>{{client.email}}{{/if}}
+        {{#if client.phone}}<br>{{client.phone}}{{/if}}
+        {{#if design.showProjectName}}
+          {{#if project.name}}<br><span class="label">Projet :</span> {{project.name}}{{/if}}
+        {{/if}}
+      </div>
+    </div>
+
+    <!-- Dates Block -->
+    {{#if design.showDateBlock}}
+    <div class="info-block">
+      <div class="info-block-title">Dates</div>
+      <div class="date-row">
+        <div class="date-item">
+          <span class="date-label">Facture du</span>
+          <span class="date-value">{{formatDate document.issueDate}}</span>
+        </div>
+        <div class="date-item">
+          <span class="date-label">Echue le</span>
+          <span class="date-value" style="color: #dc2626; font-weight: 700;">{{formatDate document.originalDueDate}}</span>
+        </div>
+        <div class="date-item">
+          <span class="date-label">Nouveau délai</span>
+          <span class="date-value">{{formatDate document.newDueDate}}</span>
+        </div>
+      </div>
+    </div>
+    {{/if}}
+  </div>
+
+  <!-- ===== LINES TABLE ===== -->
+  <div class="table-section">
+    <div class="table-title">{{design.labelServices}}</div>
+    <table class="lines-table">
+      <thead>
+        <tr>
+          <th style="width: 55%;">Description</th>
+          <th style="width: 10%;" class="text-right">Qté</th>
+          <th style="width: 17%;" class="text-right">Prix unit.</th>
+          <th style="width: 18%;" class="text-right">Total HT</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each lines}}
+        <tr>
+          <td>
+            <span class="line-description">{{this.description}}</span>
+            {{#if this.detail}}<div class="line-detail">{{this.detail}}</div>{{/if}}
+          </td>
+          <td class="text-right">{{this.quantity}}</td>
+          <td class="text-right">{{formatCurrency this.unitPrice}}</td>
+          <td class="text-right">{{formatCurrency this.total}}</td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ===== TOTALS ===== -->
+  <div class="totals-section">
+    <div class="totals-box">
+      <div class="totals-row">
+        <span class="label">Sous-total HT</span>
+        <span class="value">{{formatCurrency totals.subtotal}}</span>
+      </div>
+      <div class="totals-row">
+        <span class="label">TVA ({{totals.vatRate}}%)</span>
+        <span class="value">{{formatCurrency totals.vatAmount}}</span>
+      </div>
+      <div class="totals-row total-final">
+        <span class="label">Total TTC</span>
+        <span class="value">{{formatCurrency totals.total}}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== PAYMENT DEADLINE ===== -->
+  <div class="reminder-deadline">
+    Paiement attendu sous <strong>15 jours</strong> — nouveau délai : <strong>{{formatDate document.newDueDate}}</strong>.
+    {{#if_eq document.reminderTier 'final_notice'}}
+    <br><strong>Sans paiement dans ce délai, des poursuites pourront être engagées.</strong>
+    {{/if_eq}}
+  </div>
+
+  <!-- ===== NOTES ===== -->
+  {{#if document.notes}}
+  <div class="notes-section">
+    <div class="notes-title">Notes</div>
+    <div class="notes-content">{{document.notes}}</div>
+  </div>
+  {{/if}}
+
+  <!-- ===== FOOTER ===== -->
+  <footer class="doc-footer">
+    <div class="footer-text">
+      {{#if design.footerText}}
+        {{design.footerText}}
+      {{else}}
+        {{company.name}}{{#if company.address}} — {{company.address}}{{/if}}{{#if company.email}} — {{company.email}}{{/if}}
+      {{/if}}
+    </div>
+  </footer>
+
+  <!-- ===== QR-BILL ===== -->
+  {{#if qrBillSvg}}
+  {{#if design.showQrBill}}
+  <div class="qr-bill-section">
+    {{{qrBillSvg}}}
+  </div>
+  {{/if}}
+  {{/if}}
+
+</div>
+</body>
+</html>

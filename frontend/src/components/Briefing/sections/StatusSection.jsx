@@ -9,7 +9,7 @@ export default function StatusSection({ items }) {
     <motion.section variants={sectionContainer} initial="hidden" animate="visible">
       <motion.div variants={sectionTitle} className="flex items-center gap-2 mb-2.5">
         <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-        <h2 className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">
+        <h2 className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
           Bilan
         </h2>
       </motion.div>

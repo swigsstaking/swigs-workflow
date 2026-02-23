@@ -493,6 +493,14 @@ export const deleteInvoice = async (req, res, next) => {
       return res.status(403).json({ success: false, error: 'Accès refusé' });
     }
 
+    // Block deletion of paid invoices
+    if (invoice.status === 'paid') {
+      return res.status(400).json({
+        success: false,
+        error: 'Impossible de supprimer une facture payée. Annulez-la d\'abord.'
+      });
+    }
+
     // Unbill all events linked to this invoice
     await Event.updateMany(
       { invoice: invoice._id },

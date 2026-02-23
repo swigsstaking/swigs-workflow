@@ -217,7 +217,9 @@ export default function BankSection() {
     }
   };
 
-  if (!importsLoaded) loadImports();
+  useEffect(() => {
+    if (!importsLoaded) loadImports();
+  }, [importsLoaded, loadImports]);
 
   const fmt = (n) => new Intl.NumberFormat('fr-CH', { style: 'currency', currency: 'CHF' }).format(n || 0);
 

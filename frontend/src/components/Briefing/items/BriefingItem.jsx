@@ -19,22 +19,22 @@ const iconMap = {
 
 const accentColors = {
   red: {
-    badge: 'bg-red-500/20 text-red-300',
-    action: 'bg-red-500/15 text-red-300 hover:bg-red-500/25',
-    icon: 'text-red-400',
-    dot: 'bg-red-400',
+    badge: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300',
+    action: 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-500/15 dark:text-red-300 dark:hover:bg-red-500/25',
+    icon: 'text-red-500 dark:text-red-400',
+    dot: 'bg-red-500 dark:bg-red-400',
   },
   amber: {
-    badge: 'bg-amber-500/20 text-amber-300',
-    action: 'bg-amber-500/15 text-amber-300 hover:bg-amber-500/25',
-    icon: 'text-amber-400',
-    dot: 'bg-amber-400',
+    badge: 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300',
+    action: 'bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:hover:bg-amber-500/25',
+    icon: 'text-amber-500 dark:text-amber-400',
+    dot: 'bg-amber-500 dark:bg-amber-400',
   },
   green: {
-    badge: 'bg-emerald-500/20 text-emerald-300',
-    action: 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25',
-    icon: 'text-emerald-400',
-    dot: 'bg-emerald-400',
+    badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300',
+    action: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:hover:bg-emerald-500/25',
+    icon: 'text-emerald-500 dark:text-emerald-400',
+    dot: 'bg-emerald-500 dark:bg-emerald-400',
   },
 };
 
@@ -55,7 +55,7 @@ export default function BriefingItem({ item, accent = 'red', onSendReminder, onC
     <motion.div
       variants={itemVariant}
       onClick={handleClick}
-      className={`flex items-center gap-3 py-2.5 px-3.5 bg-white/[0.04] backdrop-blur-sm border border-white/[0.06] rounded-xl hover:bg-white/[0.07] transition-colors ${onClick ? 'cursor-pointer' : ''}`}
+      className={`flex items-center gap-3 py-2.5 px-3.5 bg-white border border-slate-200 dark:bg-white/[0.04] dark:backdrop-blur-sm dark:border-white/[0.06] rounded-xl hover:bg-slate-50 dark:hover:bg-white/[0.07] transition-colors ${onClick ? 'cursor-pointer' : ''}`}
     >
       <div className={`flex-shrink-0 ${colors.icon}`}>
         <Icon className="w-4 h-4" />
@@ -63,9 +63,9 @@ export default function BriefingItem({ item, accent = 'red', onSendReminder, onC
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-white truncate">{item.title}</span>
+          <span className="text-sm font-medium text-slate-900 dark:text-white truncate">{item.title}</span>
           {item.subtitle && (
-            <span className="text-xs text-white/50 truncate hidden sm:inline">{item.subtitle}</span>
+            <span className="text-xs text-slate-500 dark:text-white/50 truncate hidden sm:inline">{item.subtitle}</span>
           )}
           {item.badge && (
             <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${colors.badge}`}>
@@ -74,13 +74,13 @@ export default function BriefingItem({ item, accent = 'red', onSendReminder, onC
           )}
         </div>
         {item.detail && (
-          <p className="text-xs text-white/50 mt-0.5 truncate">{item.detail}</p>
+          <p className="text-xs text-slate-500 dark:text-white/50 mt-0.5 truncate">{item.detail}</p>
         )}
       </div>
 
       <div className="flex items-center gap-2 flex-shrink-0 ml-1">
         {item.amount != null && (
-          <span className="text-sm font-semibold text-white whitespace-nowrap">
+          <span className="text-sm font-semibold text-slate-900 dark:text-white whitespace-nowrap">
             {fmt(item.amount)}
           </span>
         )}
@@ -105,11 +105,11 @@ export function BriefingSubItem({ child, accent = 'green' }) {
   return (
     <div className="flex items-center gap-2.5 py-1.5 pl-7">
       <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-        child.sent === false ? 'bg-white/20' : colors.dot
+        child.sent === false ? 'bg-slate-300 dark:bg-white/20' : colors.dot
       }`} />
       <div className="flex-1 min-w-0">
-        <span className="text-xs text-white/60 truncate block">{child.label}</span>
-        {child.sub && <span className="text-[11px] text-white/30">{child.sub}</span>}
+        <span className="text-xs text-slate-600 dark:text-white/60 truncate block">{child.label}</span>
+        {child.sub && <span className="text-[11px] text-slate-400 dark:text-white/30">{child.sub}</span>}
       </div>
       {child.amount != null && (
         <span className={`text-xs font-medium whitespace-nowrap ${colors.icon}`}>

@@ -27,6 +27,19 @@ export const createTransporter = (smtpConfig) => {
 };
 
 /**
+ * Convert plain text body to minimal HTML that looks like a plain email.
+ * Prevents Gmail from splitting body/signature and placing attachments in between.
+ */
+export const textToHtml = (text) => {
+  const escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br>');
+  return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#222;line-height:1.6">${escaped}</div>`;
+};
+
+/**
  * Replace template variables
  * @param {string} template - Template string with {variables}
  * @param {Object} variables - Variables to replace
@@ -91,7 +104,7 @@ export const sendQuoteEmail = async (quote, project, settings, pdfBuffer) => {
 
   const body = replaceVariables(
     emailTemplates.quoteBody ||
-    'Bonjour {clientName},\n\nVeuillez trouver ci-joint le devis {number} d\'un montant de {total} CHF.\n\nN\'hésitez pas à me contacter pour toute question.\n\nCordialement,\n{companyName}',
+    'Bonjour {clientName},\n\nVeuillez trouver ci-joint le devis {number} d\'un montant de {total}.\n\nN\'hésitez pas à me contacter pour toute question.\n\nCordialement,\n{companyName}',
     variables
   );
 
@@ -108,7 +121,8 @@ export const sendQuoteEmail = async (quote, project, settings, pdfBuffer) => {
       {
         filename: `Devis-${quote.number}.pdf`,
         content: pdfBuffer,
-        contentType: 'application/pdf'
+        contentType: 'application/pdf',
+        contentDisposition: 'attachment'
       }
     ]
   };
@@ -158,7 +172,7 @@ export const sendInvoiceEmail = async (invoice, project, settings, pdfBuffer) =>
 
   const body = replaceVariables(
     emailTemplates.invoiceBody ||
-    'Bonjour {clientName},\n\nVeuillez trouver ci-joint la facture {number} d\'un montant de {total} CHF.\n\nMerci de procéder au règlement dans un délai de {paymentTerms} jours.\n\nCordialement,\n{companyName}',
+    'Bonjour {clientName},\n\nVeuillez trouver ci-joint la facture {number} d\'un montant de {total}.\n\nMerci de procéder au règlement dans un délai de {paymentTerms} jours.\n\nCordialement,\n{companyName}',
     variables
   );
 
@@ -175,7 +189,8 @@ export const sendInvoiceEmail = async (invoice, project, settings, pdfBuffer) =>
       {
         filename: `Facture-${invoice.number}.pdf`,
         content: pdfBuffer,
-        contentType: 'application/pdf'
+        contentType: 'application/pdf',
+        contentDisposition: 'attachment'
       }
     ]
   };

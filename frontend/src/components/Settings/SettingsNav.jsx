@@ -1,4 +1,4 @@
-import { Building2, Receipt, Palette, Users, Package, Tag, Server, Mail, Bell, Link2, Landmark } from 'lucide-react';
+import { Building2, Receipt, Palette, Paintbrush, Users, Package, Tag, Server, Mail, Bell, Link2, Landmark } from 'lucide-react';
 
 const settingsNav = [
   {
@@ -7,6 +7,7 @@ const settingsNav = [
       { id: 'company', label: 'Entreprise', icon: Building2 },
       { id: 'invoicing', label: 'Facturation', icon: Receipt },
       { id: 'personalization', label: 'Personnalisation', icon: Palette },
+      { id: 'invoice-design', label: 'Design factures', icon: Paintbrush },
     ]
   },
   {

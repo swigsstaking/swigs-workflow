@@ -16,6 +16,7 @@ import RemindersSection from '../components/Settings/sections/RemindersSection';
 import AbaNinjaSection from '../components/Settings/sections/AbaNinjaSection';
 import CmsSection from '../components/Settings/sections/CmsSection';
 import BankSection from '../components/Settings/sections/BankSection';
+import InvoiceDesignTab from '../components/Settings/InvoiceDesignTab';
 
 export default function Settings() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -67,6 +68,13 @@ export default function Settings() {
         );
       case 'personalization':
         return <PersonnalisationTab />;
+      case 'invoice-design':
+        return (
+          <InvoiceDesignTab
+            settings={settings}
+            onSettingsUpdate={handleSettingsUpdate}
+          />
+        );
       case 'clients':
         return <ClientsSection />;
       case 'services':

@@ -84,7 +84,7 @@ const emailTemplatesSchema = new mongoose.Schema({
   },
   quoteBody: {
     type: String,
-    default: 'Bonjour {clientName},\n\nVeuillez trouver ci-joint le devis {number} d\'un montant de {total} CHF.\n\nN\'hésitez pas à me contacter pour toute question.\n\nCordialement,\n{companyName}'
+    default: 'Bonjour {clientName},\n\nVeuillez trouver ci-joint le devis {number} d\'un montant de {total}.\n\nN\'hésitez pas à me contacter pour toute question.\n\nCordialement,\n{companyName}'
   },
   invoiceSubject: {
     type: String,
@@ -92,7 +92,7 @@ const emailTemplatesSchema = new mongoose.Schema({
   },
   invoiceBody: {
     type: String,
-    default: 'Bonjour {clientName},\n\nVeuillez trouver ci-joint la facture {number} d\'un montant de {total} CHF.\n\nMerci de procéder au règlement dans un délai de {paymentTerms} jours.\n\nCordialement,\n{companyName}'
+    default: 'Bonjour {clientName},\n\nVeuillez trouver ci-joint la facture {number} d\'un montant de {total}.\n\nMerci de procéder au règlement dans un délai de {paymentTerms} jours.\n\nCordialement,\n{companyName}'
   }
 }, { _id: false });
 
@@ -175,25 +175,25 @@ const remindersSchema = new mongoose.Schema({
         days: 7,
         type: 'reminder_1',
         subject: 'Rappel : Facture {number} échue',
-        body: 'Bonjour {clientName},\n\nNous vous rappelons que la facture {number} d\'un montant de {total} CHF est échue depuis le {dueDate}.\n\nMerci de procéder au règlement.\n\nCordialement,\n{companyName}'
+        body: 'Bonjour {clientName},\n\nNous vous rappelons que la facture {number} d\'un montant de {total} est échue depuis le {dueDate}.\n\nMerci de procéder au règlement dans un délai de 15 jours.\n\nVeuillez trouver ci-joint le rappel détaillé.\n\nCordialement,\n{companyName}'
       },
       {
         days: 14,
         type: 'reminder_2',
         subject: '2ème rappel : Facture {number}',
-        body: 'Bonjour {clientName},\n\nMalgré notre précédent rappel, la facture {number} de {total} CHF reste impayée ({daysOverdue} jours de retard).\n\nMerci de régulariser cette situation rapidement.\n\nCordialement,\n{companyName}'
+        body: 'Bonjour {clientName},\n\nMalgré notre précédent rappel, la facture {number} d\'un montant de {total} reste impayée ({daysOverdue} jours de retard).\n\nNous vous prions de régulariser cette situation dans les plus brefs délais.\n\nCordialement,\n{companyName}'
       },
       {
         days: 30,
         type: 'reminder_3',
         subject: '3ème rappel : Facture {number}',
-        body: 'Bonjour {clientName},\n\nLa facture {number} de {total} CHF est en retard de {daysOverdue} jours. Sans règlement sous 15 jours, nous serons contraints d\'engager des démarches.\n\nCordialement,\n{companyName}'
+        body: 'Bonjour {clientName},\n\nLa facture {number} d\'un montant de {total} est en retard de {daysOverdue} jours.\n\nSans règlement sous 15 jours, nous serons contraints d\'engager des démarches de recouvrement.\n\nCordialement,\n{companyName}'
       },
       {
         days: 45,
         type: 'final_notice',
         subject: 'Mise en demeure : Facture {number}',
-        body: 'Bonjour {clientName},\n\nDernière mise en demeure concernant la facture {number} de {total} CHF, en retard de {daysOverdue} jours. Sans paiement sous 10 jours, des poursuites seront engagées.\n\n{companyName}'
+        body: 'Bonjour {clientName},\n\nDernière mise en demeure concernant la facture {number} d\'un montant de {total}, en retard de {daysOverdue} jours.\n\nSans paiement sous 10 jours, des poursuites seront engagées conformément à la loi.\n\n{companyName}'
       }
     ]
   }
@@ -231,6 +231,129 @@ const bankImapSchema = new mongoose.Schema({
   lastCheckedAt: {
     type: Date,
     default: null
+  }
+}, { _id: false });
+
+const invoiceDesignSchema = new mongoose.Schema({
+  template: {
+    type: String,
+    enum: ['modern', 'classic', 'minimal', 'swiss', 'elegant', 'bold', 'professional', 'envelope'],
+    default: 'modern'
+  },
+  primaryColor: {
+    type: String,
+    default: '#3B82F6'
+  },
+  accentColor: {
+    type: String,
+    default: '#1E40AF'
+  },
+  fontFamily: {
+    type: String,
+    enum: ['Inter', 'Helvetica', 'Georgia'],
+    default: 'Inter'
+  },
+  // Logo
+  showLogo: {
+    type: Boolean,
+    default: true
+  },
+  logoPosition: {
+    type: String,
+    enum: ['left', 'center', 'right'],
+    default: 'left'
+  },
+  logoSize: {
+    type: Number,
+    default: 18,
+    min: 6,
+    max: 60
+  },
+  logoOffsetX: {
+    type: Number,
+    default: 0,
+    min: -30,
+    max: 30
+  },
+  logoOffsetY: {
+    type: Number,
+    default: 0,
+    min: -15,
+    max: 15
+  },
+  // Company info visibility
+  showCompanyName: {
+    type: Boolean,
+    default: true
+  },
+  showCompanyAddress: {
+    type: Boolean,
+    default: true
+  },
+  showCompanyContact: {
+    type: Boolean,
+    default: true
+  },
+  showVatNumber: {
+    type: Boolean,
+    default: true
+  },
+  showSiret: {
+    type: Boolean,
+    default: false
+  },
+  showIban: {
+    type: Boolean,
+    default: true
+  },
+  showQrBill: {
+    type: Boolean,
+    default: true
+  },
+  // Document content visibility
+  showProjectName: {
+    type: Boolean,
+    default: true
+  },
+  showPaymentTerms: {
+    type: Boolean,
+    default: true
+  },
+  showDateBlock: {
+    type: Boolean,
+    default: true
+  },
+  // Table style
+  tableHeaderStyle: {
+    type: String,
+    enum: ['colored', 'dark', 'light', 'none'],
+    default: 'colored'
+  },
+  // Custom texts
+  footerText: {
+    type: String,
+    default: ''
+  },
+  headerText: {
+    type: String,
+    default: ''
+  },
+  notesTemplate: {
+    type: String,
+    default: ''
+  },
+  // Label overrides
+  labelInvoice: {
+    type: String,
+    default: 'Facture'
+  },
+  labelQuote: {
+    type: String,
+    default: 'Devis'
+  },
+  labelServices: {
+    type: String,
+    default: 'Prestations'
   }
 }, { _id: false });
 
@@ -299,6 +422,10 @@ const settingsSchema = new mongoose.Schema({
   },
   reminders: {
     type: remindersSchema,
+    default: () => ({})
+  },
+  invoiceDesign: {
+    type: invoiceDesignSchema,
     default: () => ({})
   },
   abaninja: {

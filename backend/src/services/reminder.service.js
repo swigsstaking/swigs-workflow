@@ -2,7 +2,8 @@ import cron from 'node-cron';
 import Invoice from '../models/Invoice.js';
 import Project from '../models/Project.js';
 import Settings from '../models/Settings.js';
-import { createTransporter } from './email.service.js';
+import { createTransporter, textToHtml } from './email.service.js';
+import { generateReminderPDF } from './pdf.service.js';
 import { historyService } from './historyService.js';
 
 /**
@@ -10,10 +11,10 @@ import { historyService } from './historyService.js';
  */
 
 /**
- * Format currency (CHF)
+ * Format currency for display (no trailing unit — already in templates)
  */
 const formatCurrency = (amount) => {
-  return `${amount.toFixed(2)} CHF`;
+  return new Intl.NumberFormat('fr-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount || 0) + ' CHF';
 };
 
 /**
@@ -39,6 +40,8 @@ const replaceVariables = (template, variables) => {
     const regex = new RegExp(`\\{${key}\\}`, 'g');
     result = result.replace(regex, value || '');
   }
+  // Fix double currency suffix (user templates may have "{total} CHF" while {total} already includes "CHF")
+  result = result.replace(/CHF\s+CHF/g, 'CHF');
   return result;
 };
 
@@ -71,7 +74,7 @@ export const sendReminder = async (invoice, project, settings, scheduleItem) => 
     const dueDate = new Date(invoice.dueDate);
     const daysOverdue = Math.floor((now - dueDate) / (1000 * 60 * 60 * 24));
 
-    // Template variables
+    // Template variables — {total} already includes "CHF"
     const variables = {
       clientName: client.name || 'Client',
       number: invoice.number,
@@ -85,15 +88,44 @@ export const sendReminder = async (invoice, project, settings, scheduleItem) => 
     const subject = replaceVariables(scheduleItem.subject, variables);
     const body = replaceVariables(scheduleItem.body, variables);
 
+    // Tier labels
+    const tierLabels = {
+      reminder_1: '1er Rappel',
+      reminder_2: '2ème Rappel',
+      reminder_3: '3ème Rappel',
+      final_notice: 'Mise en demeure'
+    };
+    const reminderLabel = tierLabels[scheduleItem.type] || 'Rappel';
+
+    // Generate REMINDER PDF (not the original invoice)
+    let pdfBuffer = null;
+    try {
+      pdfBuffer = await generateReminderPDF(invoice, project, settings, {
+        tier: scheduleItem.type,
+        daysOverdue
+      });
+    } catch (pdfError) {
+      console.error(`Error generating reminder PDF for ${invoice.number}:`, pdfError.message);
+    }
+
     // Create transporter
     const transporter = createTransporter(settings.smtp);
 
-    // Send email
+    // Send HTML email with PDF attachment (minimal HTML to prevent Gmail signature splitting)
     const mailOptions = {
       from: `"${company.name || 'SWIGS'}" <${settings.smtp.user}>`,
       to: client.email,
       subject,
-      text: body
+      text: body,
+      html: textToHtml(body),
+      attachments: pdfBuffer ? [
+        {
+          filename: `Rappel-${invoice.number}.pdf`,
+          content: pdfBuffer,
+          contentType: 'application/pdf',
+          contentDisposition: 'attachment'
+        }
+      ] : []
     };
 
     await transporter.sendMail(mailOptions);
@@ -125,7 +157,7 @@ export const sendReminder = async (invoice, project, settings, scheduleItem) => 
     await historyService.log(
       project._id,
       'reminder_sent',
-      `Relance envoyée pour facture ${invoice.number} (${scheduleItem.type})`,
+      `Relance envoyée pour facture ${invoice.number} (${reminderLabel})`,
       { invoiceNumber: invoice.number, reminderType: scheduleItem.type }
     );
 
@@ -276,12 +308,8 @@ export const sendManualReminder = async (invoiceId, userId) => {
       throw new Error('La facture n\'est pas encore échue');
     }
 
-    // Get settings
+    // Get settings (manual reminders bypass the auto-reminders enabled check)
     const settings = await Settings.getSettings(userId);
-
-    if (!settings.reminders?.enabled) {
-      throw new Error('Les relances automatiques ne sont pas activées');
-    }
 
     // Calculate days overdue
     const daysOverdue = Math.floor((now - dueDate) / (1000 * 60 * 60 * 24));

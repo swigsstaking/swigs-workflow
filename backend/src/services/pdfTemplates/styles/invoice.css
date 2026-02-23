@@ -1,0 +1,2107 @@
+/* ============================================================
+   SWIGS Invoice / Quote PDF Stylesheet
+   Professional Swiss business document design
+   Supports 3 variants: template-modern (default), template-classic, template-minimal
+   ============================================================ */
+
+/* ---------- CSS Custom Properties ---------- */
+:root {
+  --primary-color: #1a56a0;
+  --accent-color: #0e3d7a;
+  --font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --text-color: #1a1a2e;
+  --muted-color: #6b7280;
+  --border-color: #e5e7eb;
+  --bg-page: #ffffff;
+  --bg-header: #f8fafc;
+  --bg-row-alt: #f9fafb;
+  --bg-totals: #f1f5f9;
+  --success-color: #16a34a;
+  --success-bg: #dcfce7;
+  --warning-color: #d97706;
+  --radius: 6px;
+  --logo-size: 18mm;
+  --logo-offset-x: 0mm;
+  --logo-offset-y: 0mm;
+}
+
+/* ---------- Reset & Base ---------- */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 210mm;
+  background: var(--bg-page);
+  font-family: var(--font-family);
+  font-size: 9pt;
+  line-height: 1.5;
+  color: var(--text-color);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* ---------- Page Layout ---------- */
+.page {
+  width: 100%;
+  min-height: 277mm;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+/* ---------- Header ---------- */
+.doc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 10mm 0 8mm;
+  border-bottom: 2px solid var(--primary-color);
+  margin-bottom: 8mm;
+}
+
+.company-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 55%;
+}
+
+.company-logo {
+  height: var(--logo-size);
+  width: auto;
+  object-fit: contain;
+  margin-bottom: 2mm;
+  position: relative;
+  left: var(--logo-offset-x);
+  top: var(--logo-offset-y);
+}
+
+/* ---------- Logo Position ---------- */
+
+/* Center: logo centered above, doc title below */
+body.logo-center .doc-header {
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+body.logo-center .company-block {
+  align-items: center;
+  text-align: center;
+  max-width: 100%;
+  margin-bottom: 4mm;
+}
+
+body.logo-center .company-logo {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+body.logo-center .company-details span {
+  display: inline;
+}
+
+body.logo-center .company-details span + span::before {
+  content: ' — ';
+}
+
+body.logo-center .doc-title-block {
+  text-align: center;
+  min-width: auto;
+}
+
+/* Right: swap company block and title block */
+body.logo-right .doc-header {
+  flex-direction: row-reverse;
+}
+
+body.logo-right .company-block {
+  align-items: flex-end;
+  text-align: right;
+}
+
+body.logo-right .company-logo {
+  margin-left: auto;
+  margin-right: 0;
+}
+
+body.logo-right .doc-title-block {
+  text-align: left;
+}
+
+.company-name {
+  font-size: 13pt;
+  font-weight: 700;
+  color: var(--primary-color);
+  letter-spacing: -0.3px;
+}
+
+.company-details {
+  font-size: 8pt;
+  color: var(--muted-color);
+  line-height: 1.6;
+}
+
+.company-details span {
+  display: block;
+}
+
+.company-meta {
+  font-size: 7.5pt;
+  color: var(--muted-color);
+  margin-top: 3px;
+}
+
+/* ---------- Document Title Block ---------- */
+.doc-title-block {
+  text-align: right;
+  min-width: 40%;
+}
+
+.doc-type {
+  font-size: 26pt;
+  font-weight: 800;
+  color: var(--primary-color);
+  letter-spacing: -1px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.doc-number {
+  font-size: 11pt;
+  font-weight: 600;
+  color: var(--accent-color);
+  margin-top: 3px;
+  letter-spacing: 0.3px;
+}
+
+.doc-status {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 8pt;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.status-paid {
+  background: var(--success-bg);
+  color: var(--success-color);
+}
+
+.status-overdue {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.status-sent {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.status-signed {
+  background: var(--success-bg);
+  color: var(--success-color);
+}
+
+/* ---------- Info Row (Dates + Client) ---------- */
+.info-row {
+  display: flex;
+  gap: 8mm;
+  margin-bottom: 8mm;
+}
+
+.info-block {
+  flex: 1;
+  background: var(--bg-header);
+  border-radius: var(--radius);
+  padding: 5mm 5mm;
+  border-left: 3px solid var(--primary-color);
+}
+
+.info-block-title {
+  font-size: 7pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--muted-color);
+  margin-bottom: 3mm;
+}
+
+.info-block-content {
+  font-size: 9pt;
+  line-height: 1.7;
+  color: var(--text-color);
+}
+
+.info-block-content strong {
+  font-weight: 700;
+  color: var(--text-color);
+}
+
+.info-block-content .label {
+  color: var(--muted-color);
+  font-size: 8pt;
+}
+
+.date-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 2mm;
+}
+
+.date-item {
+  flex: 1;
+}
+
+.date-label {
+  font-size: 7pt;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted-color);
+  display: block;
+  margin-bottom: 1px;
+}
+
+.date-value {
+  font-size: 9.5pt;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.date-paid {
+  color: var(--success-color);
+  font-weight: 700;
+}
+
+/* ---------- Optional header text ---------- */
+.header-text {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: var(--radius);
+  padding: 3mm 4mm;
+  font-size: 8.5pt;
+  color: #1d4ed8;
+  margin-bottom: 6mm;
+}
+
+/* ---------- Lines Table ---------- */
+.table-section {
+  margin-bottom: 6mm;
+}
+
+.table-title {
+  font-size: 8pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--muted-color);
+  margin-bottom: 3mm;
+}
+
+.lines-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8.5pt;
+}
+
+.lines-table thead tr {
+  background: var(--primary-color);
+  color: #ffffff;
+}
+
+.lines-table thead th {
+  padding: 3mm 3.5mm;
+  font-size: 7.5pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-align: left;
+  border: none;
+}
+
+.lines-table thead th.text-right {
+  text-align: right;
+}
+
+.lines-table tbody tr {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.lines-table tbody tr:nth-child(even) {
+  background: var(--bg-row-alt);
+}
+
+.lines-table tbody tr:last-child {
+  border-bottom: 2px solid var(--border-color);
+}
+
+.lines-table tbody td {
+  padding: 2.5mm 3.5mm;
+  vertical-align: top;
+  color: var(--text-color);
+}
+
+.lines-table tbody td.text-right {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.line-description {
+  font-weight: 500;
+}
+
+.line-detail {
+  font-size: 7.5pt;
+  color: var(--muted-color);
+  margin-top: 1px;
+}
+
+/* ---------- Totals ---------- */
+.totals-section {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8mm;
+}
+
+.totals-box {
+  width: 68mm;
+  background: var(--bg-totals);
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+}
+
+.totals-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2.5mm 4mm;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 8.5pt;
+}
+
+.totals-row:last-child {
+  border-bottom: none;
+}
+
+.totals-row .label {
+  color: var(--muted-color);
+}
+
+.totals-row .value {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.totals-row.total-final {
+  background: var(--primary-color);
+  color: #ffffff;
+}
+
+.totals-row.total-final .label {
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 700;
+  font-size: 9.5pt;
+}
+
+.totals-row.total-final .value {
+  font-size: 11pt;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+/* ---------- Notes & Payment terms ---------- */
+.notes-section {
+  margin-bottom: 6mm;
+  background: #fffbeb;
+  border-left: 3px solid #f59e0b;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  padding: 4mm 5mm;
+}
+
+.notes-title {
+  font-size: 7.5pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--warning-color);
+  margin-bottom: 2mm;
+}
+
+.notes-content {
+  font-size: 8.5pt;
+  color: #78350f;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.payment-terms {
+  text-align: center;
+  padding: 3mm;
+  background: #f8fafc;
+  border-radius: var(--radius);
+  border: 1px dashed var(--border-color);
+  font-size: 8pt;
+  color: var(--muted-color);
+  margin-bottom: 6mm;
+}
+
+.payment-terms strong {
+  color: var(--text-color);
+  font-weight: 600;
+}
+
+/* ---------- Validity Note (Quote) ---------- */
+.validity-note {
+  text-align: center;
+  padding: 4mm;
+  background: #eff6ff;
+  border-radius: var(--radius);
+  border: 1px solid #bfdbfe;
+  font-size: 8.5pt;
+  color: #1d4ed8;
+  margin-bottom: 6mm;
+}
+
+/* ---------- Footer ---------- */
+.doc-footer {
+  margin-top: auto;
+  padding-top: 5mm;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 7.5pt;
+  color: var(--muted-color);
+}
+
+.footer-text {
+  flex: 1;
+}
+
+.footer-page {
+  font-size: 7pt;
+}
+
+/* ---------- QR-Bill Section ---------- */
+.qr-bill-section {
+  margin-top: 8mm;
+  padding-top: 6mm;
+  border-top: 2px dashed var(--border-color);
+  page-break-before: always;
+}
+
+.qr-bill-section svg {
+  width: 100%;
+  height: auto;
+}
+
+/* ============================================================
+   VARIANT: template-modern (default)
+   Bold, colorful, rounded — confident & contemporary
+   ============================================================ */
+body.template-modern {
+  /* Uses default variables — no override needed */
+}
+
+/* Modern: Colored banner behind company info */
+body.template-modern .doc-header {
+  border-bottom: 3px solid var(--primary-color);
+}
+
+body.template-modern .doc-type {
+  font-size: 28pt;
+  font-weight: 900;
+  letter-spacing: -1.5px;
+}
+
+body.template-modern .info-block {
+  border-left: 4px solid var(--primary-color);
+  border-radius: var(--radius);
+  background: var(--bg-header);
+}
+
+body.template-modern .lines-table thead tr {
+  background: var(--primary-color);
+  color: #ffffff;
+}
+
+body.template-modern .totals-box {
+  border-radius: var(--radius);
+  border: 1px solid var(--border-color);
+}
+
+/* ============================================================
+   VARIANT: template-classic
+   Traditional, formal — full bordered table, warm tones, ornamental
+   ============================================================ */
+body.template-classic {
+  --bg-header: #faf8f5;
+  --bg-totals: #faf8f5;
+  --bg-row-alt: #fdfcfa;
+  --border-color: #c9bfaa;
+  --radius: 0px;
+}
+
+body.template-classic .doc-header {
+  border-bottom: none;
+  padding-bottom: 4mm;
+  margin-bottom: 4mm;
+  position: relative;
+}
+
+body.template-classic .doc-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  border-top: 2px solid var(--primary-color);
+  border-bottom: 1px solid var(--primary-color);
+}
+
+body.template-classic .company-name {
+  font-size: 15pt;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+body.template-classic .doc-type {
+  font-size: 20pt;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+
+body.template-classic .doc-number {
+  font-size: 10pt;
+  letter-spacing: 1.5px;
+  font-weight: 600;
+}
+
+body.template-classic .doc-status {
+  border-radius: 0;
+  border: 2px solid currentColor;
+  font-weight: 700;
+}
+
+body.template-classic .info-block {
+  border-left: none;
+  border: 2px solid var(--border-color);
+  background: var(--bg-header);
+  border-radius: 0;
+}
+
+body.template-classic .info-block-title {
+  letter-spacing: 1.5px;
+}
+
+body.template-classic .lines-table {
+  border: 2px solid var(--primary-color);
+}
+
+body.template-classic .lines-table thead tr {
+  background: var(--primary-color);
+  color: #ffffff;
+}
+
+body.template-classic .lines-table thead th {
+  letter-spacing: 1px;
+  font-size: 7pt;
+  padding: 3.5mm 3.5mm;
+}
+
+body.template-classic .lines-table tbody tr {
+  border-bottom: 1px solid var(--border-color);
+}
+
+body.template-classic .lines-table tbody td {
+  border-right: 1px solid #e8e0d0;
+}
+
+body.template-classic .lines-table tbody td:last-child {
+  border-right: none;
+}
+
+body.template-classic .totals-box {
+  border-radius: 0;
+  border: 2px solid var(--primary-color);
+}
+
+body.template-classic .totals-row.total-final {
+  background: var(--primary-color);
+}
+
+body.template-classic .notes-section {
+  border-radius: 0;
+  border-left: 4px solid var(--primary-color);
+  background: var(--bg-header);
+}
+
+body.template-classic .notes-title {
+  color: var(--primary-color);
+}
+
+body.template-classic .notes-content {
+  color: #5a4e3a;
+}
+
+body.template-classic .payment-terms {
+  border-radius: 0;
+  border: 1px solid var(--border-color);
+  background: var(--bg-header);
+}
+
+body.template-classic .validity-note {
+  border-radius: 0;
+  border: 1px solid var(--border-color);
+  background: var(--bg-header);
+  color: #5a4e3a;
+}
+
+body.template-classic .header-text {
+  border-radius: 0;
+  background: var(--bg-header);
+  border: 1px solid var(--border-color);
+  color: #5a4e3a;
+}
+
+body.template-classic .doc-footer {
+  border-top: none;
+  position: relative;
+  padding-top: 6mm;
+}
+
+body.template-classic .doc-footer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-top: 1px solid var(--primary-color);
+  border-bottom: 1px solid var(--primary-color);
+}
+
+/* ============================================================
+   VARIANT: template-minimal
+   Ultra-clean, lots of whitespace, hairline separators
+   ============================================================ */
+body.template-minimal {
+  --bg-header: #ffffff;
+  --bg-totals: #ffffff;
+  --bg-row-alt: #ffffff;
+  --border-color: #e5e7eb;
+  --radius: 2px;
+}
+
+body.template-minimal .doc-header {
+  border-bottom: 1px solid var(--border-color);
+  padding: 8mm 0 6mm;
+}
+
+body.template-minimal .company-name {
+  font-size: 11pt;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+body.template-minimal .doc-type {
+  font-size: 18pt;
+  font-weight: 500;
+  letter-spacing: 3px;
+  color: var(--text-color);
+}
+
+body.template-minimal .doc-number {
+  font-size: 9pt;
+  font-weight: 500;
+  color: var(--muted-color);
+}
+
+body.template-minimal .doc-status {
+  background: none;
+  color: var(--muted-color);
+  border: 1px solid var(--border-color);
+  font-weight: 600;
+  border-radius: 2px;
+}
+
+body.template-minimal .info-block {
+  border: none;
+  border-left: none;
+  background: transparent;
+  padding: 3mm 0;
+  border-bottom: 1px solid var(--border-color);
+  border-radius: 0;
+}
+
+body.template-minimal .info-block-title {
+  color: var(--text-color);
+  font-weight: 600;
+  font-size: 7.5pt;
+  letter-spacing: 0.5px;
+}
+
+body.template-minimal .lines-table thead tr {
+  background: transparent;
+  color: var(--text-color);
+}
+
+body.template-minimal .lines-table thead th {
+  color: var(--muted-color);
+  font-weight: 600;
+  border-bottom: 2px solid var(--text-color);
+  padding: 2mm 3.5mm;
+}
+
+body.template-minimal .lines-table tbody tr {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+body.template-minimal .lines-table tbody tr:last-child {
+  border-bottom: 1px solid var(--border-color);
+}
+
+body.template-minimal .totals-box {
+  background: transparent;
+  border: none;
+  border-top: 2px solid var(--text-color);
+  border-radius: 0;
+}
+
+body.template-minimal .totals-row {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+body.template-minimal .totals-row.total-final {
+  background: var(--text-color);
+  color: #ffffff;
+}
+
+body.template-minimal .notes-section {
+  background: transparent;
+  border-left: 2px solid var(--muted-color);
+  border-radius: 0;
+}
+
+body.template-minimal .notes-title {
+  color: var(--muted-color);
+}
+
+body.template-minimal .notes-content {
+  color: var(--text-color);
+}
+
+body.template-minimal .payment-terms {
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--border-color);
+  border-radius: 0;
+  text-align: left;
+}
+
+body.template-minimal .validity-note {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--muted-color);
+  border-radius: 2px;
+}
+
+body.template-minimal .header-text {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--muted-color);
+  border-radius: 2px;
+}
+
+/* ============================================================
+   VARIANT: template-swiss
+   International Typographic Style — grid-based, red accent, geometric
+   ============================================================ */
+body.template-swiss {
+  --bg-header: #ffffff;
+  --bg-totals: #ffffff;
+  --bg-row-alt: #ffffff;
+  --border-color: #d1d5db;
+  --radius: 0px;
+}
+
+body.template-swiss .doc-header {
+  border-bottom: none;
+  padding: 6mm 0 4mm;
+  margin-bottom: 4mm;
+  position: relative;
+}
+
+body.template-swiss .doc-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 20mm;
+  height: 3px;
+  background: #ff0000;
+}
+
+body.template-swiss .company-name {
+  font-size: 11pt;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #1a1a1a;
+}
+
+body.template-swiss .company-details {
+  font-size: 7.5pt;
+  color: #666;
+}
+
+body.template-swiss .doc-type {
+  font-size: 11pt;
+  font-weight: 400;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: #999;
+}
+
+body.template-swiss .doc-number {
+  font-size: 18pt;
+  letter-spacing: -0.5px;
+  font-weight: 800;
+  color: #1a1a1a;
+}
+
+body.template-swiss .doc-status {
+  border-radius: 0;
+  border: none;
+  border-left: 3px solid currentColor;
+  background: transparent;
+  font-weight: 700;
+  padding: 2px 8px;
+  font-size: 7pt;
+  letter-spacing: 1px;
+}
+
+body.template-swiss .info-block {
+  border: none;
+  border-left: 3px solid #ff0000;
+  background: transparent;
+  border-radius: 0;
+  padding: 3mm 4mm;
+}
+
+body.template-swiss .info-block-title {
+  color: #999;
+  font-size: 6.5pt;
+  letter-spacing: 2px;
+  font-weight: 700;
+}
+
+body.template-swiss .lines-table {
+  border: none;
+}
+
+body.template-swiss .lines-table thead tr {
+  background: transparent;
+  color: #1a1a1a;
+}
+
+body.template-swiss .lines-table thead th {
+  letter-spacing: 1.5px;
+  font-size: 6.5pt;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #999;
+  border-bottom: 3px solid #1a1a1a;
+  padding: 2mm 3mm;
+}
+
+body.template-swiss .lines-table tbody tr {
+  border-bottom: 1px solid #e5e5e5;
+}
+
+body.template-swiss .lines-table tbody tr:nth-child(even) {
+  background: transparent;
+}
+
+body.template-swiss .lines-table tbody tr:last-child {
+  border-bottom: 2px solid #1a1a1a;
+}
+
+body.template-swiss .totals-box {
+  border-radius: 0;
+  border: none;
+  background: transparent;
+}
+
+body.template-swiss .totals-row {
+  border-bottom: 1px solid #e5e5e5;
+}
+
+body.template-swiss .totals-row .label {
+  color: #666;
+  font-size: 8pt;
+  letter-spacing: 0.5px;
+}
+
+body.template-swiss .totals-row.total-final {
+  background: transparent;
+  color: #1a1a1a;
+  border-top: 3px solid #1a1a1a;
+  border-bottom: none;
+}
+
+body.template-swiss .totals-row.total-final .label {
+  color: #1a1a1a;
+  font-weight: 800;
+  font-size: 9pt;
+  letter-spacing: 0.5px;
+}
+
+body.template-swiss .totals-row.total-final .value {
+  font-weight: 800;
+  font-size: 11pt;
+  color: #1a1a1a;
+}
+
+body.template-swiss .notes-section {
+  border-radius: 0;
+  background: transparent;
+  border-left: 3px solid #ff0000;
+}
+
+body.template-swiss .notes-title {
+  color: #999;
+  letter-spacing: 1px;
+}
+
+body.template-swiss .notes-content {
+  color: #333;
+}
+
+body.template-swiss .payment-terms {
+  border-radius: 0;
+  border: none;
+  border-top: 1px solid #e5e5e5;
+  background: transparent;
+  text-align: left;
+}
+
+body.template-swiss .validity-note {
+  border-radius: 0;
+  background: transparent;
+  border: none;
+  border-left: 3px solid #ff0000;
+  color: #666;
+}
+
+body.template-swiss .header-text {
+  border-radius: 0;
+  background: transparent;
+  border: none;
+  border-left: 3px solid #ff0000;
+  color: #666;
+}
+
+body.template-swiss .doc-footer {
+  border-top: 1px solid #e5e5e5;
+  padding-top: 4mm;
+  position: relative;
+}
+
+body.template-swiss .doc-footer::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 0;
+  width: 20mm;
+  height: 2px;
+  background: #ff0000;
+}
+
+/* ============================================================
+   VARIANT: template-elegant
+   Luxury stationery — generous spacing, thin lines, refined proportions
+   ============================================================ */
+body.template-elegant {
+  --bg-header: #ffffff;
+  --bg-totals: #faf9f7;
+  --bg-row-alt: #fdfcfb;
+  --border-color: #d4cfc5;
+  --radius: 0px;
+  font-size: 8.5pt;
+}
+
+body.template-elegant .doc-header {
+  border-bottom: none;
+  padding: 12mm 0 10mm;
+  position: relative;
+}
+
+body.template-elegant .doc-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 25%;
+  right: 25%;
+  height: 1px;
+  background: var(--border-color);
+}
+
+body.template-elegant .company-name {
+  font-size: 18pt;
+  font-weight: 300;
+  letter-spacing: 5px;
+  text-transform: uppercase;
+  color: var(--text-color);
+}
+
+body.template-elegant .company-details {
+  font-size: 7pt;
+  letter-spacing: 0.5px;
+  color: #999;
+}
+
+body.template-elegant .company-meta {
+  color: #999;
+  letter-spacing: 0.3px;
+}
+
+body.template-elegant .doc-type {
+  font-size: 10pt;
+  font-weight: 300;
+  letter-spacing: 6px;
+  text-transform: uppercase;
+  color: #999;
+}
+
+body.template-elegant .doc-number {
+  font-size: 13pt;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: var(--text-color);
+  margin-top: 2mm;
+}
+
+body.template-elegant .doc-status {
+  border: none;
+  border-bottom: 1px solid currentColor;
+  border-radius: 0;
+  background: transparent;
+  font-weight: 400;
+  letter-spacing: 2px;
+  font-size: 7pt;
+  padding: 2px 0;
+}
+
+body.template-elegant .info-row {
+  gap: 12mm;
+  margin-bottom: 10mm;
+}
+
+body.template-elegant .info-block {
+  border: none;
+  border-left: none;
+  background: transparent;
+  padding: 5mm 0;
+  border-radius: 0;
+}
+
+body.template-elegant .info-block-title {
+  font-size: 6pt;
+  letter-spacing: 3px;
+  color: #999;
+  margin-bottom: 4mm;
+}
+
+body.template-elegant .info-block-content {
+  line-height: 1.9;
+  font-size: 8.5pt;
+}
+
+body.template-elegant .date-label {
+  font-size: 6pt;
+  letter-spacing: 2px;
+  color: #999;
+}
+
+body.template-elegant .table-section {
+  margin-bottom: 8mm;
+}
+
+body.template-elegant .table-title {
+  font-size: 6pt;
+  letter-spacing: 3px;
+  color: #999;
+  margin-bottom: 4mm;
+}
+
+body.template-elegant .lines-table {
+  font-size: 8.5pt;
+}
+
+body.template-elegant .lines-table thead tr {
+  background: transparent;
+  color: var(--text-color);
+}
+
+body.template-elegant .lines-table thead th {
+  color: #999;
+  font-weight: 400;
+  font-size: 6.5pt;
+  letter-spacing: 2px;
+  border-bottom: 1px solid var(--text-color);
+  padding: 2mm 3.5mm 3mm;
+}
+
+body.template-elegant .lines-table tbody tr {
+  border-bottom: 1px solid #ece9e3;
+}
+
+body.template-elegant .lines-table tbody tr:nth-child(even) {
+  background: transparent;
+}
+
+body.template-elegant .lines-table tbody td {
+  padding: 3mm 3.5mm;
+}
+
+body.template-elegant .lines-table tbody tr:last-child {
+  border-bottom: 1px solid var(--text-color);
+}
+
+body.template-elegant .line-description {
+  font-weight: 400;
+}
+
+body.template-elegant .totals-section {
+  margin-bottom: 10mm;
+}
+
+body.template-elegant .totals-box {
+  border: none;
+  border-top: none;
+  background: transparent;
+  border-radius: 0;
+  width: 75mm;
+}
+
+body.template-elegant .totals-row {
+  border-bottom: none;
+  padding: 2mm 4mm;
+}
+
+body.template-elegant .totals-row .label {
+  font-weight: 300;
+  letter-spacing: 0.5px;
+  font-size: 8pt;
+}
+
+body.template-elegant .totals-row .value {
+  font-weight: 500;
+}
+
+body.template-elegant .totals-row.total-final {
+  background: transparent;
+  color: var(--text-color);
+  border-top: 1px solid var(--text-color);
+  margin-top: 1mm;
+  padding-top: 3mm;
+}
+
+body.template-elegant .totals-row.total-final .label {
+  font-weight: 300;
+  letter-spacing: 2px;
+  font-size: 9pt;
+  color: var(--text-color);
+}
+
+body.template-elegant .totals-row.total-final .value {
+  font-weight: 600;
+  font-size: 12pt;
+  color: var(--text-color);
+}
+
+body.template-elegant .notes-section {
+  background: transparent;
+  border-left: none;
+  border-radius: 0;
+  padding: 5mm 0;
+}
+
+body.template-elegant .notes-title {
+  color: #999;
+  letter-spacing: 2px;
+  font-size: 6pt;
+}
+
+body.template-elegant .notes-content {
+  color: #666;
+  font-style: italic;
+  line-height: 1.8;
+}
+
+body.template-elegant .payment-terms {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  font-style: italic;
+  letter-spacing: 0.3px;
+  color: #999;
+  font-size: 7.5pt;
+  text-align: center;
+  padding: 4mm 0;
+}
+
+body.template-elegant .validity-note {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  color: #999;
+  font-style: italic;
+  text-align: center;
+}
+
+body.template-elegant .header-text {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  color: #999;
+  font-style: italic;
+  text-align: center;
+}
+
+body.template-elegant .doc-footer {
+  border-top: none;
+  position: relative;
+  padding-top: 6mm;
+  text-align: center;
+}
+
+body.template-elegant .doc-footer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 30%;
+  right: 30%;
+  height: 1px;
+  background: var(--border-color);
+}
+
+body.template-elegant .footer-text {
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+
+/* ============================================================
+   VARIANT: template-bold
+   Strong modern startup — big type, colorful blocks, confident
+   ============================================================ */
+body.template-bold {
+  --bg-header: var(--primary-color);
+  --bg-row-alt: #f9fafb;
+  --radius: 10px;
+}
+
+body.template-bold .doc-header {
+  background: var(--primary-color);
+  color: #ffffff;
+  border-radius: var(--radius);
+  padding: 8mm 8mm;
+  margin: 0 0 8mm;
+  border-bottom: none;
+}
+
+body.template-bold .company-block {
+  max-width: 60%;
+}
+
+body.template-bold .company-name {
+  font-size: 15pt;
+  font-weight: 900;
+  color: #ffffff;
+  letter-spacing: -0.5px;
+}
+
+body.template-bold .company-details {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+body.template-bold .company-meta {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+body.template-bold .company-logo {
+  filter: brightness(0) invert(1);
+}
+
+body.template-bold .doc-type {
+  font-size: 32pt;
+  font-weight: 900;
+  color: #ffffff;
+  letter-spacing: -2px;
+  line-height: 0.9;
+}
+
+body.template-bold .doc-number {
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 700;
+}
+
+body.template-bold .doc-status {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+body.template-bold .info-block {
+  border-left: 5px solid var(--primary-color);
+  border-radius: var(--radius);
+  background: #f8fafc;
+}
+
+body.template-bold .info-block-title {
+  color: var(--primary-color);
+  font-weight: 800;
+}
+
+body.template-bold .lines-table {
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+}
+
+body.template-bold .lines-table thead tr {
+  background: var(--accent-color);
+  color: #ffffff;
+}
+
+body.template-bold .lines-table thead th {
+  font-weight: 800;
+  font-size: 7.5pt;
+}
+
+body.template-bold .totals-box {
+  border-radius: var(--radius);
+  border: 2px solid var(--primary-color);
+  overflow: hidden;
+}
+
+body.template-bold .totals-row.total-final {
+  background: var(--primary-color);
+}
+
+body.template-bold .totals-row.total-final .label {
+  font-weight: 800;
+  font-size: 10pt;
+}
+
+body.template-bold .totals-row.total-final .value {
+  font-size: 12pt;
+  font-weight: 900;
+}
+
+body.template-bold .notes-section {
+  border-radius: var(--radius);
+  border-left: 5px solid #f59e0b;
+}
+
+body.template-bold .payment-terms {
+  border-radius: var(--radius);
+  background: #f0f9ff;
+  border: 2px solid #bfdbfe;
+  font-weight: 500;
+}
+
+body.template-bold .validity-note {
+  border-radius: var(--radius);
+  background: #f0f9ff;
+  border: 2px solid #bfdbfe;
+  font-weight: 500;
+}
+
+body.template-bold .header-text {
+  border-radius: var(--radius);
+  background: #f0f9ff;
+  border: 2px solid #bfdbfe;
+}
+
+body.template-bold .doc-footer {
+  border-top: 3px solid var(--primary-color);
+}
+
+/* logo position adjustments for bold template with colored header */
+body.template-bold.logo-center .doc-header {
+  text-align: center;
+}
+
+body.template-bold.logo-right .doc-header {
+  flex-direction: row-reverse;
+}
+
+body.template-bold.logo-right .company-block {
+  align-items: flex-end;
+  text-align: right;
+}
+
+body.template-bold.logo-right .doc-title-block {
+  text-align: left;
+}
+
+/* ============================================================
+   VARIANT: template-professional
+   Clean AbaNinja-inspired — pure typography, no decorative colors
+   ============================================================ */
+body.template-professional {
+  --bg-header: #ffffff;
+  --bg-totals: #ffffff;
+  --bg-row-alt: #ffffff;
+  --border-color: #d1d5db;
+  --radius: 0px;
+}
+
+body.template-professional .doc-header {
+  border-bottom: 1px solid #1a1a1a;
+  padding: 6mm 0;
+}
+
+body.template-professional .company-name {
+  font-size: 16pt;
+  font-weight: 700;
+  color: #1a1a1a;
+  letter-spacing: 0;
+}
+
+body.template-professional .company-details {
+  color: #555;
+  font-size: 7.5pt;
+}
+
+body.template-professional .company-meta {
+  color: #555;
+  font-size: 7pt;
+}
+
+body.template-professional .doc-type {
+  font-size: 10pt;
+  font-weight: 400;
+  color: #888;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+body.template-professional .doc-number {
+  font-size: 13pt;
+  font-weight: 700;
+  color: #1a1a1a;
+  letter-spacing: 0;
+}
+
+body.template-professional .doc-status {
+  display: none;
+}
+
+body.template-professional .info-block {
+  border: none;
+  border-left: none;
+  background: transparent;
+  padding: 4mm 0;
+  border-radius: 0;
+}
+
+body.template-professional .info-block-title {
+  color: #888;
+  font-size: 7pt;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+body.template-professional .info-block-content {
+  font-size: 9pt;
+  color: #1a1a1a;
+}
+
+body.template-professional .date-label {
+  color: #888;
+}
+
+body.template-professional .date-value {
+  color: #1a1a1a;
+  font-weight: 600;
+}
+
+body.template-professional .table-title {
+  display: none;
+}
+
+body.template-professional .lines-table {
+  border: none;
+}
+
+body.template-professional .lines-table thead tr {
+  background: #f2f2f2;
+  color: #333;
+}
+
+body.template-professional .lines-table thead th {
+  color: #555;
+  font-weight: 600;
+  font-size: 7.5pt;
+  border: none;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+body.template-professional .lines-table tbody tr {
+  border-bottom: 1px solid #e8e8e8;
+}
+
+body.template-professional .lines-table tbody tr:nth-child(even) {
+  background: transparent;
+}
+
+body.template-professional .lines-table tbody tr:last-child {
+  border-bottom: 1px solid #999;
+}
+
+body.template-professional .totals-box {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+body.template-professional .totals-row {
+  border-bottom: 1px solid #e8e8e8;
+  font-size: 8.5pt;
+}
+
+body.template-professional .totals-row .label {
+  color: #555;
+}
+
+body.template-professional .totals-row .value {
+  color: #1a1a1a;
+}
+
+body.template-professional .totals-row.total-final {
+  background: transparent;
+  color: #1a1a1a;
+  border-top: 2px solid #1a1a1a;
+  border-bottom: none;
+}
+
+body.template-professional .totals-row.total-final .label {
+  color: #1a1a1a;
+  font-weight: 700;
+  font-size: 10pt;
+}
+
+body.template-professional .totals-row.total-final .value {
+  font-size: 11pt;
+  font-weight: 800;
+  color: #1a1a1a;
+}
+
+body.template-professional .notes-section {
+  background: transparent;
+  border-left: 2px solid #999;
+  border-radius: 0;
+}
+
+body.template-professional .notes-title {
+  color: #888;
+}
+
+body.template-professional .notes-content {
+  color: #333;
+}
+
+body.template-professional .payment-terms {
+  background: transparent;
+  border: none;
+  border-top: 1px solid #d1d5db;
+  border-radius: 0;
+  text-align: left;
+}
+
+body.template-professional .doc-footer {
+  border-top: 1px solid #1a1a1a;
+}
+
+body.template-professional .header-text {
+  background: #f9f9f9;
+  border: 1px solid #d1d5db;
+  border-radius: 0;
+  color: #555;
+}
+
+body.template-professional .validity-note {
+  background: transparent;
+  border: 1px solid #d1d5db;
+  border-radius: 0;
+  color: #555;
+}
+
+body.template-professional .reminder-notice {
+  background: transparent;
+  border: none;
+  border-left: 2px solid #dc2626;
+  border-radius: 0;
+}
+
+body.template-professional .reminder-deadline {
+  background: transparent;
+  border: none;
+  border-top: 1px solid #fecaca;
+  border-radius: 0;
+  text-align: left;
+}
+
+/* ============================================================
+   VARIANT: template-envelope
+   Swiss envelope window — recipient address positioned for DL/C5 window
+   Based on professional styling with sender return line
+   ============================================================ */
+
+/* Hidden by default — only shown for envelope template */
+.envelope-sender-line { display: none; }
+
+body.template-envelope {
+  --bg-header: #ffffff;
+  --bg-totals: #ffffff;
+  --bg-row-alt: #ffffff;
+  --border-color: #d1d5db;
+  --radius: 0px;
+}
+
+/* Header: company on the RIGHT, doc title on the LEFT */
+body.template-envelope .doc-header {
+  flex-direction: row-reverse;
+  border-bottom: none;
+  padding: 4mm 0 3mm;
+  margin-bottom: 5mm;
+  align-items: flex-start;
+}
+
+body.template-envelope .company-block {
+  align-items: flex-end;
+  text-align: right;
+  max-width: 50%;
+}
+
+body.template-envelope .company-name {
+  font-size: 12pt;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+body.template-envelope .company-details {
+  color: #555;
+  font-size: 7pt;
+}
+
+body.template-envelope .company-meta {
+  color: #555;
+  font-size: 6.5pt;
+}
+
+body.template-envelope .company-logo {
+  margin-left: auto;
+  margin-right: 0;
+}
+
+body.template-envelope .doc-title-block {
+  text-align: left;
+  min-width: 45%;
+}
+
+body.template-envelope .doc-type {
+  font-size: 10pt;
+  font-weight: 400;
+  color: #888;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+body.template-envelope .doc-number {
+  font-size: 13pt;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+body.template-envelope .doc-status {
+  display: none;
+}
+
+/* Sender return line — visible in envelope template */
+body.template-envelope .envelope-sender-line {
+  display: block;
+  font-size: 6.5pt;
+  color: #888;
+  text-decoration: underline;
+  margin-bottom: 2mm;
+  line-height: 1.2;
+}
+
+/* Info row — client LEFT (envelope window zone) + dates RIGHT */
+body.template-envelope .info-row {
+  margin-bottom: 8mm;
+  border-bottom: 1px solid #e8e8e8;
+  padding-bottom: 5mm;
+}
+
+body.template-envelope .info-block {
+  border: none;
+  border-left: none;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+
+/* Client block: fixed 90mm (Swiss envelope window width) */
+body.template-envelope .info-block:first-child {
+  flex: none !important;
+  width: 90mm;
+  min-height: 25mm;
+}
+
+/* Hide "Destinataire" title for envelope — address speaks for itself */
+body.template-envelope .info-block:first-child .info-block-title {
+  display: none;
+}
+
+body.template-envelope .info-block-content {
+  font-size: 9pt;
+  color: #1a1a1a;
+  line-height: 1.7;
+}
+
+/* Dates block (second info-block) */
+body.template-envelope .info-block:last-child {
+  padding-top: 6mm;
+}
+
+body.template-envelope .info-block-title {
+  color: #888;
+  font-size: 7pt;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+body.template-envelope .date-label {
+  color: #888;
+}
+
+body.template-envelope .date-value {
+  color: #1a1a1a;
+  font-weight: 600;
+}
+
+/* Table — same as professional */
+body.template-envelope .table-title {
+  display: none;
+}
+
+body.template-envelope .lines-table thead tr {
+  background: #f2f2f2;
+  color: #333;
+}
+
+body.template-envelope .lines-table thead th {
+  color: #555;
+  font-weight: 600;
+  font-size: 7.5pt;
+  border: none;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+body.template-envelope .lines-table tbody tr {
+  border-bottom: 1px solid #e8e8e8;
+}
+
+body.template-envelope .lines-table tbody tr:nth-child(even) {
+  background: transparent;
+}
+
+body.template-envelope .lines-table tbody tr:last-child {
+  border-bottom: 1px solid #999;
+}
+
+/* Totals — same as professional */
+body.template-envelope .totals-box {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+body.template-envelope .totals-row {
+  border-bottom: 1px solid #e8e8e8;
+  font-size: 8.5pt;
+}
+
+body.template-envelope .totals-row .label {
+  color: #555;
+}
+
+body.template-envelope .totals-row .value {
+  color: #1a1a1a;
+}
+
+body.template-envelope .totals-row.total-final {
+  background: transparent;
+  color: #1a1a1a;
+  border-top: 2px solid #1a1a1a;
+  border-bottom: none;
+}
+
+body.template-envelope .totals-row.total-final .label {
+  color: #1a1a1a;
+  font-weight: 700;
+  font-size: 10pt;
+}
+
+body.template-envelope .totals-row.total-final .value {
+  font-size: 11pt;
+  font-weight: 800;
+  color: #1a1a1a;
+}
+
+/* Notes & Payment terms — same as professional */
+body.template-envelope .notes-section {
+  background: transparent;
+  border-left: 2px solid #999;
+  border-radius: 0;
+}
+
+body.template-envelope .notes-title {
+  color: #888;
+}
+
+body.template-envelope .notes-content {
+  color: #333;
+}
+
+body.template-envelope .payment-terms {
+  background: transparent;
+  border: none;
+  border-top: 1px solid #d1d5db;
+  border-radius: 0;
+  text-align: left;
+}
+
+body.template-envelope .doc-footer {
+  border-top: 1px solid #1a1a1a;
+}
+
+body.template-envelope .header-text {
+  background: #f9f9f9;
+  border: 1px solid #d1d5db;
+  border-radius: 0;
+  color: #555;
+}
+
+body.template-envelope .validity-note {
+  background: transparent;
+  border: 1px solid #d1d5db;
+  border-radius: 0;
+  color: #555;
+}
+
+/* Reminder overrides */
+body.template-envelope .reminder-notice {
+  background: transparent;
+  border: none;
+  border-left: 2px solid #dc2626;
+  border-radius: 0;
+}
+
+body.template-envelope .reminder-deadline {
+  background: transparent;
+  border: none;
+  border-top: 1px solid #fecaca;
+  border-radius: 0;
+  text-align: left;
+}
+
+/* ============================================================
+   TABLE HEADER STYLE VARIANTS
+   ============================================================ */
+
+/* table-header-colored: Uses primary color (default — already defined in base) */
+
+/* table-header-dark: Dark header instead of primary color */
+body.table-header-dark .lines-table thead tr {
+  background: #1a1a2e;
+  color: #ffffff;
+}
+body.table-header-dark .totals-row.total-final {
+  background: #1a1a2e;
+}
+
+/* table-header-light: Light subtle header */
+body.table-header-light .lines-table thead tr {
+  background: #f3f4f6;
+  color: #374151;
+}
+body.table-header-light .lines-table thead th {
+  border-bottom: 2px solid var(--primary-color);
+}
+body.table-header-light .totals-row.total-final {
+  background: var(--primary-color);
+  color: #ffffff;
+}
+
+/* table-header-none: No header background */
+body.table-header-none .lines-table thead tr {
+  background: transparent;
+  color: var(--text-color);
+}
+body.table-header-none .lines-table thead th {
+  border-bottom: 2px solid var(--primary-color);
+  font-weight: 700;
+}
+
+/* ---------- Reminder-specific Styles ---------- */
+.reminder-type {
+  color: #dc2626 !important;
+}
+
+.reminder-notice {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-left: 4px solid #dc2626;
+  border-radius: var(--radius);
+  padding: 5mm 6mm;
+  margin-bottom: 6mm;
+}
+
+.reminder-notice-title {
+  font-size: 9pt;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: #dc2626;
+  margin-bottom: 2mm;
+}
+
+.reminder-notice-text {
+  font-size: 8.5pt;
+  color: #7f1d1d;
+  line-height: 1.7;
+}
+
+.reminder-deadline {
+  text-align: center;
+  padding: 4mm;
+  background: #fef2f2;
+  border-radius: var(--radius);
+  border: 1px solid #fecaca;
+  font-size: 8.5pt;
+  color: #991b1b;
+  margin-bottom: 6mm;
+  font-weight: 500;
+}
+
+.reminder-deadline strong {
+  color: #dc2626;
+  font-weight: 700;
+}
+
+/* Template-specific reminder overrides */
+body.template-classic .reminder-notice,
+body.template-swiss .reminder-notice {
+  border-radius: 0;
+  background: transparent;
+}
+
+body.template-classic .reminder-deadline,
+body.template-swiss .reminder-deadline {
+  border-radius: 0;
+}
+
+body.template-swiss .reminder-notice {
+  border-left: 3px solid #dc2626;
+}
+
+body.template-swiss .reminder-deadline {
+  background: transparent;
+  border: none;
+  border-top: 1px solid #fecaca;
+  text-align: left;
+}
+
+body.template-minimal .reminder-notice {
+  background: transparent;
+  border: none;
+  border-left: 3px solid #dc2626;
+  border-radius: 0;
+}
+
+body.template-minimal .reminder-deadline {
+  background: transparent;
+  border: none;
+  border-top: 1px solid #fecaca;
+  border-radius: 0;
+  text-align: left;
+}
+
+body.template-bold .reminder-notice {
+  border-radius: var(--radius);
+  border-left: 5px solid #dc2626;
+}
+
+body.template-bold .reminder-deadline {
+  border-radius: var(--radius);
+  border: 2px solid #fecaca;
+}
+
+body.template-elegant .reminder-notice {
+  background: transparent;
+  border: none;
+  border-left: 1px solid #dc2626;
+  border-radius: 0;
+}
+
+body.template-elegant .reminder-deadline {
+  background: transparent;
+  border: none;
+  border-top: 1px solid #fecaca;
+  border-bottom: 1px solid #fecaca;
+  border-radius: 0;
+  font-style: italic;
+}
+
+/* ---------- Print optimizations ---------- */
+@media print {
+  html, body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .page {
+    page-break-inside: avoid;
+  }
+
+  .qr-bill-section {
+    page-break-before: always;
+  }
+
+  .lines-table {
+    page-break-inside: auto;
+  }
+
+  .lines-table tr {
+    page-break-inside: avoid;
+  }
+}

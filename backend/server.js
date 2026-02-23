@@ -28,6 +28,7 @@ import exportRoutes from './src/routes/exports.js';
 import reminderRoutes from './src/routes/reminders.js';
 import abaninjaRoutes from './src/routes/abaninja.js';
 import bankRoutes from './src/routes/bank.js';
+import timerRoutes from './src/routes/timer.js';
 import { errorHandler } from './src/middleware/errorHandler.js';
 import { requireAuth, optionalAuth } from './src/middleware/auth.js';
 import { initializeAutomationServices } from './src/services/automation/index.js';
@@ -197,10 +198,10 @@ app.use('/api/planning', requireAuth, planningRoutes);
 app.use('/api/analytics', requireAuth, analyticsRoutes);
 app.use('/api/services', requireAuth, serviceRoutes);
 
-// Automation routes (may have their own auth)
-app.use('/api/automations', automationRoutes);
-app.use('/api/automation-runs', automationRunRoutes);
-app.use('/api/email-templates', emailTemplateRoutes);
+// Automation routes (protected)
+app.use('/api/automations', requireAuth, automationRoutes);
+app.use('/api/automation-runs', requireAuth, automationRunRoutes);
+app.use('/api/email-templates', requireAuth, emailTemplateRoutes);
 
 // Portal routes (mix of public and private routes)
 app.use('/api/portal', portalRoutes);
@@ -216,6 +217,9 @@ app.use('/api/abaninja', requireAuth, abaninjaRoutes);
 
 // Bank import routes (protected)
 app.use('/api/bank', requireAuth, bankRoutes);
+
+// Timer routes (protected)
+app.use('/api/timer', requireAuth, timerRoutes);
 
 // =============================================================================
 // ERROR HANDLING

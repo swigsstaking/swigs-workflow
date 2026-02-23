@@ -16,9 +16,9 @@ export default function EmailsSection({ settings, onSettingsUpdate }) {
     if (settings) {
       setEmailTemplates(settings.emailTemplates || {
         quoteSubject: 'Devis {number} - {projectName}',
-        quoteBody: 'Bonjour {clientName},\n\nVeuillez trouver ci-joint le devis {number} d\'un montant de {total} CHF.\n\nN\'hésitez pas à me contacter pour toute question.\n\nCordialement,\n{companyName}',
+        quoteBody: 'Bonjour {clientName},\n\nVeuillez trouver ci-joint le devis {number} d\'un montant de {total}.\n\nN\'hésitez pas à me contacter pour toute question.\n\nCordialement,\n{companyName}',
         invoiceSubject: 'Facture {number} - {projectName}',
-        invoiceBody: 'Bonjour {clientName},\n\nVeuillez trouver ci-joint la facture {number} d\'un montant de {total} CHF.\n\nMerci de procéder au règlement dans un délai de {paymentTerms} jours.\n\nCordialement,\n{companyName}'
+        invoiceBody: 'Bonjour {clientName},\n\nVeuillez trouver ci-joint la facture {number} d\'un montant de {total}.\n\nMerci de procéder au règlement dans un délai de {paymentTerms} jours.\n\nCordialement,\n{companyName}'
       });
       setHasChanges(false);
     }

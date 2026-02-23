@@ -402,7 +402,13 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
 
         {/* Actions */}
         <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-dark-border">
-          <Button variant="secondary" onClick={onClose}>
+          <Button variant="secondary" onClick={() => {
+            if (statusTimeoutRef.current) {
+              clearTimeout(statusTimeoutRef.current);
+              statusTimeoutRef.current = null;
+            }
+            onClose();
+          }}>
             Annuler
           </Button>
           <Button

@@ -112,7 +112,19 @@ export const historyApi = {
 export const settingsApi = {
   get: () => api.get('/settings'),
   update: (data) => api.put('/settings', data),
-  getStats: () => api.get('/settings/stats')
+  getStats: () => api.get('/settings/stats'),
+  uploadLogo: (file) => {
+    const formData = new FormData();
+    formData.append('logo', file);
+    return api.post('/settings/logo', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
+  deleteLogo: () => api.delete('/settings/logo'),
+  getInvoicePreview: () => api.get('/settings/invoice-preview', { responseType: 'blob' }),
+  getInvoicePreviewHTML: () => api.get('/settings/invoice-preview-html', { responseType: 'text', transformResponse: [(data) => data] }),
+  sendTestEmail: (to) => api.post('/settings/test-email', { to }),
+  sendTestReminder: (to) => api.post('/settings/test-reminder', { to })
 };
 
 // Clients
@@ -235,6 +247,16 @@ export const bankApi = {
   ignoreTransaction: (id) => api.patch(`/bank/transactions/${id}/ignore`),
   testImap: (config) => api.post('/bank/imap/test', config),
   fetchImapNow: () => api.post('/bank/imap/fetch')
+};
+
+// Timer
+export const timerApi = {
+  getActive: () => api.get('/timer/active'),
+  start: (data) => api.post('/timer/start', data),
+  pause: () => api.patch('/timer/pause'),
+  resume: () => api.patch('/timer/resume'),
+  stop: (data) => api.post('/timer/stop', data),
+  discard: () => api.delete('/timer/discard'),
 };
 
 // AbaNinja

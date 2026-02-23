@@ -221,7 +221,7 @@ export default function StandardInvoiceForm({
               )}
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Signé le {format(new Date(quote.signedAt), 'dd MMM yyyy', { locale: fr })}
+              {quote.signedAt ? `Signé le ${format(new Date(quote.signedAt), 'dd MMM yyyy', { locale: fr })}` : 'Devis signé'}
               {isPartiallyInvoiced && (
                 <span className="text-amber-600 dark:text-amber-400">
                   {' '}• Reste {formatCurrency(remainingAmount)}
