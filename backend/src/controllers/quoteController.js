@@ -132,8 +132,13 @@ export const getQuote = async (req, res, next) => {
     }
 
     // Verify project ownership
-    if (req.user && quote.project.userId && quote.project.userId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ success: false, error: 'Accès refusé' });
+    if (req.user) {
+      if (!quote.project.userId) {
+        return res.status(403).json({ success: false, error: 'Ce projet n\'a pas de propriétaire assigné' });
+      }
+      if (quote.project.userId.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ success: false, error: 'Accès refusé' });
+      }
     }
 
     res.json({ success: true, data: quote });
@@ -171,7 +176,7 @@ export const createQuote = async (req, res, next) => {
     const total = subtotal + vatAmount;
 
     // Generate quote number
-    const number = await Quote.generateNumber();
+    const number = await Quote.generateNumber(req.user?._id);
 
     // Calculate validity date (default 30 days)
     const finalValidUntil = validUntil || new Date(
@@ -211,8 +216,13 @@ export const updateQuote = async (req, res, next) => {
     }
 
     // Verify project ownership
-    if (req.user && quote.project.userId && quote.project.userId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ success: false, error: 'Accès refusé' });
+    if (req.user) {
+      if (!quote.project.userId) {
+        return res.status(403).json({ success: false, error: 'Ce projet n\'a pas de propriétaire assigné' });
+      }
+      if (quote.project.userId.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ success: false, error: 'Accès refusé' });
+      }
     }
 
     const { lines, notes, validUntil, vatRate } = req.body;
@@ -313,8 +323,13 @@ export const changeQuoteStatus = async (req, res, next) => {
     }
 
     // Verify project ownership
-    if (req.user && quote.project.userId && quote.project.userId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ success: false, error: 'Accès refusé' });
+    if (req.user) {
+      if (!quote.project.userId) {
+        return res.status(403).json({ success: false, error: 'Ce projet n\'a pas de propriétaire assigné' });
+      }
+      if (quote.project.userId.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ success: false, error: 'Accès refusé' });
+      }
     }
 
     // Validate transition
@@ -357,8 +372,13 @@ export const deleteQuote = async (req, res, next) => {
     }
 
     // Verify project ownership
-    if (req.user && quote.project.userId && quote.project.userId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ success: false, error: 'Accès refusé' });
+    if (req.user) {
+      if (!quote.project.userId) {
+        return res.status(403).json({ success: false, error: 'Ce projet n\'a pas de propriétaire assigné' });
+      }
+      if (quote.project.userId.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ success: false, error: 'Accès refusé' });
+      }
     }
 
     // Deletion rules:
@@ -409,8 +429,13 @@ export const getQuotePDF = async (req, res, next) => {
     }
 
     // Verify project ownership
-    if (req.user && quote.project.userId && quote.project.userId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ success: false, error: 'Accès refusé' });
+    if (req.user) {
+      if (!quote.project.userId) {
+        return res.status(403).json({ success: false, error: 'Ce projet n\'a pas de propriétaire assigné' });
+      }
+      if (quote.project.userId.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ success: false, error: 'Accès refusé' });
+      }
     }
 
     // Get settings
@@ -445,8 +470,13 @@ export const sendQuote = async (req, res, next) => {
     }
 
     // Verify project ownership
-    if (req.user && quote.project.userId && quote.project.userId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ success: false, error: 'Accès refusé' });
+    if (req.user) {
+      if (!quote.project.userId) {
+        return res.status(403).json({ success: false, error: 'Ce projet n\'a pas de propriétaire assigné' });
+      }
+      if (quote.project.userId.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ success: false, error: 'Accès refusé' });
+      }
     }
 
     // Validate client email

@@ -9,6 +9,22 @@ const companySchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  street: {
+    type: String,
+    default: ''
+  },
+  zip: {
+    type: String,
+    default: ''
+  },
+  city: {
+    type: String,
+    default: ''
+  },
+  country: {
+    type: String,
+    default: 'CH'
+  },
   siret: {
     type: String,
     default: ''

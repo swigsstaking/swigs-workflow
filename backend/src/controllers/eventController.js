@@ -94,8 +94,13 @@ export const updateEvent = async (req, res, next) => {
     }
 
     // Verify project ownership
-    if (req.user && event.project.userId && event.project.userId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ success: false, error: 'Accès refusé' });
+    if (req.user) {
+      if (!event.project.userId) {
+        return res.status(403).json({ success: false, error: 'Ce projet n\'a pas de propriétaire assigné' });
+      }
+      if (event.project.userId.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ success: false, error: 'Accès refusé' });
+      }
     }
 
     // Cannot update billed events
@@ -137,8 +142,13 @@ export const deleteEvent = async (req, res, next) => {
     }
 
     // Verify project ownership
-    if (req.user && event.project.userId && event.project.userId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ success: false, error: 'Accès refusé' });
+    if (req.user) {
+      if (!event.project.userId) {
+        return res.status(403).json({ success: false, error: 'Ce projet n\'a pas de propriétaire assigné' });
+      }
+      if (event.project.userId.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ success: false, error: 'Accès refusé' });
+      }
     }
 
     // Cannot delete billed events

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import Counter from './Counter.js';
 
 const quoteLineSchema = new mongoose.Schema({
   description: {
@@ -140,32 +141,10 @@ const quoteSchema = new mongoose.Schema({
 });
 
 // Generate quote number (atomic — safe for PM2 cluster)
-quoteSchema.statics.generateNumber = async function() {
+quoteSchema.statics.generateNumber = async function(userId) {
   const year = new Date().getFullYear();
-  const prefix = `DEV-${year}-`;
-
-  // Find the last used number
-  const lastQuote = await this.findOne(
-    { number: new RegExp(`^${prefix}`) },
-    { number: 1 },
-    { sort: { number: -1 } }
-  );
-
-  let nextNum = 1;
-  if (lastQuote) {
-    const lastNum = parseInt(lastQuote.number.replace(prefix, ''), 10);
-    if (!isNaN(lastNum)) nextNum = lastNum + 1;
-  }
-
-  // Retry loop in case of conflict (unique index on number)
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const number = `${prefix}${String(nextNum + attempt).padStart(3, '0')}`;
-    const exists = await this.findOne({ number });
-    if (!exists) return number;
-  }
-
-  // Fallback with timestamp
-  return `${prefix}${Date.now()}`;
+  const seq = await Counter.getNextSequence(`quote_${year}_${userId || 'global'}`);
+  return `DEV-${year}-${String(seq).padStart(3, '0')}`;
 };
 
 // Indexes for common query patterns

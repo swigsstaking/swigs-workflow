@@ -96,8 +96,13 @@ export const getInvoice = async (req, res, next) => {
     }
 
     // Verify project ownership
-    if (req.user && invoice.project.userId && invoice.project.userId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ success: false, error: 'Accès refusé' });
+    if (req.user) {
+      if (!invoice.project.userId) {
+        return res.status(403).json({ success: false, error: 'Ce projet n\'a pas de propriétaire assigné' });
+      }
+      if (invoice.project.userId.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ success: false, error: 'Accès refusé' });
+      }
     }
 
     res.json({ success: true, data: invoice });
@@ -109,6 +114,11 @@ export const getInvoice = async (req, res, next) => {
 // @desc    Create invoice from events and/or quotes, or custom lines
 // @route   POST /api/projects/:projectId/invoices
 export const createInvoice = async (req, res, next) => {
+  // Tracks compensatory rollback state (no replica set — manual rollback on failure)
+  let invoice = null;
+  let billedEventIds = [];
+  const updatedQuoteIds = [];
+
   try {
     const {
       invoiceType = 'standard',
@@ -139,10 +149,8 @@ export const createInvoice = async (req, res, next) => {
       finalIssueDate.getTime() + settings.invoicing.defaultPaymentTerms * 24 * 60 * 60 * 1000
     );
 
-    // Generate invoice number
-    const number = await Invoice.generateNumber();
-
-    let invoice;
+    // Generate invoice number (atomic via Counter — race-condition safe)
+    const number = await Invoice.generateNumber(req.user?._id);
 
     // Handle CUSTOM invoice type
     if (invoiceType === 'custom') {
@@ -281,7 +289,7 @@ export const createInvoice = async (req, res, next) => {
     const vatAmount = subtotal * (vatRate / 100);
     const total = subtotal + vatAmount;
 
-    // Create standard invoice
+    // Step 1: Create the invoice document
     invoice = await Invoice.create({
       project: req.params.projectId,
       number,
@@ -298,15 +306,16 @@ export const createInvoice = async (req, res, next) => {
       notes
     });
 
-    // Mark events as billed
+    // Step 2: Mark events as billed (compensatory rollback: unbill on error)
     if (eventIds.length > 0) {
       await Event.updateMany(
         { _id: { $in: eventIds } },
         { billed: true, invoice: invoice._id }
       );
+      billedEventIds = eventIds;
     }
 
-    // Update quotes with partial payment tracking
+    // Step 3: Update quotes with partial payment tracking (compensatory rollback on error)
     for (const quote of quotes) {
       const snapshot = quoteSnapshots.find(qs => qs.quoteId.toString() === quote._id.toString());
       const newInvoicedAmount = (quote.invoicedAmount || 0) + snapshot.invoicedAmount;
@@ -327,6 +336,8 @@ export const createInvoice = async (req, res, next) => {
           }
         }
       });
+
+      updatedQuoteIds.push({ id: quote._id, previousStatus: quote.status, previousInvoicedAmount: quote.invoicedAmount || 0, previousInvoice: quote.invoice });
     }
 
     // Log history
@@ -334,6 +345,41 @@ export const createInvoice = async (req, res, next) => {
 
     res.status(201).json({ success: true, data: invoice });
   } catch (error) {
+    // Compensatory rollback: undo side effects if invoice was already created
+    if (invoice) {
+      try {
+        // Rollback step 2: unbill events
+        if (billedEventIds.length > 0) {
+          await Event.updateMany(
+            { _id: { $in: billedEventIds } },
+            { billed: false, invoice: null }
+          );
+        }
+
+        // Rollback step 3: restore quote states
+        for (const q of updatedQuoteIds) {
+          await Quote.findByIdAndUpdate(q.id, {
+            $set: {
+              status: q.previousStatus,
+              invoicedAmount: q.previousInvoicedAmount,
+              invoice: q.previousInvoice,
+              invoicedAt: null
+            },
+            $pull: { invoices: { invoice: invoice._id } }
+          });
+        }
+
+        // Rollback step 1: delete the invoice
+        await Invoice.findByIdAndDelete(invoice._id);
+      } catch (rollbackErr) {
+        console.error('Invoice creation rollback failed:', rollbackErr.message, {
+          invoiceId: invoice._id,
+          billedEventIds,
+          updatedQuoteIds
+        });
+      }
+    }
+
     next(error);
   }
 };
@@ -349,8 +395,13 @@ export const updateInvoice = async (req, res, next) => {
     }
 
     // Verify project ownership
-    if (req.user && invoice.project.userId && invoice.project.userId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ success: false, error: 'Accès refusé' });
+    if (req.user) {
+      if (!invoice.project.userId) {
+        return res.status(403).json({ success: false, error: 'Ce projet n\'a pas de propriétaire assigné' });
+      }
+      if (invoice.project.userId.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ success: false, error: 'Accès refusé' });
+      }
     }
 
     // Only draft invoices can be fully updated
@@ -406,8 +457,13 @@ export const changeInvoiceStatus = async (req, res, next) => {
     }
 
     // Verify project ownership
-    if (req.user && invoice.project.userId && invoice.project.userId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ success: false, error: 'Accès refusé' });
+    if (req.user) {
+      if (!invoice.project.userId) {
+        return res.status(403).json({ success: false, error: 'Ce projet n\'a pas de propriétaire assigné' });
+      }
+      if (invoice.project.userId.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ success: false, error: 'Accès refusé' });
+      }
     }
 
     const oldStatus = invoice.status;
@@ -424,10 +480,47 @@ export const changeInvoiceStatus = async (req, res, next) => {
         { invoice: invoice._id },
         { billed: false, invoice: null }
       );
-      await Quote.updateMany(
-        { invoice: invoice._id },
-        { status: 'signed', invoice: null, invoicedAt: null }
-      );
+
+      // Handle partial quote invoicing: decrement invoicedAmount and recalculate status
+      if (invoice.quotes && invoice.quotes.length > 0) {
+        for (const quoteSnapshot of invoice.quotes) {
+          const quote = await Quote.findById(quoteSnapshot.quoteId);
+          if (!quote) continue;
+
+          // Decrement invoicedAmount by the amount from this invoice
+          const newInvoicedAmount = Math.max(0, (quote.invoicedAmount || 0) - (quoteSnapshot.invoicedAmount || quoteSnapshot.subtotal || 0));
+
+          // Remove this invoice from the invoices array
+          const updatedInvoices = (quote.invoices || []).filter(
+            inv => inv.invoice.toString() !== invoice._id.toString()
+          );
+
+          // Recalculate status based on new invoicedAmount
+          let newStatus = 'signed';
+          if (newInvoicedAmount > 0 && newInvoicedAmount < quote.subtotal) {
+            newStatus = 'partial';
+          } else if (newInvoicedAmount >= quote.subtotal) {
+            newStatus = 'invoiced';
+          }
+
+          await Quote.findByIdAndUpdate(quote._id, {
+            $set: {
+              status: newStatus,
+              invoicedAmount: newInvoicedAmount,
+              invoice: newStatus === 'invoiced' ? quote.invoice : null,
+              invoicedAt: newStatus === 'invoiced' ? quote.invoicedAt : null,
+              invoices: updatedInvoices
+            }
+          });
+        }
+      } else {
+        // Legacy: Reset quotes status back to 'signed' (for old invoices without partial tracking)
+        await Quote.updateMany(
+          { invoice: invoice._id },
+          { status: 'signed', invoice: null, invoicedAt: null }
+        );
+      }
+
       await historyService.invoiceCancelled(invoice.project._id, invoice.number);
     } else if (status === 'sent') {
       await historyService.invoiceSent(invoice.project._id, invoice.number);
@@ -489,8 +582,13 @@ export const deleteInvoice = async (req, res, next) => {
     }
 
     // Verify project ownership
-    if (req.user && invoice.project.userId && invoice.project.userId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ success: false, error: 'Accès refusé' });
+    if (req.user) {
+      if (!invoice.project.userId) {
+        return res.status(403).json({ success: false, error: 'Ce projet n\'a pas de propriétaire assigné' });
+      }
+      if (invoice.project.userId.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ success: false, error: 'Accès refusé' });
+      }
     }
 
     // Block deletion of paid invoices
@@ -575,8 +673,13 @@ export const getInvoicePDF = async (req, res, next) => {
     }
 
     // Verify project ownership
-    if (req.user && invoice.project.userId && invoice.project.userId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ success: false, error: 'Accès refusé' });
+    if (req.user) {
+      if (!invoice.project.userId) {
+        return res.status(403).json({ success: false, error: 'Ce projet n\'a pas de propriétaire assigné' });
+      }
+      if (invoice.project.userId.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ success: false, error: 'Accès refusé' });
+      }
     }
 
     // Get settings
@@ -611,8 +714,13 @@ export const sendInvoice = async (req, res, next) => {
     }
 
     // Verify project ownership
-    if (req.user && invoice.project.userId && invoice.project.userId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ success: false, error: 'Accès refusé' });
+    if (req.user) {
+      if (!invoice.project.userId) {
+        return res.status(403).json({ success: false, error: 'Ce projet n\'a pas de propriétaire assigné' });
+      }
+      if (invoice.project.userId.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ success: false, error: 'Accès refusé' });
+      }
     }
 
     // Validate client email

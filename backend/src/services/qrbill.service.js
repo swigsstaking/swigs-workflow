@@ -7,33 +7,88 @@ import { SwissQRBill as SwissQRBillSVG } from 'swissqrbill/svg';
  */
 
 /**
- * Build common QR-Bill data object from invoice + settings
+ * Generate a valid QR-Reference (27 digits) for QR-IBAN accounts.
+ * Uses mod 10 recursive checksum algorithm as per Swiss payment standards.
+ */
+function generateQRReference(invoiceNumber) {
+  const digits = invoiceNumber.replace(/[^0-9]/g, '');
+  const padded = digits.padStart(26, '0');
+  const table = [0, 9, 4, 6, 8, 2, 7, 1, 3, 5];
+  let carry = 0;
+  for (const digit of padded) {
+    carry = table[(carry + parseInt(digit, 10)) % 10];
+  }
+  const checkDigit = (10 - carry) % 10;
+  return padded + checkDigit;
+}
+
+/**
+ * Detect whether an IBAN is a Swiss QR-IBAN.
+ * QR-IBANs: CH or LI, bank clearing number in range 30000–31999 (positions 5-9).
+ */
+function isQRIBAN(iban) {
+  const normalized = (iban || '').replace(/\s/g, '').toUpperCase();
+  return /^(CH|LI)\d{2}3[01]\d{3}/.test(normalized);
+}
+
+/**
+ * Build common QR-Bill data object from invoice + settings.
+ * Conforms to Swiss QR-Bill standard (SIX Payment Services).
  */
 const buildQRBillData = (invoice, project, settings) => {
   const company = settings.company || {};
   const client = project.client || {};
+  const iban = company.qrIban || company.iban || '';
 
-  return {
+  // --- Creditor address ---
+  // Prefer decomposed fields (street/zip/city), fall back to parsing legacy address string
+  const creditorAddress = company.street || company.address?.split(',')[0]?.trim() || '';
+  const creditorZip = company.zip || '';
+  const creditorCity = company.city || '';
+  const creditorCountry = company.country || 'CH';
+
+  // --- Debtor address ---
+  // Prefer decomposed fields on client, fall back to parsing legacy address string
+  const clientAddress = client.street || client.address || '';
+  const clientZip = client.zip || '';
+  const clientCity = client.city || '';
+  const clientCountry = client.country || 'CH';
+
+  // --- Reference ---
+  // QR-IBAN requires a valid 27-digit QR-Reference (type QRR).
+  // Regular IBAN must NOT include a QR-Reference — omit reference entirely (type NON).
+  let reference;
+  if (isQRIBAN(iban)) {
+    reference = generateQRReference(invoice.number);
+  }
+  // For regular IBAN: leave reference undefined (NON type, no structured reference)
+
+  const data = {
     currency: 'CHF',
     amount: invoice.total,
-    reference: invoice.number.replace(/[^0-9]/g, ''), // Remove non-numeric chars
     creditor: {
-      name: company.name || 'SWIGS',
-      address: company.address || '',
-      zip: '',
-      city: '',
-      account: company.qrIban || company.iban,
-      country: 'CH'
+      name: (company.name || 'SWIGS').substring(0, 70),
+      address: creditorAddress.substring(0, 70),
+      zip: creditorZip,
+      city: creditorCity.substring(0, 35),
+      country: creditorCountry,
+      account: iban
     },
     debtor: {
-      name: client.name || '',
-      address: client.address || '',
-      zip: '',
-      city: '',
-      country: 'CH'
+      name: (client.name || client.company || '').substring(0, 70),
+      address: clientAddress.substring(0, 70),
+      zip: clientZip,
+      city: clientCity.substring(0, 35),
+      country: clientCountry
     },
-    additionalInformation: `Facture ${invoice.number}`
+    additionalInformation: `Facture ${invoice.number}`.substring(0, 140)
   };
+
+  if (reference !== undefined) {
+    data.reference = reference;
+  }
+
+  return data;
 };
 
 /**
