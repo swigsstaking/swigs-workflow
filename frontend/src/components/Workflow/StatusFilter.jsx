@@ -3,15 +3,17 @@ import { useUIStore } from '../../stores/uiStore';
 
 export default function StatusFilter() {
   const { statuses } = useProjectStore();
-  const { statusFilter, setStatusFilter } = useUIStore();
+  const { hiddenStatuses, toggleHiddenStatus, clearHiddenStatuses } = useUIStore();
+
+  const hasHidden = hiddenStatuses.length > 0;
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <button
-        onClick={() => setStatusFilter(null)}
+        onClick={() => clearHiddenStatuses()}
         className={`
           px-3 py-1.5 text-sm font-medium rounded-lg transition-colors
-          ${statusFilter === null
+          ${!hasHidden
             ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900'
             : 'bg-slate-100 dark:bg-dark-card text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-dark-hover'
           }
@@ -20,29 +22,31 @@ export default function StatusFilter() {
         Tous
       </button>
 
-      {statuses.map(status => (
-        <button
-          key={status._id}
-          onClick={() => setStatusFilter(status._id)}
-          className={`
-            px-3 py-1.5 text-sm font-medium rounded-lg transition-colors
-            ${statusFilter === status._id
-              ? 'text-white'
-              : 'hover:opacity-80'
-            }
-          `}
-          style={{
-            backgroundColor: statusFilter === status._id
-              ? status.color
-              : `${status.color}20`,
-            color: statusFilter === status._id
-              ? 'white'
-              : status.color
-          }}
-        >
-          {status.name}
-        </button>
-      ))}
+      {statuses.map(status => {
+        const isHidden = hiddenStatuses.includes(status._id);
+        return (
+          <button
+            key={status._id}
+            onClick={() => toggleHiddenStatus(status._id)}
+            className={`
+              px-3 py-1.5 text-sm font-medium rounded-lg transition-all
+              ${isHidden
+                ? 'opacity-40 line-through'
+                : 'hover:opacity-80'
+              }
+            `}
+            style={{
+              backgroundColor: isHidden
+                ? `${status.color}10`
+                : `${status.color}20`,
+              color: status.color
+            }}
+            title={isHidden ? `Afficher "${status.name}"` : `Masquer "${status.name}"`}
+          >
+            {status.name}
+          </button>
+        );
+      })}
     </div>
   );
 }

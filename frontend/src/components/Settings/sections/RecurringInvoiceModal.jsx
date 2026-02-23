@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
-import { X, RefreshCw, Plus, Trash2, Calendar, Save } from 'lucide-react';
+import { RefreshCw, Calendar, Save } from 'lucide-react';
 import { recurringInvoicesApi, projectsApi } from '../../../services/api';
 import { useToastStore } from '../../../stores/toastStore';
+import Modal from '../../ui/Modal';
 import Button from '../../ui/Button';
 import Input, { Textarea } from '../../ui/Input';
+import LinesEditor from '../../Sidebar/invoice/LinesEditor';
 
 const FREQUENCY_OPTIONS = [
   { value: 'weekly', label: 'Hebdomadaire' },
@@ -23,13 +25,6 @@ function getDefaultLine() {
   return { description: '', quantity: 1, unitPrice: 0 };
 }
 
-function getLineTotal(line) {
-  const qty = parseFloat(line.quantity);
-  const price = parseFloat(line.unitPrice);
-  if (isNaN(qty) || isNaN(price)) return 0;
-  return qty * price;
-}
-
 function formatCurrency(amount) {
   return new Intl.NumberFormat('fr-CH', { style: 'currency', currency: 'CHF' }).format(amount);
 }
@@ -41,6 +36,13 @@ function formatDate(dateStr) {
   } catch {
     return dateStr;
   }
+}
+
+function getLineTotal(line) {
+  const qty = parseFloat(line.quantity);
+  const price = parseFloat(line.unitPrice);
+  if (isNaN(qty) || isNaN(price)) return 0;
+  return qty * price;
 }
 
 function computeNextDate(startDate, frequency, dayOfMonth) {
@@ -78,7 +80,7 @@ export default function RecurringInvoiceModal({ isOpen, onClose, editItem, setti
   const [projects, setProjects] = useState([]);
   const [loadingProjects, setLoadingProjects] = useState(false);
 
-  const defaultVat = settings?.invoicing?.vatRate ?? 8.1;
+  const defaultVat = parseFloat((settings?.invoicing?.vatRate ?? 8.1).toFixed(2));
 
   const [form, setForm] = useState({
     projectId: '',
@@ -110,8 +112,8 @@ export default function RecurringInvoiceModal({ isOpen, onClose, editItem, setti
     if (editItem) {
       setForm({
         projectId: editItem.project?._id || editItem.project || '',
-        lines: editItem.lines?.length
-          ? editItem.lines.map(l => ({ description: l.description || '', quantity: l.quantity ?? 1, unitPrice: l.unitPrice ?? 0 }))
+        lines: editItem.customLines?.length
+          ? editItem.customLines.map(l => ({ description: l.description || '', quantity: l.quantity ?? 1, unitPrice: l.unitPrice ?? 0 }))
           : [getDefaultLine()],
         frequency: editItem.frequency || 'monthly',
         dayOfMonth: editItem.dayOfMonth ?? 1,
@@ -119,7 +121,7 @@ export default function RecurringInvoiceModal({ isOpen, onClose, editItem, setti
         hasEndDate: !!editItem.endDate,
         endDate: editItem.endDate ? editItem.endDate.slice(0, 10) : '',
         vatRate: editItem.vatRate ?? defaultVat,
-        paymentDays: editItem.paymentDays ?? 30,
+        paymentDays: editItem.paymentTermsDays ?? 30,
         notes: editItem.notes || '',
         autoSend: editItem.autoSend ?? false,
       });
@@ -139,8 +141,6 @@ export default function RecurringInvoiceModal({ isOpen, onClose, editItem, setti
       });
     }
   }, [isOpen, editItem]);
-
-  if (!isOpen) return null;
 
   const isCancelled = editItem?.status === 'cancelled';
   const selectedProject = projects.find(p => p._id === form.projectId);
@@ -178,7 +178,7 @@ export default function RecurringInvoiceModal({ isOpen, onClose, editItem, setti
     try {
       const payload = {
         project: form.projectId,
-        lines: form.lines.map(l => ({
+        customLines: form.lines.map(l => ({
           description: l.description,
           quantity: parseFloat(l.quantity) || 1,
           unitPrice: parseFloat(l.unitPrice) || 0,
@@ -188,7 +188,7 @@ export default function RecurringInvoiceModal({ isOpen, onClose, editItem, setti
         startDate: form.startDate,
         endDate: form.hasEndDate && form.endDate ? form.endDate : undefined,
         vatRate: parseFloat(form.vatRate) || 0,
-        paymentDays: parseInt(form.paymentDays) || 30,
+        paymentTermsDays: parseInt(form.paymentDays) || 30,
         notes: form.notes || undefined,
         autoSend: form.autoSend,
       };
@@ -210,31 +210,13 @@ export default function RecurringInvoiceModal({ isOpen, onClose, editItem, setti
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-dark-card rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[92vh]">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-dark-border flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <RefreshCw className="w-5 h-5 text-primary-600 dark:text-primary-400" />
-            <h3 className="text-base font-semibold text-slate-900 dark:text-white">
-              {editItem ? 'Modifier la récurrence' : 'Nouvelle récurrence'}
-            </h3>
-            {isCancelled && (
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
-                Annulée
-              </span>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Body */}
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={editItem ? 'Modifier la récurrence' : 'Nouvelle récurrence'}
+      size="lg"
+    >
+      <div className="space-y-5 -m-6 flex flex-col">
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
           {isCancelled && (
             <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700/40 rounded-lg text-sm text-red-700 dark:text-red-300">
@@ -269,84 +251,17 @@ export default function RecurringInvoiceModal({ isOpen, onClose, editItem, setti
 
           {/* Lignes */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Lignes de facturation
-              </label>
-            </div>
-
-            <div className="grid grid-cols-12 gap-2 px-1 text-xs font-medium text-slate-500 dark:text-slate-400">
-              <div className="col-span-6">Description</div>
-              <div className="col-span-2 text-center">Qté</div>
-              <div className="col-span-2 text-center">Prix unit.</div>
-              <div className="col-span-2 text-right">Total</div>
-            </div>
-
-            {form.lines.map((line, i) => (
-              <div
-                key={i}
-                className="grid grid-cols-12 gap-2 items-center p-2 rounded-lg bg-slate-50/80 dark:bg-slate-800/30"
-              >
-                <div className="col-span-6">
-                  <input
-                    type="text"
-                    value={line.description}
-                    onChange={e => updateLine(i, 'description', e.target.value)}
-                    placeholder="Description..."
-                    disabled={isCancelled}
-                    className="w-full px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.5"
-                    value={line.quantity === '' ? '' : line.quantity}
-                    onChange={e => updateLine(i, 'quantity', e.target.value === '' ? '' : e.target.value)}
-                    onBlur={e => updateLine(i, 'quantity', parseFloat(e.target.value) || 1)}
-                    disabled={isCancelled}
-                    className="w-full px-2 py-1.5 text-sm text-center rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={line.unitPrice === '' ? '' : line.unitPrice}
-                    onChange={e => updateLine(i, 'unitPrice', e.target.value === '' ? '' : e.target.value)}
-                    onBlur={e => updateLine(i, 'unitPrice', parseFloat(e.target.value) || 0)}
-                    disabled={isCancelled}
-                    className="w-full px-2 py-1.5 text-sm text-center rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                </div>
-                <div className="col-span-2 flex items-center justify-end gap-1">
-                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                    {formatCurrency(getLineTotal(line))}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => removeLine(i)}
-                    disabled={form.lines.length === 1 || isCancelled}
-                    className="p-1 rounded text-slate-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
-
-            {!isCancelled && (
-              <button
-                type="button"
-                onClick={addLine}
-                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-primary-500 hover:text-primary-500 transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                <span className="text-sm">Ajouter une ligne</span>
-              </button>
-            )}
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              Lignes de facturation
+            </label>
+            <LinesEditor
+              lines={form.lines}
+              updateLine={updateLine}
+              removeLine={removeLine}
+              addLine={addLine}
+              formatCurrency={formatCurrency}
+              disabled={isCancelled}
+            />
           </div>
 
           {/* Fréquence et dates */}
@@ -492,7 +407,7 @@ export default function RecurringInvoiceModal({ isOpen, onClose, editItem, setti
               <span>{formatCurrency(subtotal)}</span>
             </div>
             <div className="flex justify-between text-sm text-slate-700 dark:text-slate-300">
-              <span>TVA ({form.vatRate}%)</span>
+              <span>TVA ({parseFloat(form.vatRate).toFixed(1)}%)</span>
               <span>{formatCurrency(vatAmount)}</span>
             </div>
             <div className="flex justify-between text-sm font-semibold text-slate-900 dark:text-white border-t border-slate-200 dark:border-slate-700 pt-2 mt-1">
@@ -526,6 +441,6 @@ export default function RecurringInvoiceModal({ isOpen, onClose, editItem, setti
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

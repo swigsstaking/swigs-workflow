@@ -1,27 +1,30 @@
 import { useState, useEffect } from 'react';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
-import { eventsApi, quotesApi } from '../../services/api';
+import { eventsApi, quotesApi, invoicesApi, recurringInvoicesApi } from '../../services/api';
 import { useProjectStore } from '../../stores/projectStore';
 import { useToastStore } from '../../stores/toastStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import InvoiceModeSelector from './invoice/InvoiceModeSelector';
 import StandardInvoiceForm from './invoice/StandardInvoiceForm';
 import CustomInvoiceForm from './invoice/CustomInvoiceForm';
+import RecurringInvoiceForm from './invoice/RecurringInvoiceForm';
 import InvoiceSummary from './invoice/InvoiceSummary';
 
 export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQuoteId, vatRate }) {
   const { createInvoice } = useProjectStore();
   const { addToast } = useToastStore();
+  const { settings, fetchSettings } = useSettingsStore();
 
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState('standard'); // 'standard' or 'custom'
+  const [mode, setMode] = useState('standard'); // 'standard' | 'custom' | 'recurring'
 
   // Standard mode state
   const [unbilledEvents, setUnbilledEvents] = useState([]);
   const [selectedEvents, setSelectedEvents] = useState([]);
   const [invoiceableQuotes, setInvoiceableQuotes] = useState([]);
   const [selectedQuotes, setSelectedQuotes] = useState([]);
-  const [quotePartials, setQuotePartials] = useState({}); // { quoteId: { type: 'percent'|'amount', value: number } }
+  const [quotePartials, setQuotePartials] = useState({});
   const [collapsedSections, setCollapsedSections] = useState({});
 
   // Custom mode state
@@ -29,6 +32,19 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
     { description: '', quantity: 1, unitPrice: 0 }
   ]);
   const [notes, setNotes] = useState('');
+  const [autoSend, setAutoSend] = useState(false);
+
+  // Recurring mode state
+  const [recurringForm, setRecurringForm] = useState({
+    lines: [{ description: '', quantity: 1, unitPrice: 0 }],
+    frequency: 'monthly',
+    dayOfMonth: 1,
+    startDate: new Date().toISOString().slice(0, 10),
+    hasEndDate: false,
+    endDate: '',
+    notes: '',
+    autoSend: false,
+  });
 
   // Shared advanced options
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -37,6 +53,7 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
   useEffect(() => {
     if (isOpen && project?._id) {
       loadData();
+      if (!settings) fetchSettings();
     }
   }, [isOpen, project?._id, preselectedQuoteId]);
 
@@ -65,6 +82,17 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
       setCustomIssueDate('');
       setCustomLines([{ description: '', quantity: 1, unitPrice: 0 }]);
       setNotes('');
+      setAutoSend(false);
+      setRecurringForm({
+        lines: [{ description: '', quantity: 1, unitPrice: 0 }],
+        frequency: 'monthly',
+        dayOfMonth: 1,
+        startDate: new Date().toISOString().slice(0, 10),
+        hasEndDate: false,
+        endDate: '',
+        notes: '',
+        autoSend: false,
+      });
     } catch (error) {
       console.error('Error loading data:', error);
     }
@@ -92,7 +120,6 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
   };
 
   const setQuotePartial = (quoteId, type, value) => {
-    // Keep the string value to preserve input state
     setQuotePartials(prev => ({
       ...prev,
       [quoteId]: { type, value: value === '' ? '' : value }
@@ -142,6 +169,28 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
     setCustomLines(newLines);
   };
 
+  // Service line handler (shared for custom & recurring)
+  const addServiceLine = (service) => {
+    const newLine = {
+      description: service.description
+        ? `${service.name} - ${service.description}`
+        : service.name,
+      quantity: service.defaultQuantity || 1,
+      unitPrice: service.priceType === 'hourly' && service.estimatedHours
+        ? service.unitPrice * service.estimatedHours
+        : service.unitPrice
+    };
+
+    if (mode === 'recurring') {
+      setRecurringForm(f => ({
+        ...f,
+        lines: [...f.lines.filter(l => l.description || l.unitPrice), newLine]
+      }));
+    } else {
+      setCustomLines(prev => [...prev.filter(l => l.description || l.unitPrice), newLine]);
+    }
+  };
+
   // Calculations
   const getEventsTotal = () => {
     return unbilledEvents
@@ -156,8 +205,6 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
   const getQuoteAmount = (quote) => {
     const partial = quotePartials[quote._id];
     const numValue = parseFloat(partial?.value) || 0;
-
-    // Use remaining amount if quote is partially invoiced
     const remainingAmount = quote.remainingAmount ?? quote.subtotal;
 
     if (!partial || numValue === 0) {
@@ -201,12 +248,43 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
     );
   };
 
+  const isRecurringValid = () => {
+    return recurringForm.lines.every(l =>
+      l.description.trim() !== '' && parseFloat(l.quantity) > 0
+    ) && recurringForm.startDate;
+  };
+
   const handleSubmit = async () => {
     if (mode === 'standard' && selectedEvents.length === 0 && selectedQuotes.length === 0) return;
     if (mode === 'custom' && !isCustomValid()) return;
+    if (mode === 'recurring' && !isRecurringValid()) return;
 
     setLoading(true);
     try {
+      if (mode === 'recurring') {
+        const showDayOfMonth = ['monthly', 'quarterly', 'yearly'].includes(recurringForm.frequency);
+        await recurringInvoicesApi.create({
+          project: project._id,
+          customLines: recurringForm.lines.map(l => ({
+            description: l.description,
+            quantity: parseFloat(l.quantity) || 1,
+            unitPrice: parseFloat(l.unitPrice) || 0,
+          })),
+          frequency: recurringForm.frequency,
+          dayOfMonth: showDayOfMonth ? (parseInt(recurringForm.dayOfMonth) || 1) : undefined,
+          startDate: recurringForm.startDate,
+          endDate: recurringForm.hasEndDate && recurringForm.endDate ? recurringForm.endDate : undefined,
+          vatRate: vatRate ? vatRate * 100 : (settings?.invoicing?.vatRate ?? 8.1),
+          paymentTermsDays: 30,
+          notes: recurringForm.notes || undefined,
+          autoSend: recurringForm.autoSend,
+        });
+        addToast({ type: 'success', message: 'Récurrence créée avec succès' });
+        resetForm();
+        onClose();
+        return;
+      }
+
       let invoiceData = {};
 
       if (mode === 'custom') {
@@ -220,7 +298,6 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
           notes: notes || undefined
         };
       } else {
-        // Convert string values to numbers for quotePartials
         const cleanedPartials = {};
         for (const [quoteId, partial] of Object.entries(quotePartials)) {
           const numValue = parseFloat(partial.value);
@@ -240,12 +317,23 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
         invoiceData.issueDate = customIssueDate;
       }
 
-      await createInvoice(project._id, invoiceData);
+      const invoice = await createInvoice(project._id, invoiceData);
+
+      // Auto-send via SMTP if enabled
+      if (autoSend && invoice?._id) {
+        try {
+          const { data: sendResult } = await invoicesApi.send(invoice._id);
+          addToast({ type: 'success', message: sendResult.message || 'Facture créée et envoyée' });
+        } catch (sendErr) {
+          addToast({ type: 'warning', message: 'Facture créée mais l\'envoi a échoué : ' + (sendErr.response?.data?.error || sendErr.message) });
+        }
+      }
+
       resetForm();
       onClose();
     } catch (error) {
       console.error('Error creating invoice:', error);
-      addToast({ type: 'error', message: error.response?.data?.error || 'Erreur lors de la création de la facture' });
+      addToast({ type: 'error', message: error.response?.data?.error || 'Erreur lors de la création' });
     } finally {
       setLoading(false);
     }
@@ -257,7 +345,18 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
     setQuotePartials({});
     setCustomLines([{ description: '', quantity: 1, unitPrice: 0 }]);
     setNotes('');
+    setAutoSend(false);
     setMode('standard');
+    setRecurringForm({
+      lines: [{ description: '', quantity: 1, unitPrice: 0 }],
+      frequency: 'monthly',
+      dayOfMonth: 1,
+      startDate: new Date().toISOString().slice(0, 10),
+      hasEndDate: false,
+      endDate: '',
+      notes: '',
+      autoSend: false,
+    });
   };
 
   const formatCurrency = (amount) => {
@@ -269,7 +368,11 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
 
   const totalSelected = mode === 'standard'
     ? selectedEvents.length + selectedQuotes.length
-    : (isCustomValid() ? customLines.length : 0);
+    : mode === 'custom'
+      ? (isCustomValid() ? customLines.length : 0)
+      : (isRecurringValid() ? recurringForm.lines.length : 0);
+
+  const submitLabel = mode === 'recurring' ? 'Créer la récurrence' : 'Créer la facture';
 
   return (
     <Modal
@@ -303,15 +406,22 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
                 formatCurrency={formatCurrency}
                 getQuoteAmount={getQuoteAmount}
               />
-            ) : (
+            ) : mode === 'custom' ? (
               <CustomInvoiceForm
                 customLines={customLines}
                 updateCustomLine={updateCustomLine}
                 removeCustomLine={removeCustomLine}
                 addCustomLine={addCustomLine}
-                getCustomLineTotal={getCustomLineTotal}
                 notes={notes}
                 setNotes={setNotes}
+                formatCurrency={formatCurrency}
+                onSelectService={addServiceLine}
+              />
+            ) : (
+              <RecurringInvoiceForm
+                form={recurringForm}
+                setForm={setRecurringForm}
+                onSelectService={addServiceLine}
                 formatCurrency={formatCurrency}
               />
             )}
@@ -335,6 +445,11 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
             customIssueDate={customIssueDate}
             setCustomIssueDate={setCustomIssueDate}
             vatRate={vatRate}
+            recurringForm={recurringForm}
+            setRecurringForm={setRecurringForm}
+            autoSend={autoSend}
+            setAutoSend={setAutoSend}
+            settings={settings}
           />
         </div>
 
@@ -347,7 +462,7 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
             loading={loading}
             disabled={totalSelected === 0}
           >
-            Créer la facture
+            {submitLabel}
           </Button>
         </div>
       </div>

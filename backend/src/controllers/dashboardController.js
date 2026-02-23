@@ -359,7 +359,8 @@ export const getDashboard = async (req, res, next) => {
           reminderCount: (inv.reminders || []).length,
           clientName: inv.project?.client?.name || 'Inconnu',
           company: inv.project?.client?.company || '',
-          projectName: inv.project?.name || ''
+          projectName: inv.project?.name || '',
+          projectId: inv.project?._id || null
         })),
         remindersDue: remindersDue.map(r => ({
           invoiceId: r.invoice._id,
@@ -368,7 +369,8 @@ export const getDashboard = async (req, res, next) => {
           clientName: r.invoice.project?.client?.name || 'Inconnu',
           company: r.invoice.project?.client?.company || '',
           reminderType: r.reminderType,
-          daysOverdue: r.daysOverdue
+          daysOverdue: r.daysOverdue,
+          projectId: r.invoice.project?._id || null
         })),
         upcomingReminders: upcomingReminders.slice(0, 10),
         paymentsThisWeek,
@@ -381,7 +383,8 @@ export const getDashboard = async (req, res, next) => {
           total: q.total,
           clientName: q.project?.client?.name || 'Inconnu',
           company: q.project?.client?.company || '',
-          sentAt: q.updatedAt
+          sentAt: q.updatedAt,
+          projectId: q.project?._id || null
         }))
       }
     });

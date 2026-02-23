@@ -36,8 +36,9 @@ function formatDate(dateStr) {
 }
 
 function getTotal(item) {
-  if (!item?.lines?.length) return 0;
-  const subtotal = item.lines.reduce((sum, l) => sum + (parseFloat(l.quantity) || 0) * (parseFloat(l.unitPrice) || 0), 0);
+  const lines = item?.customLines || item?.lines || [];
+  if (!lines.length) return 0;
+  const subtotal = lines.reduce((sum, l) => sum + (parseFloat(l.quantity) || 0) * (parseFloat(l.unitPrice) || 0), 0);
   return subtotal * (1 + (parseFloat(item.vatRate) || 0) / 100);
 }
 
@@ -189,7 +190,7 @@ function RecurringRow({ item, onEdit, onChangeStatus, onDelete, onGenerate, gene
               Lignes
             </p>
             <div className="space-y-1">
-              {(item.lines || []).map((line, i) => (
+              {(item.customLines || item.lines || []).map((line, i) => (
                 <div key={i} className="flex justify-between text-sm text-slate-700 dark:text-slate-300">
                   <span className="truncate flex-1 mr-4">{line.description}</span>
                   <span className="flex-shrink-0 text-slate-500 dark:text-slate-400">
@@ -215,7 +216,7 @@ function RecurringRow({ item, onEdit, onChangeStatus, onDelete, onGenerate, gene
             </div>
             <div className="flex justify-between">
               <span>TVA</span>
-              <span className="font-medium text-slate-800 dark:text-slate-200">{item.vatRate ?? 0}%</span>
+              <span className="font-medium text-slate-800 dark:text-slate-200">{parseFloat(item.vatRate ?? 0).toFixed(1)}%</span>
             </div>
             <div className="flex justify-between">
               <span>Délai paiement</span>

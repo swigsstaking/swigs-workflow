@@ -8,6 +8,7 @@ import Invoice from '../models/Invoice.js';
 import { parseCamtXml } from './camtParser.service.js';
 import { reconcileTransaction } from './reconciliation.service.js';
 import { historyService } from './historyService.js';
+import { sendPaymentConfirmationEmail } from './email.service.js';
 import { decrypt } from '../utils/crypto.js';
 import cron from 'node-cron';
 
@@ -142,6 +143,17 @@ async function processXmlBuffer(buffer, filename, userId) {
             { importId, txId: tx.txId, amount: tx.amount, source: 'imap' }
           );
         } catch (e) { /* non-blocking */ }
+
+        // Send payment confirmation email to client
+        try {
+          const userSettings = await Settings.findOne({ userId });
+          if (userSettings?.smtp?.host) {
+            await sendPaymentConfirmationEmail(invoice, userSettings);
+            console.log(`[BankIMAP] Payment confirmation sent for ${invoice.number}`);
+          }
+        } catch (e) {
+          console.error(`[BankIMAP] Payment confirmation email failed for ${invoice.number}:`, e.message);
+        }
       }
     }
 

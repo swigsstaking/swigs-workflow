@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useProjectStore } from '../../stores/projectStore';
 import { useToastStore } from '../../stores/toastStore';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { remindersApi, portalApi, abaninjaApi } from '../../services/api';
+import { invoicesApi, quotesApi, remindersApi, portalApi, abaninjaApi } from '../../services/api';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { Skeleton } from '../ui/Skeleton';
 import NewInvoiceModal from './NewInvoiceModal';
@@ -176,6 +176,22 @@ export default function DocumentsTab({ project }) {
     }
   };
 
+  // Send email via SMTP
+  const handleSendEmail = async (docId, docType) => {
+    try {
+      const api = docType === 'invoice' ? invoicesApi : quotesApi;
+      const { data } = await api.send(docId);
+      addToast({ type: 'success', message: data.message || 'Email envoyé avec succès' });
+      if (docType === 'invoice') {
+        fetchProjectInvoices(project._id);
+      } else {
+        fetchProjectQuotes(project._id);
+      }
+    } catch (error) {
+      addToast({ type: 'error', message: error.response?.data?.error || 'Erreur lors de l\'envoi' });
+    }
+  };
+
   // Generate portal link
   const handleGeneratePortalLink = async (documentId, docType) => {
     try {
@@ -206,6 +222,23 @@ export default function DocumentsTab({ project }) {
       setActiveMenu(null);
     } catch (error) {
       addToast({ type: 'error', message: 'Erreur de synchronisation AbaNinja' });
+    }
+  };
+
+  // Download invoice PDF
+  const handleDownloadPdf = async (invoice) => {
+    try {
+      const response = await invoicesApi.getPdf(invoice._id);
+      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.setAttribute('download', `Facture-${invoice.number}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      addToast({ type: 'error', message: 'Erreur lors du téléchargement du PDF' });
     }
   };
 
@@ -243,6 +276,7 @@ export default function DocumentsTab({ project }) {
         onShowQuoteModal={() => setShowQuoteModal(true)}
         onEdit={handleEditQuote}
         onCreateInvoiceFromQuote={handleCreateInvoiceFromQuote}
+        onSendEmail={handleSendEmail}
         onGeneratePortalLink={handleGeneratePortalLink}
         onSyncAbaNinja={handleSyncAbaNinja}
         canDeleteQuote={canDeleteQuote}
@@ -263,8 +297,10 @@ export default function DocumentsTab({ project }) {
         onDelete={handleDeleteInvoice}
         onShowInvoiceModal={() => setShowInvoiceModal(true)}
         onSendReminder={handleSendReminder}
+        onSendEmail={handleSendEmail}
         onGeneratePortalLink={handleGeneratePortalLink}
         onSyncAbaNinja={handleSyncAbaNinja}
+        onDownloadPdf={handleDownloadPdf}
         generateMailtoLink={generateMailtoLink}
         formatCurrency={formatCurrency}
         getDaysOverdue={getDaysOverdue}
@@ -276,7 +312,7 @@ export default function DocumentsTab({ project }) {
         isOpen={showInvoiceModal}
         onClose={handleCloseInvoiceModal}
         preselectedQuoteId={preselectedQuoteId}
-        vatRate={settings?.invoicing?.defaultVatRate != null ? settings.invoicing.defaultVatRate / 100 : undefined}
+        vatRate={settings?.invoicing?.defaultVatRate != null ? parseFloat((settings.invoicing.defaultVatRate / 100).toFixed(4)) : undefined}
       />
       <NewQuoteModal
         project={project}

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useProjectStore } from '../stores/projectStore';
 import { useUIStore } from '../stores/uiStore';
 import { useSettingsStore } from '../stores/settingsStore';
@@ -21,13 +22,14 @@ export default function Workflow() {
     updatePositions
   } = useProjectStore();
 
+  const [searchParams, setSearchParams] = useSearchParams();
   const { fetchSettings } = useSettingsStore();
   const { sessionVersion } = useAuthStore();
   const lastSessionVersion = useRef(sessionVersion);
 
   const {
     searchQuery,
-    statusFilter,
+    hiddenStatuses,
     showArchived,
     openSidebar,
     closeSidebar,
@@ -64,6 +66,19 @@ export default function Workflow() {
     }
   }, [sessionVersion, showArchived]);
 
+  // Handle deep-link from dashboard (e.g. ?project=xxx&tab=documents)
+  useEffect(() => {
+    const projectId = searchParams.get('project');
+    const tab = searchParams.get('tab');
+    if (projectId && !initialLoading) {
+      fetchProject(projectId).then(() => {
+        openSidebar(tab || 'documents');
+      });
+      // Clear query params to avoid re-opening on re-render
+      setSearchParams({}, { replace: true });
+    }
+  }, [initialLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Filter projects
   const filteredProjects = useMemo(() => {
     let result = projects;
@@ -77,13 +92,13 @@ export default function Workflow() {
       );
     }
 
-    // Status filter
-    if (statusFilter) {
-      result = result.filter(p => p.status?._id === statusFilter);
+    // Status filter (hide mode)
+    if (hiddenStatuses.length > 0) {
+      result = result.filter(p => !hiddenStatuses.includes(p.status?._id));
     }
 
     return result;
-  }, [projects, searchQuery, statusFilter]);
+  }, [projects, searchQuery, hiddenStatuses]);
 
   // Handle project click
   const handleProjectClick = async (project) => {

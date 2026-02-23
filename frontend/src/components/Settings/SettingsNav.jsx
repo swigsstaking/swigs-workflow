@@ -24,7 +24,7 @@ const settingsNav = [
     items: [
       { id: 'smtp', label: 'SMTP', icon: Server },
       { id: 'emails', label: 'Templates email', icon: Mail },
-      { id: 'reminders', label: 'Relances', icon: Bell },
+      { id: 'reminders', label: 'Emails & Relances', icon: Mail },
     ]
   },
   {

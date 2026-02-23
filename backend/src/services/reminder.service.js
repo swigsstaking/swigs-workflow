@@ -130,6 +130,16 @@ export const sendReminder = async (invoice, project, settings, scheduleItem) => 
 
     await transporter.sendMail(mailOptions);
 
+    // Save to IMAP Sent folder (best-effort, non-blocking)
+    try {
+      const { default: nodemailer } = await import('nodemailer');
+      const bufferTransport = nodemailer.createTransport({ streamTransport: true, buffer: true });
+      bufferTransport.sendMail(mailOptions).then(async (composed) => {
+        const { appendToSentFolder } = await import('./email.service.js');
+        appendToSentFolder(settings.smtp, composed.message);
+      }).catch(() => {});
+    } catch (_) { /* ignore */ }
+
     // Update invoice
     invoice.reminders.push({
       sentAt: new Date(),

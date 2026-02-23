@@ -18,72 +18,83 @@ export const useAnalyticsStore = create((set, get) => ({
   // Actions
   setShowLastYear: (show) => set({ showLastYear: show }),
 
-  fetchRevenue: async () => {
+  fetchRevenue: async (excludeStatuses = []) => {
     try {
-      const response = await analyticsApi.getRevenue();
+      const params = excludeStatuses.length ? { excludeStatuses: excludeStatuses.join(',') } : {};
+      const response = await analyticsApi.getRevenue(params);
       set({ revenue: response.data.data });
     } catch (error) {
       console.error('Error fetching revenue:', error);
     }
   },
 
-  fetchMonthly: async () => {
+  fetchMonthly: async (excludeStatuses = []) => {
     try {
       const { showLastYear } = get();
-      const response = await analyticsApi.getMonthly({ includeLastYear: showLastYear });
+      const params = { includeLastYear: showLastYear };
+      if (excludeStatuses.length) params.excludeStatuses = excludeStatuses.join(',');
+      const response = await analyticsApi.getMonthly(params);
       set({ monthly: response.data.data });
     } catch (error) {
       console.error('Error fetching monthly:', error);
     }
   },
 
-  fetchQuotes: async () => {
+  fetchQuotes: async (excludeStatuses = []) => {
     try {
-      const response = await analyticsApi.getQuotes();
+      const params = excludeStatuses.length ? { excludeStatuses: excludeStatuses.join(',') } : {};
+      const response = await analyticsApi.getQuotes(params);
       set({ quotes: response.data.data });
     } catch (error) {
       console.error('Error fetching quotes:', error);
     }
   },
 
-  fetchProjects: async () => {
+  fetchProjects: async (excludeStatuses = []) => {
     try {
-      const response = await analyticsApi.getProjects();
+      const params = excludeStatuses.length ? { excludeStatuses: excludeStatuses.join(',') } : {};
+      const response = await analyticsApi.getProjects(params);
       set({ projects: response.data.data });
     } catch (error) {
       console.error('Error fetching projects:', error);
     }
   },
 
-  fetchClients: async (limit = 5) => {
+  fetchClients: async (limit = 5, excludeStatuses = []) => {
     try {
-      const response = await analyticsApi.getTopClients(limit);
+      const extraParams = excludeStatuses.length ? { excludeStatuses: excludeStatuses.join(',') } : {};
+      const response = await analyticsApi.getTopClients(limit, extraParams);
       set({ clients: response.data.data });
     } catch (error) {
       console.error('Error fetching clients:', error);
     }
   },
 
-  fetchHours: async (months = 12) => {
+  fetchHours: async (months = 12, excludeStatuses = []) => {
     try {
-      const response = await analyticsApi.getHours(months);
+      const extraParams = excludeStatuses.length ? { excludeStatuses: excludeStatuses.join(',') } : {};
+      const response = await analyticsApi.getHours(months, extraParams);
       set({ hours: response.data.data });
     } catch (error) {
       console.error('Error fetching hours:', error);
     }
   },
 
-  fetchAll: async () => {
+  fetchAll: async (excludeStatuses = []) => {
     set({ loading: true, error: null });
     try {
       const { showLastYear } = get();
+      const esParam = excludeStatuses.length ? excludeStatuses.join(',') : undefined;
+      const baseParams = esParam ? { excludeStatuses: esParam } : {};
+      const monthlyParams = { ...baseParams, includeLastYear: showLastYear };
+
       const [revenueRes, monthlyRes, quotesRes, projectsRes, clientsRes, hoursRes] = await Promise.all([
-        analyticsApi.getRevenue(),
-        analyticsApi.getMonthly({ includeLastYear: showLastYear }),
-        analyticsApi.getQuotes(),
-        analyticsApi.getProjects(),
-        analyticsApi.getTopClients(5),
-        analyticsApi.getHours(12)
+        analyticsApi.getRevenue(baseParams),
+        analyticsApi.getMonthly(monthlyParams),
+        analyticsApi.getQuotes(baseParams),
+        analyticsApi.getProjects(baseParams),
+        analyticsApi.getTopClients(5, baseParams),
+        analyticsApi.getHours(12, baseParams)
       ]);
 
       set({
@@ -101,10 +112,12 @@ export const useAnalyticsStore = create((set, get) => ({
     }
   },
 
-  refreshWithLastYear: async (show) => {
+  refreshWithLastYear: async (show, excludeStatuses = []) => {
     set({ showLastYear: show, loading: true });
     try {
-      const response = await analyticsApi.getMonthly({ includeLastYear: show });
+      const params = { includeLastYear: show };
+      if (excludeStatuses.length) params.excludeStatuses = excludeStatuses.join(',');
+      const response = await analyticsApi.getMonthly(params);
       set({ monthly: response.data.data, loading: false });
     } catch (error) {
       console.error('Error refreshing monthly:', error);

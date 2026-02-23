@@ -110,6 +110,7 @@ function buildUrgentItems(data) {
       amount: r.total,
       actionType: 'send',
       invoiceId: r.invoiceId,
+      projectId: r.projectId,
     });
   }
 
@@ -126,6 +127,7 @@ function buildUrgentItems(data) {
       badge: inv.reminderCount > 0 ? `${inv.reminderCount} rappel${inv.reminderCount > 1 ? 's' : ''}` : null,
       amount: inv.total,
       daysOverdue: inv.daysOverdue,
+      projectId: inv.projectId,
     });
   }
 
@@ -168,6 +170,7 @@ function buildWatchItems(data) {
       detail: `Devis ${q.number} · en attente de signature`,
       amount: q.total,
       sortKey: 50,
+      projectId: q.projectId,
     });
   }
 

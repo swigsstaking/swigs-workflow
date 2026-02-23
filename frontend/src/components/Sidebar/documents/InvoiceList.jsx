@@ -1,10 +1,17 @@
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import {
-  Receipt, Plus, Send, Check, MoreVertical, Trash2, Mail, Bell, ExternalLink, Link2
+  Receipt, Plus, Send, Check, MoreVertical, Trash2, Mail, Bell, ExternalLink, Link2, Clock, CheckCircle, XCircle, FileDown
 } from 'lucide-react';
 import Button from '../../ui/Button';
 import { InvoiceStatusBadge } from '../../ui/Badge';
+
+const REMINDER_LABELS = {
+  reminder_1: '1er Rappel',
+  reminder_2: '2ème Rappel',
+  reminder_3: '3ème Rappel',
+  final_notice: 'Mise en demeure'
+};
 
 export default function InvoiceList({
   project,
@@ -18,8 +25,10 @@ export default function InvoiceList({
   onDelete,
   onShowInvoiceModal,
   onSendReminder,
+  onSendEmail,
   onGeneratePortalLink,
   onSyncAbaNinja,
+  onDownloadPdf,
   generateMailtoLink,
   formatCurrency,
   getDaysOverdue
@@ -27,7 +36,7 @@ export default function InvoiceList({
   return (
     <section>
       {/* Click-outside overlay to close dropdown */}
-      {activeMenu?.startsWith('invoice-') && (
+      {(activeMenu?.startsWith('invoice-') || activeMenu?.startsWith('reminder-')) && (
         <div className="fixed inset-0 z-[5]" onClick={() => setActiveMenu(null)} />
       )}
       <div className="flex items-center justify-between mb-4">
@@ -51,7 +60,8 @@ export default function InvoiceList({
       ) : (
         <div className="space-y-2">
           {invoices.map(invoice => {
-            const mailtoLink = generateMailtoLink('invoice', invoice);
+            const hasSmtp = !!(settings?.smtp?.host && settings?.smtp?.user);
+            const mailtoLink = !hasSmtp ? generateMailtoLink('invoice', invoice) : null;
             return (
               <div
                 key={invoice._id}
@@ -80,11 +90,50 @@ export default function InvoiceList({
                     </span>
                   )}
 
-                  {/* Reminder count */}
+                  {/* Reminder count — clickable to show history */}
                   {invoice.reminderCount > 0 && (
-                    <span className="px-1.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded">
-                      Relance {invoice.reminderCount}/4
-                    </span>
+                    <div className="relative">
+                      <button
+                        onClick={() => setActiveMenu(activeMenu === `reminder-${invoice._id}` ? null : `reminder-${invoice._id}`)}
+                        className="px-1.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors cursor-pointer"
+                        title="Voir l'historique des relances"
+                      >
+                        Relance {invoice.reminderCount}/4
+                      </button>
+
+                      {activeMenu === `reminder-${invoice._id}` && invoice.reminders?.length > 0 && (
+                        <div className="absolute right-0 mt-1 w-64 bg-white dark:bg-dark-card rounded-lg shadow-lg border border-slate-200 dark:border-dark-border p-3 z-10">
+                          <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-2 flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5" />
+                            Historique des relances
+                          </p>
+                          <div className="space-y-1.5">
+                            {invoice.reminders.map((r, i) => (
+                              <div key={i} className="flex items-center justify-between text-xs">
+                                <div className="flex items-center gap-1.5">
+                                  {r.emailSent ? (
+                                    <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+                                  ) : (
+                                    <XCircle className="w-3.5 h-3.5 text-slate-400" />
+                                  )}
+                                  <span className="text-slate-700 dark:text-slate-300">
+                                    {REMINDER_LABELS[r.type] || r.type}
+                                  </span>
+                                </div>
+                                <span className="text-slate-500 dark:text-slate-400">
+                                  {format(new Date(r.sentAt), 'dd MMM yyyy', { locale: fr })}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                          {invoice.nextReminderDate && invoice.status === 'sent' && (
+                            <p className="mt-2 pt-2 border-t border-slate-100 dark:border-dark-border text-xs text-slate-500 dark:text-slate-400">
+                              Prochaine : {format(new Date(invoice.nextReminderDate), 'dd MMM yyyy', { locale: fr })}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
 
                   {/* AbaNinja badge */}
@@ -94,8 +143,25 @@ export default function InvoiceList({
                     </span>
                   )}
 
-                  {/* Mail button */}
-                  {mailtoLink && (
+                  {/* PDF download */}
+                  <button
+                    onClick={() => onDownloadPdf(invoice)}
+                    className="p-1.5 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded transition-colors"
+                    title="Télécharger le PDF"
+                  >
+                    <FileDown className="w-4 h-4" />
+                  </button>
+
+                  {/* Mail button — SMTP send or mailto fallback */}
+                  {hasSmtp && project.client?.email ? (
+                    <button
+                      onClick={() => onSendEmail(invoice._id, 'invoice')}
+                      className="p-1.5 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded transition-colors"
+                      title="Envoyer par email (SMTP)"
+                    >
+                      <Send className="w-4 h-4" />
+                    </button>
+                  ) : mailtoLink ? (
                     <a
                       href={mailtoLink}
                       className="p-1.5 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded transition-colors"
@@ -103,7 +169,7 @@ export default function InvoiceList({
                     >
                       <Mail className="w-4 h-4" />
                     </a>
-                  )}
+                  ) : null}
 
                   <div className="relative">
                     <button

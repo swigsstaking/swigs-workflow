@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Bell, Save, Edit2, X, Clock, AlertTriangle, Mail, ChevronDown, ChevronUp } from 'lucide-react';
+import { Bell, Save, Edit2, X, Clock, AlertTriangle, Mail, ChevronDown, ChevronUp, FileText, Receipt } from 'lucide-react';
 import { settingsApi } from '../../../services/api';
 import { useToastStore } from '../../../stores/toastStore';
 import Button from '../../ui/Button';
@@ -86,18 +86,51 @@ function mergeSchedule(savedSchedule) {
   });
 }
 
+const SEND_EMAIL_VARIABLES = [
+  { name: '{number}', desc: 'Numéro du document' },
+  { name: '{clientName}', desc: 'Nom du client' },
+  { name: '{total}', desc: 'Montant total' },
+  { name: '{projectName}', desc: 'Nom du projet' },
+  { name: '{companyName}', desc: 'Votre entreprise' },
+  { name: '{paymentTerms}', desc: 'Délai de paiement (jours)' },
+];
+
 export default function RemindersSection({ settings, onSettingsUpdate }) {
   const [formData, setFormData] = useState({
     enabled: false,
     schedule: buildDefaultSchedule(),
   });
+  const [emailTemplates, setEmailTemplates] = useState({
+    invoiceSubject: '',
+    invoiceBody: '',
+    quoteSubject: '',
+    quoteBody: '',
+  });
   const [hasChanges, setHasChanges] = useState(false);
+  const [hasEmailChanges, setHasEmailChanges] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingEmail, setSavingEmail] = useState(false);
   const [expandedIndex, setExpandedIndex] = useState(null);
   const [editingIndex, setEditingIndex] = useState(null);
   const [editDraft, setEditDraft] = useState(null);
+  const [editingEmailType, setEditingEmailType] = useState(null); // 'invoice' | 'quote'
+  const [emailEditDraft, setEmailEditDraft] = useState(null);
   const bodyTextareaRef = useRef(null);
+  const emailBodyRef = useRef(null);
   const { addToast } = useToastStore();
+
+  // Lock body scroll when edit modal is open
+  useEffect(() => {
+    if (editingIndex !== null) {
+      document.body.style.overflow = 'hidden';
+      const handleEscape = (e) => { if (e.key === 'Escape') handleCancelEdit(); };
+      document.addEventListener('keydown', handleEscape);
+      return () => {
+        document.body.style.overflow = 'unset';
+        document.removeEventListener('keydown', handleEscape);
+      };
+    }
+  }, [editingIndex]);
 
   useEffect(() => {
     if (settings?.reminders) {
@@ -108,6 +141,32 @@ export default function RemindersSection({ settings, onSettingsUpdate }) {
       setHasChanges(false);
     }
   }, [settings]);
+
+  // Load email templates from settings
+  useEffect(() => {
+    if (settings?.emailTemplates) {
+      setEmailTemplates({
+        invoiceSubject: settings.emailTemplates.invoiceSubject || '',
+        invoiceBody: settings.emailTemplates.invoiceBody || '',
+        quoteSubject: settings.emailTemplates.quoteSubject || '',
+        quoteBody: settings.emailTemplates.quoteBody || '',
+      });
+      setHasEmailChanges(false);
+    }
+  }, [settings]);
+
+  // Lock body scroll when email edit modal is open
+  useEffect(() => {
+    if (editingEmailType !== null) {
+      document.body.style.overflow = 'hidden';
+      const handleEscape = (e) => { if (e.key === 'Escape') handleCancelEmailEdit(); };
+      document.addEventListener('keydown', handleEscape);
+      return () => {
+        document.body.style.overflow = 'unset';
+        document.removeEventListener('keydown', handleEscape);
+      };
+    }
+  }, [editingEmailType]);
 
   const updateEnabled = (value) => {
     setFormData((prev) => ({ ...prev, enabled: value }));
@@ -168,9 +227,177 @@ export default function RemindersSection({ settings, onSettingsUpdate }) {
     }
   };
 
+  // Email template handlers
+  const handleOpenEmailEdit = (type) => {
+    const prefix = type; // 'invoice' or 'quote'
+    setEmailEditDraft({
+      subject: emailTemplates[`${prefix}Subject`],
+      body: emailTemplates[`${prefix}Body`],
+    });
+    setEditingEmailType(type);
+  };
+
+  const handleSaveEmailEdit = () => {
+    if (!editingEmailType || !emailEditDraft) return;
+    const prefix = editingEmailType;
+    setEmailTemplates((prev) => ({
+      ...prev,
+      [`${prefix}Subject`]: emailEditDraft.subject,
+      [`${prefix}Body`]: emailEditDraft.body,
+    }));
+    setHasEmailChanges(true);
+    setEditingEmailType(null);
+    setEmailEditDraft(null);
+  };
+
+  const handleCancelEmailEdit = () => {
+    setEditingEmailType(null);
+    setEmailEditDraft(null);
+  };
+
+  const handleInsertEmailVariable = (varName) => {
+    const textarea = emailBodyRef.current?.querySelector('textarea');
+    if (!textarea) {
+      setEmailEditDraft((prev) => ({ ...prev, body: (prev.body || '') + varName }));
+      return;
+    }
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const currentBody = emailEditDraft?.body || '';
+    const newBody = currentBody.slice(0, start) + varName + currentBody.slice(end);
+    setEmailEditDraft((prev) => ({ ...prev, body: newBody }));
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + varName.length, start + varName.length);
+    });
+  };
+
+  const handleSaveEmailTemplates = async () => {
+    setSavingEmail(true);
+    try {
+      const { data } = await settingsApi.update({ emailTemplates });
+      onSettingsUpdate(data.data);
+      setHasEmailChanges(false);
+      addToast({ type: 'success', message: 'Modèles d\'emails enregistrés avec succès' });
+    } catch {
+      addToast({ type: 'error', message: "Erreur lors de l'enregistrement" });
+    } finally {
+      setSavingEmail(false);
+    }
+  };
+
+  const EMAIL_TYPES = [
+    {
+      type: 'invoice',
+      label: 'Email d\'envoi de facture',
+      icon: Receipt,
+      color: 'text-emerald-600 dark:text-emerald-400',
+      bgColor: 'bg-emerald-100 dark:bg-emerald-900/40',
+    },
+    {
+      type: 'quote',
+      label: 'Email d\'envoi de devis',
+      icon: FileText,
+      color: 'text-blue-600 dark:text-blue-400',
+      bgColor: 'bg-blue-100 dark:bg-blue-900/40',
+    },
+  ];
+
   return (
     <div className="space-y-6">
       {/* Header */}
+      <div>
+        <div className="flex items-center gap-2 mb-1">
+          <Mail className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
+            Emails & Relances
+          </h2>
+        </div>
+        <p className="text-sm text-slate-600 dark:text-slate-400">
+          Personnalisez vos emails d'envoi et configurez les relances automatiques.
+        </p>
+      </div>
+
+      {/* ──────── Email templates section ──────── */}
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+          Modèles d'emails d'envoi
+        </h3>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Personnalisez l'email envoyé avec vos factures et devis.
+        </p>
+
+        {EMAIL_TYPES.map(({ type, label, icon: Icon, color, bgColor }) => {
+          const prefix = type;
+          const subject = emailTemplates[`${prefix}Subject`];
+          const body = emailTemplates[`${prefix}Body`];
+          return (
+            <div
+              key={type}
+              className="border border-slate-200 dark:border-dark-border rounded-xl overflow-hidden bg-white dark:bg-dark-card"
+            >
+              <div className="flex items-center gap-3 px-4 py-3">
+                <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${bgColor}`}>
+                  <Icon className={`w-4 h-4 ${color}`} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className="font-medium text-slate-900 dark:text-white text-sm">{label}</span>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                    {subject || '(sujet par défaut)'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleOpenEmailEdit(type)}
+                  title="Modifier"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  <Edit2 className="w-4 h-4" />
+                </button>
+              </div>
+              {body && (
+                <div className="px-4 pb-3 border-t border-slate-100 dark:border-slate-800 pt-2">
+                  <pre className="text-xs text-slate-600 dark:text-slate-400 whitespace-pre-wrap font-sans leading-relaxed line-clamp-3">
+                    {body}
+                  </pre>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Variables reference for email templates */}
+        <div className="p-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-dark-border rounded-xl">
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+            Variables disponibles :
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {SEND_EMAIL_VARIABLES.map((v) => (
+              <span
+                key={v.name}
+                title={v.desc}
+                className="px-2 py-0.5 text-xs bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded text-slate-600 dark:text-slate-400 font-mono cursor-default"
+              >
+                {v.name}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* Save email templates */}
+        {hasEmailChanges && (
+          <div className="flex justify-end">
+            <Button icon={Save} onClick={handleSaveEmailTemplates} loading={savingEmail} disabled={savingEmail} size="sm">
+              Enregistrer les modèles d'envoi
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* ──────── Divider ──────── */}
+      <div className="border-t border-slate-200 dark:border-slate-700" />
+
+      {/* ──────── Reminders section header ──────── */}
       <div>
         <div className="flex items-center gap-2 mb-1">
           <Bell className="w-5 h-5 text-primary-600 dark:text-primary-400" />
@@ -379,8 +606,10 @@ export default function RemindersSection({ settings, onSettingsUpdate }) {
 
       {/* Edit modal */}
       {editingIndex !== null && editDraft !== null && (
-        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-dark-card rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={handleCancelEdit} />
+          <div className="absolute inset-0 grid place-items-center p-4 pointer-events-none">
+          <div className="pointer-events-auto bg-white dark:bg-dark-card rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
             {/* Modal header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-dark-border flex-shrink-0">
               <div className="flex items-center gap-2">
@@ -454,8 +683,91 @@ export default function RemindersSection({ settings, onSettingsUpdate }) {
               </Button>
             </div>
           </div>
+          </div>
         </div>
       )}
+
+      {/* Email template edit modal */}
+      {editingEmailType !== null && emailEditDraft !== null && (() => {
+        const meta = EMAIL_TYPES.find((t) => t.type === editingEmailType);
+        const Icon = meta?.icon || Mail;
+        return (
+          <div className="fixed inset-0 z-50">
+            <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={handleCancelEmailEdit} />
+            <div className="absolute inset-0 grid place-items-center p-4 pointer-events-none">
+              <div className="pointer-events-auto bg-white dark:bg-dark-card rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
+                {/* Modal header */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-dark-border flex-shrink-0">
+                  <div className="flex items-center gap-2">
+                    <Icon className={`w-5 h-5 ${meta?.color || ''}`} />
+                    <h3 className="text-base font-semibold text-slate-900 dark:text-white">
+                      Modifier — {meta?.label || 'Email'}
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCancelEmailEdit}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Modal body */}
+                <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+                  <Input
+                    label="Objet de l'email"
+                    value={emailEditDraft.subject}
+                    onChange={(e) => setEmailEditDraft((prev) => ({ ...prev, subject: e.target.value }))}
+                  />
+
+                  <div ref={emailBodyRef}>
+                    <Textarea
+                      label="Corps de l'email"
+                      value={emailEditDraft.body}
+                      onChange={(e) => setEmailEditDraft((prev) => ({ ...prev, body: e.target.value }))}
+                      rows={10}
+                    />
+                  </div>
+
+                  {/* Variables hint — clickable to insert */}
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg">
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+                      Cliquez sur une variable pour l'insérer dans le corps :
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {SEND_EMAIL_VARIABLES.map((v) => (
+                        <button
+                          key={v.name}
+                          type="button"
+                          title={v.desc}
+                          onClick={() => handleInsertEmailVariable(v.name)}
+                          className="px-2 py-0.5 text-xs bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded text-slate-700 dark:text-slate-300 font-mono hover:bg-primary-50 dark:hover:bg-primary-900/20 hover:border-primary-300 dark:hover:border-primary-700 hover:text-primary-700 dark:hover:text-primary-300 transition-colors cursor-pointer"
+                        >
+                          {v.name}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
+                      Survolez pour voir la description
+                    </p>
+                  </div>
+                </div>
+
+                {/* Modal footer */}
+                <div className="flex gap-3 px-6 py-4 border-t border-slate-200 dark:border-dark-border flex-shrink-0">
+                  <Button variant="secondary" onClick={handleCancelEmailEdit} className="flex-1">
+                    Annuler
+                  </Button>
+                  <Button icon={Save} onClick={handleSaveEmailEdit} className="flex-1">
+                    Enregistrer
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

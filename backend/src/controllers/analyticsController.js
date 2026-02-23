@@ -22,10 +22,15 @@ const getYearRange = (year) => {
 // Helper: French month names
 const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
 
-// Helper: Get user's project IDs
-const getUserProjectIds = async (userId) => {
+// Helper: Get user's project IDs (with optional status exclusion)
+const getUserProjectIds = async (userId, excludeStatuses = []) => {
   if (!userId) return null;
-  const projects = await Project.find({ userId }).select('_id');
+  const query = { userId };
+  if (excludeStatuses.length > 0) {
+    const statusIds = excludeStatuses.map(id => new mongoose.Types.ObjectId(id));
+    query.status = { $nin: statusIds };
+  }
+  const projects = await Project.find(query).select('_id');
   return projects.map(p => p._id);
 };
 
@@ -41,8 +46,11 @@ export const getRevenueStats = async (req, res, next) => {
     const lastMonth = currentMonth === 1 ? 12 : currentMonth - 1;
     const lastMonthYear = currentMonth === 1 ? currentYear - 1 : currentYear;
 
+    // Parse excluded statuses
+    const excludeStatuses = req.query.excludeStatuses ? req.query.excludeStatuses.split(',').filter(Boolean) : [];
+
     // Get user's projects for filtering invoices
-    const projectIds = await getUserProjectIds(req.user?._id);
+    const projectIds = await getUserProjectIds(req.user?._id, excludeStatuses);
     const projectFilter = projectIds ? { project: { $in: projectIds } } : {};
 
     // Date ranges
@@ -154,8 +162,11 @@ export const getMonthlyEvolution = async (req, res, next) => {
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
 
+    // Parse excluded statuses
+    const excludeStatuses = req.query.excludeStatuses ? req.query.excludeStatuses.split(',').filter(Boolean) : [];
+
     // Get user's projects for filtering invoices
-    const projectIds = await getUserProjectIds(req.user?._id);
+    const projectIds = await getUserProjectIds(req.user?._id, excludeStatuses);
     const projectFilter = projectIds ? { project: { $in: projectIds } } : {};
 
     // Calculate date range for last 12 months
@@ -255,8 +266,11 @@ export const getMonthlyEvolution = async (req, res, next) => {
  */
 export const getQuoteStats = async (req, res, next) => {
   try {
+    // Parse excluded statuses
+    const excludeStatuses = req.query.excludeStatuses ? req.query.excludeStatuses.split(',').filter(Boolean) : [];
+
     // Get user's projects for filtering quotes
-    const projectIds = await getUserProjectIds(req.user?._id);
+    const projectIds = await getUserProjectIds(req.user?._id, excludeStatuses);
     const projectFilter = projectIds ? { project: { $in: projectIds } } : {};
 
     const quotes = await Quote.find(projectFilter).lean();
@@ -306,14 +320,20 @@ export const getQuoteStats = async (req, res, next) => {
  */
 export const getProjectStats = async (req, res, next) => {
   try {
+    // Parse excluded statuses
+    const excludeStatuses = req.query.excludeStatuses ? req.query.excludeStatuses.split(',').filter(Boolean) : [];
+
     // Filter by user
     const userQuery = {};
     if (req.user) {
       userQuery.userId = req.user._id;
     }
+    if (excludeStatuses.length > 0) {
+      userQuery.status = { $nin: excludeStatuses.map(id => new mongoose.Types.ObjectId(id)) };
+    }
 
     const projects = await Project.find(userQuery).populate('status');
-    const statuses = await Status.find(userQuery).sort('order');
+    const statuses = await Status.find(req.user ? { userId: req.user._id } : {}).sort('order');
 
     const active = projects.filter(p => !p.archivedAt).length;
     const archived = projects.filter(p => p.archivedAt).length;
@@ -359,8 +379,11 @@ export const getTopClients = async (req, res, next) => {
   try {
     const limit = parseInt(req.query.limit) || 5;
 
+    // Parse excluded statuses
+    const excludeStatuses = req.query.excludeStatuses ? req.query.excludeStatuses.split(',').filter(Boolean) : [];
+
     // Get user's projects for filtering invoices
-    const projectIds = await getUserProjectIds(req.user?._id);
+    const projectIds = await getUserProjectIds(req.user?._id, excludeStatuses);
     const projectFilter = projectIds ? { project: { $in: projectIds } } : {};
 
     // Aggregation with $lookup to get project data
@@ -426,8 +449,11 @@ export const getHoursStats = async (req, res, next) => {
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
 
+    // Parse excluded statuses
+    const excludeStatuses = req.query.excludeStatuses ? req.query.excludeStatuses.split(',').filter(Boolean) : [];
+
     // Get user's projects for filtering events
-    const projectIds = await getUserProjectIds(req.user?._id);
+    const projectIds = await getUserProjectIds(req.user?._id, excludeStatuses);
     const projectFilter = projectIds ? { project: { $in: projectIds } } : {};
 
     // Calculate date range

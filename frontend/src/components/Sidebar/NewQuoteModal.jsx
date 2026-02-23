@@ -1,21 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Trash2, Package, ChevronDown, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, AlertCircle } from 'lucide-react';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import Input, { Textarea } from '../ui/Input';
+import ServicePicker from './invoice/ServicePicker';
 import { useProjectStore } from '../../stores/projectStore';
 import { useToastStore } from '../../stores/toastStore';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { servicesApi } from '../../services/api';
-
-const CATEGORIES = {
-  development: { label: 'Développement', color: 'bg-blue-500' },
-  design: { label: 'Design', color: 'bg-purple-500' },
-  maintenance: { label: 'Maintenance', color: 'bg-green-500' },
-  hosting: { label: 'Hébergement', color: 'bg-orange-500' },
-  consulting: { label: 'Consulting', color: 'bg-yellow-500' },
-  other: { label: 'Autre', color: 'bg-gray-500' }
-};
 
 // Statuses that allow full editing
 const FULL_EDIT_STATUSES = ['draft', 'sent', 'refused', 'expired'];
@@ -36,16 +27,12 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
     { description: '', quantity: 1, unitPrice: 0 }
   ]);
   const [notes, setNotes] = useState('');
-  const [services, setServices] = useState([]);
-  const [showServicePicker, setShowServicePicker] = useState(false);
   const [statusChangeWarning, setStatusChangeWarning] = useState(null);
 
-  const servicePickerRef = useRef(null);
   const statusTimeoutRef = useRef(null);
 
   useEffect(() => {
     if (isOpen) {
-      loadServices();
       if (editQuote) {
         // Pre-fill form with quote data
         setLines(editQuote.lines.map(l => ({
@@ -70,29 +57,6 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
     };
   }, [isOpen, editQuote]);
 
-  // Click outside to close service picker
-  useEffect(() => {
-    if (!showServicePicker) return;
-
-    const handleClickOutside = (e) => {
-      if (servicePickerRef.current && !servicePickerRef.current.contains(e.target)) {
-        setShowServicePicker(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showServicePicker]);
-
-  const loadServices = async () => {
-    try {
-      const { data } = await servicesApi.getAll({ active: true });
-      setServices(data.data.filter(s => s.isActive));
-    } catch (error) {
-      console.error('Error loading services:', error);
-    }
-  };
-
   const addLine = () => {
     setLines([...lines, { description: '', quantity: 1, unitPrice: 0 }]);
   };
@@ -108,7 +72,6 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
         : service.unitPrice
     };
     setLines([...lines.filter(l => l.description || l.unitPrice), newLine]);
-    setShowServicePicker(false);
   };
 
   const removeLine = (index) => {
@@ -183,14 +146,6 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
     }).format(amount);
   };
 
-  // Group services by category
-  const servicesByCategory = services.reduce((acc, service) => {
-    const cat = service.category || 'other';
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(service);
-    return acc;
-  }, {});
-
   const getStatusLabel = (status) => {
     const labels = {
       draft: 'Brouillon',
@@ -243,53 +198,8 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
         )}
 
         {/* Service picker - only show for full edit */}
-        {canFullEdit && services.length > 0 && (
-          <div className="relative" ref={servicePickerRef}>
-            <button
-              type="button"
-              onClick={() => setShowServicePicker(!showServicePicker)}
-              className="flex items-center gap-2 px-4 py-2.5 w-full bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors text-sm font-medium"
-            >
-              <Package className="w-4 h-4" />
-              <span>Ajouter depuis mes services</span>
-              <ChevronDown className={`w-4 h-4 ml-auto transition-transform ${showServicePicker ? 'rotate-180' : ''}`} />
-            </button>
-
-            {showServicePicker && (
-              <div className="absolute z-20 left-0 right-0 mt-2 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-slate-200 dark:border-dark-border max-h-80 overflow-y-auto">
-                {Object.entries(servicesByCategory).map(([category, categoryServices]) => (
-                  <div key={category}>
-                    <div className="px-3 py-2 bg-slate-50 dark:bg-dark-bg sticky top-0">
-                      <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium text-white ${CATEGORIES[category]?.color || 'bg-gray-500'}`}>
-                        {CATEGORIES[category]?.label || category}
-                      </span>
-                    </div>
-                    {categoryServices.map(service => (
-                      <button
-                        key={service._id}
-                        type="button"
-                        onClick={() => addServiceLine(service)}
-                        className="w-full px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-dark-hover flex items-center justify-between border-b border-slate-100 dark:border-dark-border last:border-0"
-                      >
-                        <div>
-                          <p className="text-sm font-medium text-slate-900 dark:text-white">{service.name}</p>
-                          {service.description && (
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{service.description}</p>
-                          )}
-                        </div>
-                        <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-                          {service.unitPrice.toLocaleString('fr-CH')} CHF
-                          {service.priceType === 'hourly' && '/h'}
-                          {service.priceType === 'monthly' && '/mois'}
-                          {service.priceType === 'yearly' && '/an'}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+        {canFullEdit && (
+          <ServicePicker onSelectService={addServiceLine} />
         )}
 
         {/* Lines - only show for full edit */}

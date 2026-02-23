@@ -88,7 +88,9 @@ export const invoicesApi = {
   create: (projectId, data) => api.post(`/projects/${projectId}/invoices`, data),
   update: (id, data) => api.put(`/invoices/${id}`, data),
   changeStatus: (id, status) => api.patch(`/invoices/${id}/status`, { status }),
-  delete: (id) => api.delete(`/invoices/${id}`)
+  delete: (id) => api.delete(`/invoices/${id}`),
+  send: (id) => api.post(`/invoices/${id}/send`),
+  getPdf: (id) => api.get(`/invoices/${id}/pdf`, { responseType: 'blob' })
 };
 
 // Quotes
@@ -100,7 +102,8 @@ export const quotesApi = {
   create: (projectId, data) => api.post(`/projects/${projectId}/quotes`, data),
   update: (id, data) => api.put(`/quotes/${id}`, data),
   changeStatus: (id, status) => api.patch(`/quotes/${id}/status`, { status }),
-  delete: (id) => api.delete(`/quotes/${id}`)
+  delete: (id) => api.delete(`/quotes/${id}`),
+  send: (id) => api.post(`/quotes/${id}/send`)
 };
 
 // History
@@ -151,12 +154,12 @@ export const dashboardApi = {
 
 // Analytics
 export const analyticsApi = {
-  getRevenue: () => api.get('/analytics/revenue'),
+  getRevenue: (params) => api.get('/analytics/revenue', { params }),
   getMonthly: (params) => api.get('/analytics/monthly', { params }),
-  getQuotes: () => api.get('/analytics/quotes'),
-  getProjects: () => api.get('/analytics/projects'),
-  getTopClients: (limit = 5) => api.get('/analytics/clients', { params: { limit } }),
-  getHours: (months = 12) => api.get('/analytics/hours', { params: { months } })
+  getQuotes: (params) => api.get('/analytics/quotes', { params }),
+  getProjects: (params) => api.get('/analytics/projects', { params }),
+  getTopClients: (limit = 5, extraParams = {}) => api.get('/analytics/clients', { params: { limit, ...extraParams } }),
+  getHours: (months = 12, extraParams = {}) => api.get('/analytics/hours', { params: { months, ...extraParams } })
 };
 
 // Services

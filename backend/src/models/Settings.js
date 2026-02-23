@@ -100,7 +100,7 @@ const emailTemplatesSchema = new mongoose.Schema({
   },
   quoteBody: {
     type: String,
-    default: 'Bonjour {clientName},\n\nVeuillez trouver ci-joint le devis {number} d\'un montant de {total}.\n\nN\'hésitez pas à me contacter pour toute question.\n\nCordialement,\n{companyName}'
+    default: 'Bonjour {clientName},\n\nVeuillez trouver ci-joint notre offre relative à votre demande.\n\nJe reste à votre disposition pour toute question ou ajustement.\n\nAvec mes meilleures salutations,\n\n{companyName}'
   },
   invoiceSubject: {
     type: String,
@@ -108,7 +108,7 @@ const emailTemplatesSchema = new mongoose.Schema({
   },
   invoiceBody: {
     type: String,
-    default: 'Bonjour {clientName},\n\nVeuillez trouver ci-joint la facture {number} d\'un montant de {total}.\n\nMerci de procéder au règlement dans un délai de {paymentTerms} jours.\n\nCordialement,\n{companyName}'
+    default: 'Bonjour,\n\nVeuillez trouver ci-joint la facture relative à notre prestation. Je vous remercie pour la confiance accordée.\n\nJe reste à votre disposition pour tout renseignement complémentaire.\n\nAvec mes remerciements et mes salutations distinguées,\n\n{companyName}'
   }
 }, { _id: false });
 

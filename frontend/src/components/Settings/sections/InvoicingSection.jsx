@@ -19,7 +19,7 @@ export default function InvoicingSection({ settings, onSettingsUpdate }) {
     if (settings?.invoicing) {
       setFormData({
         defaultHourlyRate: settings.invoicing.defaultHourlyRate || 50,
-        defaultVatRate: settings.invoicing.defaultVatRate || 8.1,
+        defaultVatRate: parseFloat((settings.invoicing.defaultVatRate || 8.1).toFixed(2)),
         defaultPaymentTerms: settings.invoicing.defaultPaymentTerms || 30
       });
       setHasChanges(false);

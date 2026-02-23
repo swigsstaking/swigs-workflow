@@ -144,7 +144,7 @@ export default function EmailTemplatesTab() {
         data: sampleData
       });
 
-      setPreviewHtml(data.data);
+      setPreviewHtml(data.data?.body || data.data || '');
       setShowPreview(true);
     } catch (error) {
       addToast({ type: 'error', message: 'Erreur lors de la génération de l\'aperçu' });

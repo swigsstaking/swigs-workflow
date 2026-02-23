@@ -20,8 +20,11 @@ export const useUIStore = create(
 
       // Filters
       searchQuery: '',
-      statusFilter: null,
+      hiddenStatuses: [],
       showArchived: false,
+
+      // Analytics filters
+      analyticsHiddenStatuses: [],
 
       // Expanded cards
       expandedCards: {},
@@ -44,12 +47,31 @@ export const useUIStore = create(
 
       // Filter Actions
       setSearchQuery: (query) => set({ searchQuery: query }),
-      setStatusFilter: (statusId) => set({ statusFilter: statusId }),
+      toggleHiddenStatus: (statusId) => set(state => {
+        const hidden = state.hiddenStatuses;
+        return {
+          hiddenStatuses: hidden.includes(statusId)
+            ? hidden.filter(id => id !== statusId)
+            : [...hidden, statusId]
+        };
+      }),
+      clearHiddenStatuses: () => set({ hiddenStatuses: [] }),
       toggleShowArchived: () => set(state => ({ showArchived: !state.showArchived })),
+
+      // Analytics filter actions
+      toggleAnalyticsHiddenStatus: (statusId) => set(state => {
+        const hidden = state.analyticsHiddenStatuses;
+        return {
+          analyticsHiddenStatuses: hidden.includes(statusId)
+            ? hidden.filter(id => id !== statusId)
+            : [...hidden, statusId]
+        };
+      }),
+      clearAnalyticsHiddenStatuses: () => set({ analyticsHiddenStatuses: [] }),
 
       resetFilters: () => set({
         searchQuery: '',
-        statusFilter: null,
+        hiddenStatuses: [],
         showArchived: false
       }),
 
@@ -70,7 +92,12 @@ export const useUIStore = create(
     }),
     {
       name: 'swigs-workflow-ui',
-      partialize: (state) => ({ darkMode: state.darkMode, expandedCards: state.expandedCards })
+      partialize: (state) => ({
+        darkMode: state.darkMode,
+        expandedCards: state.expandedCards,
+        hiddenStatuses: state.hiddenStatuses,
+        analyticsHiddenStatuses: state.analyticsHiddenStatuses
+      })
     }
   )
 );

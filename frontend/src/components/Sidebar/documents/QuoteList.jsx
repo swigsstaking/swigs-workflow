@@ -19,6 +19,7 @@ export default function QuoteList({
   onShowQuoteModal,
   onEdit,
   onCreateInvoiceFromQuote,
+  onSendEmail,
   onGeneratePortalLink,
   onSyncAbaNinja,
   canDeleteQuote,
@@ -52,7 +53,8 @@ export default function QuoteList({
       ) : (
         <div className="space-y-2">
           {quotes.map(quote => {
-            const mailtoLink = generateMailtoLink('quote', quote);
+            const hasSmtp = !!(settings?.smtp?.host && settings?.smtp?.user);
+            const mailtoLink = !hasSmtp ? generateMailtoLink('quote', quote) : null;
             return (
               <div
                 key={quote._id}
@@ -81,8 +83,16 @@ export default function QuoteList({
                     </span>
                   )}
 
-                  {/* Mail button */}
-                  {mailtoLink && (
+                  {/* Mail button — SMTP send or mailto fallback */}
+                  {hasSmtp && project.client?.email ? (
+                    <button
+                      onClick={() => onSendEmail(quote._id, 'quote')}
+                      className="p-1.5 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded transition-colors"
+                      title="Envoyer par email (SMTP)"
+                    >
+                      <Send className="w-4 h-4" />
+                    </button>
+                  ) : mailtoLink ? (
                     <a
                       href={mailtoLink}
                       className="p-1.5 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded transition-colors"
@@ -90,7 +100,7 @@ export default function QuoteList({
                     >
                       <Mail className="w-4 h-4" />
                     </a>
-                  )}
+                  ) : null}
 
                   <div className="relative">
                     <button

@@ -81,8 +81,11 @@ export default function Secretary() {
   };
 
   const handleItemClick = (item) => {
-    // Navigate to workflow page — items are informational links
-    navigate('/workflow');
+    if (item.projectId) {
+      navigate(`/workflow?project=${item.projectId}&tab=documents`);
+    } else {
+      navigate('/workflow');
+    }
   };
 
   if (loading && !data) {

@@ -54,17 +54,32 @@ export default function SmtpSection({ settings, onSettingsUpdate }) {
     }
   };
 
+  const [testing, setTesting] = useState(false);
+
   const handleTestEmail = async () => {
+    // First save if there are changes
+    if (hasChanges) {
+      try {
+        const payload = { ...formData };
+        if (!payload.pass) delete payload.pass;
+        const { data } = await settingsApi.update({ smtp: payload });
+        onSettingsUpdate(data.data);
+        setHasChanges(false);
+      } catch (error) {
+        addToast({ type: 'error', message: 'Erreur lors de la sauvegarde' });
+        return;
+      }
+    }
+
+    // Then send real test email
+    setTesting(true);
     try {
-      const payload = { ...formData };
-      if (!payload.pass) delete payload.pass;
-      await settingsApi.update({ smtp: payload });
-      addToast({
-        type: 'success',
-        message: 'Configuration SMTP sauvegardée. Envoyez un email de test depuis les templates.'
-      });
+      await settingsApi.sendTestEmail(formData.user || settings?.smtp?.user);
+      addToast({ type: 'success', message: 'Email de test envoyé avec succès !' });
     } catch (error) {
-      addToast({ type: 'error', message: 'Erreur lors de la sauvegarde' });
+      addToast({ type: 'error', message: error.response?.data?.error || 'Erreur lors de l\'envoi du test' });
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -142,15 +157,19 @@ export default function SmtpSection({ settings, onSettingsUpdate }) {
           </div>
         </div>
 
-        {hasChanges && (
-          <div className="mt-6 pt-6 border-t border-slate-200 dark:border-dark-border flex justify-end gap-3">
+        <div className="mt-6 pt-6 border-t border-slate-200 dark:border-dark-border flex justify-end gap-3">
+          {(settings?.smtp?.host || formData.host) && (
             <Button
               onClick={handleTestEmail}
               variant="secondary"
               icon={Send}
+              loading={testing}
+              disabled={testing}
             >
               Envoyer un email de test
             </Button>
+          )}
+          {hasChanges && (
             <Button
               onClick={handleSave}
               icon={Save}
@@ -159,8 +178,8 @@ export default function SmtpSection({ settings, onSettingsUpdate }) {
             >
               Enregistrer les modifications
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <div className="mt-6 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 p-4">
