@@ -1,10 +1,9 @@
 import { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutGrid, Settings, Plus, Search, Archive, Sun, Moon, Calendar, BarChart3, Zap, LogIn, LogOut, Home } from 'lucide-react';
+import { LayoutGrid, Settings, Plus, Search, Archive, Sun, Moon, Calendar, BarChart3, Zap, LogIn, LogOut } from 'lucide-react';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimerStore } from '../../stores/timerStore';
-import Button from '../ui/Button';
 import TimerWidget from './TimerWidget';
 
 export default function Header() {
@@ -23,6 +22,7 @@ export default function Header() {
   const { activeTimer, fetchActive } = useTimerStore();
 
   const currentPath = location.pathname;
+  const isWorkflow = currentPath === '/workflow';
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -30,151 +30,171 @@ export default function Header() {
     }
   }, [isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const navLink = (to, label, Icon, exact = false) => {
-    const isActive = exact ? currentPath === to : currentPath.startsWith(to);
-    return (
-      <Link
-        to={to}
-        aria-current={isActive ? 'page' : undefined}
-        className={`
-          flex items-center gap-1.5 px-2.5 py-1 text-[13px] font-medium rounded-md transition-colors
-          ${isActive
-            ? 'text-white bg-white/[0.12]'
-            : 'text-slate-400 hover:text-white hover:bg-white/[0.06]'
-          }
-        `}
-      >
-        {Icon && <Icon className="w-3.5 h-3.5" />}
-        <span className={Icon ? 'hidden md:inline' : ''}>{label}</span>
-      </Link>
-    );
-  };
+  const navItems = [
+    { to: '/workflow', label: 'Workflow' },
+    { to: '/planning', label: 'Planning', icon: Calendar },
+    { to: '/analytics', label: 'Analytics', icon: BarChart3 },
+    { to: '/automations', label: 'Automations', icon: Zap },
+  ];
+
+  const userInitials = user?.name
+    ? user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+    : '?';
 
   return (
-    <header className="sticky top-0 z-40 bg-[#0d1117] border-b border-white/[0.06] transition-colors">
-      <div className="px-4 py-1.5">
-        <div className="flex items-center justify-between">
-          {/* Logo & Nav */}
-          <div className="flex items-center gap-1">
-            <Link to="/" className="flex items-center gap-2 mr-4">
-              <div className="w-6 h-6 bg-primary-500 rounded-md flex items-center justify-center">
-                <LayoutGrid className="w-3.5 h-3.5 text-white" />
-              </div>
-              <span className="text-sm font-semibold text-white hidden sm:inline">
-                Swigs
-              </span>
-            </Link>
+    <header className="sticky top-0 z-40 bg-white/80 dark:bg-[#0d1117]/80 backdrop-blur-xl border-b border-slate-200 dark:border-white/[0.06]">
+      <div className="px-4 h-11 flex items-center gap-3">
 
-            <nav className="flex items-center gap-0.5">
-              {navLink('/', 'Accueil', Home, true)}
-              {navLink('/workflow', 'Workflow')}
-              {navLink('/planning', 'Planning', Calendar)}
-              {navLink('/analytics', 'Analytics', BarChart3)}
-              {navLink('/automations', 'Automations', Zap)}
-              <Link
-                to="/settings"
-                aria-current={currentPath === '/settings' ? 'page' : undefined}
-                className={`
-                  p-1.5 rounded-md transition-colors
-                  ${currentPath === '/settings'
-                    ? 'text-white bg-white/[0.12]'
-                    : 'text-slate-400 hover:text-white hover:bg-white/[0.06]'
-                  }
-                `}
-              >
-                <Settings className="w-3.5 h-3.5" />
-              </Link>
-            </nav>
-          </div>
+        {/* Zone 1: Logo + Nav */}
+        <div className="flex items-center gap-1 shrink-0">
+          <Link to="/" className="flex items-center gap-2 mr-3 group">
+            <div className="w-6 h-6 bg-primary-500 rounded-md flex items-center justify-center group-hover:bg-primary-400 transition-colors">
+              <LayoutGrid className="w-3.5 h-3.5 text-white" />
+            </div>
+            <span className="text-sm font-semibold text-slate-900 dark:text-white hidden sm:inline">
+              Swigs
+            </span>
+          </Link>
 
-          {/* Actions */}
-          <div className="flex items-center gap-2">
-            {/* Timer Widget */}
-            {activeTimer && <TimerWidget />}
-            {currentPath === '/workflow' && (
-              <>
-                {/* Search */}
-                <div className="relative hidden md:block">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
-                  <input
-                    type="text"
-                    placeholder="Rechercher..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="
-                      w-48 pl-8 pr-3 py-1
-                      text-[13px] bg-white/[0.06] border border-white/[0.08] rounded-md
-                      text-white
-                      placeholder:text-slate-500
-                      focus:outline-none focus:ring-1 focus:ring-primary-500/50 focus:border-primary-500/50
-                      transition-colors
-                    "
-                  />
-                </div>
-
-                {/* Archive toggle */}
-                <button
-                  onClick={toggleShowArchived}
+          <nav className="flex items-center gap-0.5">
+            {navItems.map(({ to, label, icon: Icon }) => {
+              const isActive = currentPath.startsWith(to);
+              return (
+                <Link
+                  key={to}
+                  to={to}
+                  aria-current={isActive ? 'page' : undefined}
                   className={`
-                    p-1.5 rounded-md transition-colors
-                    ${showArchived
-                      ? 'bg-amber-500/20 text-amber-400'
-                      : 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.06]'
+                    relative flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] font-medium rounded-md transition-all duration-200
+                    ${isActive
+                      ? 'text-slate-900 dark:text-white'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/[0.04]'
                     }
                   `}
-                  title={showArchived ? 'Masquer les archivés' : 'Voir les archivés'}
-                  aria-label={showArchived ? 'Masquer les archivés' : 'Voir les archivés'}
                 >
-                  <Archive className="w-4 h-4" />
-                </button>
-
-                {/* New Project */}
-                <Button
-                  onClick={toggleNewProjectModal}
-                  icon={Plus}
-                  size="sm"
-                  className="!py-1 !px-2.5 !text-[13px] !rounded-md"
-                >
-                  <span className="hidden sm:inline">Nouveau</span>
-                </Button>
-              </>
-            )}
-
-            {/* Auth */}
-            {isAuthenticated ? (
-              <div className="flex items-center gap-1.5">
-                <span className="text-[13px] text-slate-400 hidden sm:inline">
-                  {user?.name}
-                </span>
-                <button
-                  onClick={logout}
-                  className="p-1.5 rounded-md hover:bg-white/[0.06] transition-colors"
-                  title="Déconnexion"
-                  aria-label="Déconnexion"
-                >
-                  <LogOut className="w-4 h-4 text-slate-500" />
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={loginWithHub}
-                className="flex items-center gap-1.5 px-2.5 py-1 bg-primary-500 hover:bg-primary-600 text-white rounded-md text-[13px] font-medium transition-colors"
-              >
-                <LogIn className="w-3.5 h-3.5" />
-                Connexion
-              </button>
-            )}
-
-            {/* Dark mode toggle */}
-            <button
-              onClick={toggleDarkMode}
-              className="p-1.5 rounded-md text-slate-500 hover:text-slate-300 hover:bg-white/[0.06] transition-colors"
-              title={darkMode ? 'Mode clair' : 'Mode sombre'}
-              aria-label={darkMode ? 'Activer le mode clair' : 'Activer le mode sombre'}
+                  {Icon && <Icon className="w-3.5 h-3.5" />}
+                  <span className={Icon ? 'hidden lg:inline' : ''}>{label}</span>
+                  {isActive && (
+                    <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-primary-500 rounded-full" />
+                  )}
+                </Link>
+              );
+            })}
+            <Link
+              to="/settings"
+              aria-current={currentPath === '/settings' ? 'page' : undefined}
+              className={`
+                relative p-1.5 rounded-md transition-all duration-200
+                ${currentPath === '/settings'
+                  ? 'text-slate-900 dark:text-white'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/[0.04]'
+                }
+              `}
             >
-              {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            </button>
+              <Settings className="w-3.5 h-3.5" />
+              {currentPath === '/settings' && (
+                <span className="absolute bottom-0 left-1.5 right-1.5 h-[2px] bg-primary-500 rounded-full" />
+              )}
+            </Link>
+          </nav>
+        </div>
+
+        {/* Zone 2: Centered Search (workflow only) */}
+        {isWorkflow ? (
+          <div className="flex-1 flex justify-center min-w-0 px-2">
+            <div className={`relative w-full hidden md:block transition-all duration-300 ${activeTimer ? 'max-w-xs' : 'max-w-md'}`}>
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+              <input
+                type="text"
+                placeholder="Rechercher un projet..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="
+                  w-full pl-9 pr-3 py-1.5
+                  text-[13px] bg-slate-100 dark:bg-white/[0.05] border border-slate-200 dark:border-white/[0.08] rounded-lg
+                  text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500
+                  focus:outline-none focus:bg-white dark:focus:bg-white/[0.08] focus:border-slate-300 dark:focus:border-white/[0.15] focus:ring-1 focus:ring-primary-500/30
+                  transition-all duration-200
+                "
+              />
+            </div>
           </div>
+        ) : (
+          <div className="flex-1" />
+        )}
+
+        {/* Zone 3: Widgets + Actions */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {activeTimer && <TimerWidget />}
+
+          {/* Workflow actions */}
+          {isWorkflow && (
+            <div className="flex items-center gap-1 ml-1 pl-2 border-l border-slate-200 dark:border-white/[0.06]">
+              <button
+                onClick={toggleShowArchived}
+                className={`
+                  p-1.5 rounded-md transition-all duration-200
+                  ${showArchived
+                    ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                    : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.05]'
+                  }
+                `}
+                title={showArchived ? 'Masquer les archivés' : 'Voir les archivés'}
+                aria-label={showArchived ? 'Masquer les archivés' : 'Voir les archivés'}
+              >
+                <Archive className="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                onClick={toggleNewProjectModal}
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-primary-50 dark:bg-primary-500/15 hover:bg-primary-100 dark:hover:bg-primary-500/25 text-primary-600 dark:text-primary-400 rounded-md text-[13px] font-medium transition-all duration-200"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Nouveau</span>
+              </button>
+            </div>
+          )}
+
+          {/* Separator */}
+          <div className="w-px h-4 bg-slate-200 dark:bg-white/[0.06] mx-0.5" />
+
+          {/* Auth */}
+          {isAuthenticated ? (
+            <div className="flex items-center gap-1">
+              <div
+                className="w-6 h-6 rounded-full bg-primary-100 dark:bg-primary-500/20 flex items-center justify-center text-[10px] font-semibold text-primary-600 dark:text-primary-400"
+                title={user?.name}
+              >
+                {userInitials}
+              </div>
+              <button
+                onClick={logout}
+                className="p-1.5 rounded-md text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-all duration-200"
+                title="Déconnexion"
+                aria-label="Déconnexion"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={loginWithHub}
+              className="flex items-center gap-1.5 px-2.5 py-1 bg-primary-500 hover:bg-primary-600 text-white rounded-md text-[13px] font-medium transition-colors"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              Connexion
+            </button>
+          )}
+
+          {/* Dark mode */}
+          <button
+            onClick={toggleDarkMode}
+            className="p-1.5 rounded-md text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.04] transition-all duration-200 opacity-60 hover:opacity-100"
+            title={darkMode ? 'Mode clair' : 'Mode sombre'}
+            aria-label={darkMode ? 'Activer le mode clair' : 'Activer le mode sombre'}
+          >
+            {darkMode ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+          </button>
         </div>
       </div>
     </header>
