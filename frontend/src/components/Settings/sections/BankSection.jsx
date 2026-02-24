@@ -3,6 +3,7 @@ import { Landmark, Upload, CheckCircle2, AlertTriangle, XCircle, Search, FileTex
 import { bankApi, invoicesApi, settingsApi } from '../../../services/api';
 import { useToastStore } from '../../../stores/toastStore';
 import Button from '../../ui/Button';
+import { formatCurrency } from '../../../utils/format';
 
 const statusBadge = {
   matched: { label: 'Rapproché', cls: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' },
@@ -221,7 +222,7 @@ export default function BankSection() {
     if (!importsLoaded) loadImports();
   }, [importsLoaded, loadImports]);
 
-  const fmt = (n) => new Intl.NumberFormat('fr-CH', { style: 'currency', currency: 'CHF' }).format(n || 0);
+  const fmt = formatCurrency;
 
   return (
     <div className="space-y-8">

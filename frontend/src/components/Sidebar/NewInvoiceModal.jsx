@@ -10,6 +10,7 @@ import StandardInvoiceForm from './invoice/StandardInvoiceForm';
 import CustomInvoiceForm from './invoice/CustomInvoiceForm';
 import RecurringInvoiceForm from './invoice/RecurringInvoiceForm';
 import InvoiceSummary from './invoice/InvoiceSummary';
+import { formatCurrency } from '../../utils/format';
 
 export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQuoteId, vatRate }) {
   const { createInvoice } = useProjectStore();
@@ -45,6 +46,9 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
     notes: '',
     autoSend: false,
   });
+
+  // Reminder opt-out
+  const [skipReminders, setSkipReminders] = useState(false);
 
   // Shared advanced options
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -295,7 +299,8 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
             quantity: parseFloat(line.quantity) || 1,
             unitPrice: parseFloat(line.unitPrice) || 0
           })),
-          notes: notes || undefined
+          notes: notes || undefined,
+          skipReminders: skipReminders || undefined
         };
       } else {
         const cleanedPartials = {};
@@ -309,7 +314,8 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
         invoiceData = {
           eventIds: selectedEvents,
           quoteIds: selectedQuotes,
-          quotePartials: Object.keys(cleanedPartials).length > 0 ? cleanedPartials : undefined
+          quotePartials: Object.keys(cleanedPartials).length > 0 ? cleanedPartials : undefined,
+          skipReminders: skipReminders || undefined
         };
       }
 
@@ -346,6 +352,7 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
     setCustomLines([{ description: '', quantity: 1, unitPrice: 0 }]);
     setNotes('');
     setAutoSend(false);
+    setSkipReminders(false);
     setMode('standard');
     setRecurringForm({
       lines: [{ description: '', quantity: 1, unitPrice: 0 }],
@@ -357,13 +364,6 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
       notes: '',
       autoSend: false,
     });
-  };
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('fr-CH', {
-      style: 'currency',
-      currency: 'CHF'
-    }).format(amount);
   };
 
   const totalSelected = mode === 'standard'
@@ -403,7 +403,6 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
                 collapsedSections={collapsedSections}
                 toggleSection={toggleSection}
                 toggleAllInSection={toggleAllInSection}
-                formatCurrency={formatCurrency}
                 getQuoteAmount={getQuoteAmount}
               />
             ) : mode === 'custom' ? (
@@ -414,7 +413,6 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
                 addCustomLine={addCustomLine}
                 notes={notes}
                 setNotes={setNotes}
-                formatCurrency={formatCurrency}
                 onSelectService={addServiceLine}
               />
             ) : (
@@ -422,7 +420,6 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
                 form={recurringForm}
                 setForm={setRecurringForm}
                 onSelectService={addServiceLine}
-                formatCurrency={formatCurrency}
               />
             )}
           </div>
@@ -439,7 +436,6 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
             getCustomTotal={getCustomTotal}
             getSelectedTotal={getSelectedTotal}
             customLines={customLines}
-            formatCurrency={formatCurrency}
             showAdvanced={showAdvanced}
             setShowAdvanced={setShowAdvanced}
             customIssueDate={customIssueDate}
@@ -449,6 +445,8 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
             setRecurringForm={setRecurringForm}
             autoSend={autoSend}
             setAutoSend={setAutoSend}
+            skipReminders={skipReminders}
+            setSkipReminders={setSkipReminders}
             settings={settings}
           />
         </div>

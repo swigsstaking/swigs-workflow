@@ -8,7 +8,6 @@ export default function CustomInvoiceForm({
   addCustomLine,
   notes,
   setNotes,
-  formatCurrency,
   onSelectService
 }) {
   return (
@@ -22,7 +21,6 @@ export default function CustomInvoiceForm({
         updateLine={updateCustomLine}
         removeLine={removeCustomLine}
         addLine={addCustomLine}
-        formatCurrency={formatCurrency}
       />
 
       <div className="mt-4">

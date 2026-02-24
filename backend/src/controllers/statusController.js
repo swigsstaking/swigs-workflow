@@ -112,6 +112,16 @@ export const deleteStatus = async (req, res, next) => {
       });
     }
 
+    // Check if any projects are using this status
+    const Project = (await import('../models/Project.js')).default;
+    const projectCount = await Project.countDocuments({ status: status._id, userId: req.user._id });
+    if (projectCount > 0) {
+      return res.status(400).json({
+        success: false,
+        error: `Impossible de supprimer : ce statut est utilisé par ${projectCount} projet(s). Changez d'abord leur statut.`
+      });
+    }
+
     await status.deleteOne();
     res.json({ success: true, data: {} });
   } catch (error) {

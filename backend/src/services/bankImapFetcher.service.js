@@ -24,7 +24,7 @@ async function fetchBankEmails(userId, bankImap) {
       host: bankImap.host,
       port: bankImap.port || 993,
       tls: bankImap.tls !== false,
-      tlsOptions: { rejectUnauthorized: false },
+      tlsOptions: { rejectUnauthorized: process.env.NODE_ENV !== 'production' ? false : true },
       authTimeout: 10000
     }
   };
@@ -192,7 +192,7 @@ export async function testImapConnection(imapConfig) {
       host: imapConfig.host,
       port: imapConfig.port || 993,
       tls: imapConfig.tls !== false,
-      tlsOptions: { rejectUnauthorized: false },
+      tlsOptions: { rejectUnauthorized: process.env.NODE_ENV !== 'production' ? false : true },
       authTimeout: 10000
     }
   };
@@ -233,13 +233,24 @@ async function checkAllUsers() {
   }
 }
 
+let isRunning = false;
+
 /**
  * Initialize cron job — runs every hour at minute 30
  */
 export function initBankImapCron() {
-  cron.schedule('30 * * * *', () => {
-    console.log('[BankIMAP] Running hourly check...');
-    checkAllUsers();
+  cron.schedule('30 * * * *', async () => {
+    if (isRunning) {
+      console.log('[BankIMAP] Skipping — previous run still active');
+      return;
+    }
+    isRunning = true;
+    try {
+      console.log('[BankIMAP] Running hourly check...');
+      await checkAllUsers();
+    } finally {
+      isRunning = false;
+    }
   });
 
   console.log('Bank IMAP service initialized (hourly check at :30)');

@@ -139,18 +139,11 @@ export const signQuote = async (req, res, next) => {
 
     const quote = result.document;
 
-    // Verify quote can be signed
-    if (quote.status === 'signed') {
+    // Verify quote can be signed (only draft or sent quotes)
+    if (!['draft', 'sent'].includes(quote.status)) {
       return res.status(400).json({
         success: false,
-        error: 'Ce devis a déjà été signé'
-      });
-    }
-
-    if (quote.status === 'invoiced') {
-      return res.status(400).json({
-        success: false,
-        error: 'Ce devis a déjà été facturé'
+        error: 'Ce devis ne peut plus être signé dans son état actuel'
       });
     }
 

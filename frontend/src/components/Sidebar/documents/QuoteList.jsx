@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import Button from '../../ui/Button';
 import { QuoteStatusBadge } from '../../ui/Badge';
+import { formatCurrency } from '../../../utils/format';
 
 export default function QuoteList({
   project,
@@ -23,8 +24,7 @@ export default function QuoteList({
   onGeneratePortalLink,
   onSyncAbaNinja,
   canDeleteQuote,
-  generateMailtoLink,
-  formatCurrency
+  generateMailtoLink
 }) {
   return (
     <section>
@@ -127,7 +127,7 @@ export default function QuoteList({
                           className="w-full px-4 py-2 text-sm text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-dark-hover flex items-center gap-2"
                         >
                           <ExternalLink className="w-4 h-4" />
-                          Générer lien portal
+                          Générer lien portail
                         </button>
 
                         {/* AbaNinja sync */}

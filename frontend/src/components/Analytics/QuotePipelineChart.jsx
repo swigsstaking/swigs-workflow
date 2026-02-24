@@ -1,4 +1,5 @@
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell, Tooltip } from 'recharts';
+import { formatCurrencyRound as formatCurrency } from '../../utils/format';
 
 const COLORS = {
   draft: '#6B7280',
@@ -6,7 +7,8 @@ const COLORS = {
   signed: '#10B981',
   refused: '#EF4444',
   expired: '#F59E0B',
-  invoiced: '#8B5CF6'
+  invoiced: '#8B5CF6',
+  partial: '#F59E0B'
 };
 
 const LABELS = {
@@ -15,7 +17,8 @@ const LABELS = {
   signed: 'Signé',
   refused: 'Refusé',
   expired: 'Expiré',
-  invoiced: 'Facturé'
+  invoiced: 'Facturé',
+  partial: 'Partiel'
 };
 
 const CustomTooltip = ({ active, payload }) => {
@@ -55,15 +58,6 @@ export default function QuotePipelineChart({ data }) {
   // Order: draft -> sent -> signed -> invoiced | refused -> expired
   const order = ['draft', 'sent', 'signed', 'invoiced', 'refused', 'expired'];
   chartData.sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status));
-
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('fr-CH', {
-      style: 'currency',
-      currency: 'CHF',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(value);
-  };
 
   return (
     <div className="bg-white dark:bg-slate-800/50 rounded-2xl p-6 border border-slate-200/50 dark:border-slate-700/50">

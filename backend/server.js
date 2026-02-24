@@ -7,6 +7,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
+import mongoSanitize from 'express-mongo-sanitize';
 
 import projectRoutes from './src/routes/projects.js';
 import statusRoutes from './src/routes/statuses.js';
@@ -31,7 +32,7 @@ import bankRoutes from './src/routes/bank.js';
 import timerRoutes from './src/routes/timer.js';
 import recurringInvoiceRoutes from './src/routes/recurringInvoices.js';
 import { errorHandler } from './src/middleware/errorHandler.js';
-import { requireAuth, optionalAuth } from './src/middleware/auth.js';
+import { requireAuth } from './src/middleware/auth.js';
 import { initializeAutomationServices } from './src/services/automation/index.js';
 import { initEventBus, eventBus } from './src/services/eventBus.service.js';
 import { initialize as initReminders } from './src/services/reminder.service.js';
@@ -146,6 +147,9 @@ app.use(compression({
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
+// Sanitize MongoDB query injection
+app.use(mongoSanitize());
+
 // =============================================================================
 // REQUEST LOGGING (Development only)
 // =============================================================================
@@ -195,7 +199,7 @@ app.use('/api/events', requireAuth, eventRoutes);
 app.use('/api/invoices', requireAuth, invoiceRoutes);
 app.use('/api/quotes', requireAuth, quoteRoutes);
 app.use('/api/settings', requireAuth, settingsRoutes);
-app.use('/api/dashboard', optionalAuth, dashboardRoutes);
+app.use('/api/dashboard', requireAuth, dashboardRoutes);
 app.use('/api/clients', requireAuth, clientRoutes);
 app.use('/api/planning', requireAuth, planningRoutes);
 app.use('/api/analytics', requireAuth, analyticsRoutes);

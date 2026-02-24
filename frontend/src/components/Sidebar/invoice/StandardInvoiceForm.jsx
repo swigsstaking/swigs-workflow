@@ -4,6 +4,7 @@ import { fr } from 'date-fns/locale';
 import {
   Check, Clock, Receipt, FileText, ChevronDown, ChevronUp, Percent
 } from 'lucide-react';
+import { formatCurrency } from '../../../utils/format';
 
 // Separate component for partial input to prevent focus loss
 const PartialInput = memo(({ type, value, onChange, placeholder }) => {
@@ -54,7 +55,6 @@ export default function StandardInvoiceForm({
   collapsedSections,
   toggleSection,
   toggleAllInSection,
-  formatCurrency,
   getQuoteAmount
 }) {
   const hoursEvents = unbilledEvents.filter(e => e.type === 'hours');

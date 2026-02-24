@@ -6,6 +6,7 @@ import Modal from '../../ui/Modal';
 import Button from '../../ui/Button';
 import Input, { Textarea } from '../../ui/Input';
 import LinesEditor from '../../Sidebar/invoice/LinesEditor';
+import { formatCurrency } from '../../../utils/format';
 
 const FREQUENCY_OPTIONS = [
   { value: 'weekly', label: 'Hebdomadaire' },
@@ -23,10 +24,6 @@ const FREQUENCY_LABELS = {
 
 function getDefaultLine() {
   return { description: '', quantity: 1, unitPrice: 0 };
-}
-
-function formatCurrency(amount) {
-  return new Intl.NumberFormat('fr-CH', { style: 'currency', currency: 'CHF' }).format(amount);
 }
 
 function formatDate(dateStr) {
@@ -259,7 +256,6 @@ export default function RecurringInvoiceModal({ isOpen, onClose, editItem, setti
               updateLine={updateLine}
               removeLine={removeLine}
               addLine={addLine}
-              formatCurrency={formatCurrency}
               disabled={isCancelled}
             />
           </div>

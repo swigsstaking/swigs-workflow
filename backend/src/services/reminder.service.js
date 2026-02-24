@@ -226,10 +226,11 @@ export const checkOverdueInvoices = async () => {
       try {
         if (!settings.reminders?.enabled) continue;
 
-        // Find overdue invoices for this user
+        // Find overdue invoices for this user (skip those with reminders disabled)
         const overdueInvoices = await Invoice.find({
           status: 'sent',
-          dueDate: { $lt: now }
+          dueDate: { $lt: now },
+          skipReminders: { $ne: true }
         }).populate({
           path: 'project',
           match: { userId: settings.userId },
@@ -351,14 +352,25 @@ export const sendManualReminder = async (invoiceId, userId) => {
   }
 };
 
+let isRunning = false;
+
 /**
  * Initialize reminder service with cron job
  */
 export const initialize = () => {
   // Run every day at 8:00 AM
-  cron.schedule('0 8 * * *', () => {
-    console.log('Running daily reminder check at 8:00 AM');
-    checkOverdueInvoices();
+  cron.schedule('0 8 * * *', async () => {
+    if (isRunning) {
+      console.log('[Reminder] Skipping — previous run still active');
+      return;
+    }
+    isRunning = true;
+    try {
+      console.log('Running daily reminder check at 8:00 AM');
+      await checkOverdueInvoices();
+    } finally {
+      isRunning = false;
+    }
   });
 
   console.log('Reminder service initialized (daily check at 8:00 AM)');

@@ -43,7 +43,7 @@ export const getDashboard = async (req, res, next) => {
       pendingQuotes,
       unbilledEvents,
       allPaidInvoices,
-      allSentInvoices,
+      recoveryAgg,
       settings,
       vatAgg
     ] = await Promise.all([
@@ -73,18 +73,18 @@ export const getDashboard = async (req, res, next) => {
         billed: false
       }).lean(),
 
-      // All paid invoices (for client intelligence)
+      // Paid invoices for client intelligence (limit to last 500 to prevent memory issues)
       Invoice.find({
         ...projectFilter,
         status: 'paid',
         paidAt: { $ne: null }
-      }).populate({ path: 'project', select: 'client name' }).lean(),
+      }).populate({ path: 'project', select: 'client name' }).sort('-paidAt').limit(500).lean(),
 
-      // All sent invoices (for recovery rate)
-      Invoice.find({
-        ...projectFilter,
-        status: { $in: ['sent', 'paid'] }
-      }).lean(),
+      // Recovery rate via aggregation (count sent vs paid, no full docs in memory)
+      Invoice.aggregate([
+        { $match: { ...projectFilter, status: { $in: ['sent', 'paid'] } } },
+        { $group: { _id: '$status', count: { $sum: 1 } } }
+      ]),
 
       // User settings (for reminder schedule)
       Settings.getSettings(req.user?._id || null),
@@ -259,11 +259,12 @@ export const getDashboard = async (req, res, next) => {
       }))
     };
 
-    // 6. Recovery rate
-    const totalSentAndPaid = allSentInvoices.length;
-    const totalPaid = allSentInvoices.filter(i => i.status === 'paid').length;
+    // 6. Recovery rate (from aggregation)
+    const sentCount = recoveryAgg.find(r => r._id === 'sent')?.count || 0;
+    const paidCount = recoveryAgg.find(r => r._id === 'paid')?.count || 0;
+    const totalSentAndPaid = sentCount + paidCount;
     const recoveryRate = totalSentAndPaid > 0
-      ? Math.round((totalPaid / totalSentAndPaid) * 1000) / 10
+      ? Math.round((paidCount / totalSentAndPaid) * 1000) / 10
       : 100;
 
     // 7. Unbilled work

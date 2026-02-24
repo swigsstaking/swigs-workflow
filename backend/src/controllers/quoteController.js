@@ -90,7 +90,12 @@ export const getInvoiceableQuotes = async (req, res, next) => {
 // @route   GET /api/quotes
 export const getAllQuotes = async (req, res, next) => {
   try {
-    const { status, limit } = req.query;
+    const { status } = req.query;
+
+    // Pagination
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(Math.max(1, parseInt(req.query.limit) || 50), 100);
+    const skip = (page - 1) * limit;
 
     // Filter by user's projects
     const projectIds = await getUserProjectIds(req.user?._id);
@@ -101,17 +106,20 @@ export const getAllQuotes = async (req, res, next) => {
     }
     if (status) query.status = status;
 
-    let quotesQuery = Quote.find(query)
-      .populate('project', 'name client')
-      .sort('-createdAt');
+    const [quotes, total] = await Promise.all([
+      Quote.find(query)
+        .populate('project', 'name client')
+        .sort('-createdAt')
+        .skip(skip)
+        .limit(limit),
+      Quote.countDocuments(query)
+    ]);
 
-    if (limit) {
-      quotesQuery = quotesQuery.limit(parseInt(limit));
-    }
-
-    const quotes = await quotesQuery;
-
-    res.json({ success: true, data: quotes });
+    res.json({
+      success: true,
+      data: quotes,
+      pagination: { page, limit, total }
+    });
   } catch (error) {
     next(error);
   }

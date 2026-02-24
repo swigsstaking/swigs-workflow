@@ -144,19 +144,32 @@ export const processRecurringInvoices = async () => {
 
     const now = new Date();
 
+    // Find all due recurring invoices (IDs only to avoid stale data)
     const dueRecurrings = await RecurringInvoice.find({
       status: 'active',
       nextGenerationDate: { $lte: now }
-    }).populate('project', 'name client userId');
+    }).select('_id');
 
     console.log(`Found ${dueRecurrings.length} recurring invoice(s) to process`);
 
-    for (const recurring of dueRecurrings) {
+    for (const { _id: recurringId } of dueRecurrings) {
       try {
+        // Atomically claim this recurring invoice to prevent double generation
+        const recurring = await RecurringInvoice.findOneAndUpdate(
+          { _id: recurringId, status: 'active', nextGenerationDate: { $lte: now } },
+          { $set: { nextGenerationDate: new Date(now.getTime() + 24 * 60 * 60 * 1000) } }, // Temporary bump to prevent re-claim
+          { new: false }
+        ).populate('project', 'name client userId');
+
+        if (!recurring) {
+          console.log(`Recurring invoice ${recurringId} already claimed by another process, skipping`);
+          continue;
+        }
+
         const invoice = await generateInvoiceFromRecurring(recurring);
-        console.log(`Generated invoice ${invoice.number} from recurring ${recurring._id}`);
+        console.log(`Generated invoice ${invoice.number} from recurring ${recurringId}`);
       } catch (err) {
-        console.error(`Error processing recurring invoice ${recurring._id}:`, err.message);
+        console.error(`Error processing recurring invoice ${recurringId}:`, err.message);
         // Continue with next recurring invoice
       }
     }
@@ -167,14 +180,25 @@ export const processRecurringInvoices = async () => {
   }
 };
 
+let isRunning = false;
+
 /**
  * Initialize recurring invoice cron job
  */
 export const initRecurringInvoices = () => {
   // Run every day at 6:00 AM
-  cron.schedule('0 6 * * *', () => {
-    console.log('Running daily recurring invoice generation at 6:00 AM');
-    processRecurringInvoices();
+  cron.schedule('0 6 * * *', async () => {
+    if (isRunning) {
+      console.log('[RecurringInvoice] Skipping — previous run still active');
+      return;
+    }
+    isRunning = true;
+    try {
+      console.log('Running daily recurring invoice generation at 6:00 AM');
+      await processRecurringInvoices();
+    } finally {
+      isRunning = false;
+    }
   });
 
   console.log('Recurring invoice service initialized (daily generation at 6:00 AM)');

@@ -6,6 +6,7 @@ export class AbaNinjaService {
   constructor(apiKey) {
     this.client = axios.create({
       baseURL: ABANINJA_BASE_URL,
+      timeout: 30000,
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json'

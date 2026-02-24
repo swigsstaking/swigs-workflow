@@ -5,9 +5,7 @@ import {
   getQuoteStats,
   getProjectStats,
   getTopClients,
-  getHoursStats,
-  seedTestData,
-  deleteTestData
+  getHoursStats
 } from '../controllers/analyticsController.js';
 
 const router = express.Router();
@@ -29,9 +27,5 @@ router.get('/clients', getTopClients);
 
 // GET /api/analytics/hours - Hours worked statistics
 router.get('/hours', getHoursStats);
-
-// TEMPORARY - Test data seeding
-router.post('/seed-test-data', seedTestData);
-router.delete('/seed-test-data', deleteTestData);
 
 export default router;

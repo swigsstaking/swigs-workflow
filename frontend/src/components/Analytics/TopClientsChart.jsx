@@ -1,18 +1,10 @@
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from 'recharts';
+import { formatCurrencyRound } from '../../utils/format';
 
 const COLORS = ['#3B82F6', '#6366F1', '#8B5CF6', '#A855F7', '#D946EF'];
 
 const CustomTooltip = ({ active, payload }) => {
   if (!active || !payload?.length) return null;
-
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('fr-CH', {
-      style: 'currency',
-      currency: 'CHF',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(value);
-  };
 
   const data = payload[0].payload;
 
@@ -20,7 +12,7 @@ const CustomTooltip = ({ active, payload }) => {
     <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 p-3">
       <p className="font-medium text-slate-900 dark:text-white mb-1">{data.displayName}</p>
       <p className="text-sm text-slate-600 dark:text-slate-400">
-        CA: {formatCurrency(data.totalRevenue)}
+        CA: {formatCurrencyRound(data.totalRevenue)}
       </p>
       <p className="text-xs text-slate-500 dark:text-slate-500">
         {data.invoiceCount} facture{data.invoiceCount > 1 ? 's' : ''}
@@ -52,7 +44,7 @@ export default function TopClientsChart({ data }) {
     color: COLORS[index % COLORS.length]
   }));
 
-  const formatCurrency = (value) => {
+  const formatAxisValue = (value) => {
     if (value >= 1000) {
       return `${(value / 1000).toFixed(0)}k`;
     }
@@ -73,7 +65,7 @@ export default function TopClientsChart({ data }) {
         >
           <XAxis
             type="number"
-            tickFormatter={formatCurrency}
+            tickFormatter={formatAxisValue}
             axisLine={false}
             tickLine={false}
             tick={{ fill: '#94a3b8', fontSize: 11 }}

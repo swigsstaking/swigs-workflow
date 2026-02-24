@@ -69,7 +69,6 @@ export const usePlanningStore = create(
           set({ blocks: data.data, loading: false, useLocalStorage: false });
         } catch (error) {
           // Fallback to localStorage
-          console.log('Using localStorage for planning (backend not available)');
           const { localBlocks } = get();
           const filteredBlocks = localBlocks.filter(block => {
             const blockStart = new Date(block.start);

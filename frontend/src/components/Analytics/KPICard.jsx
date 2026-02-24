@@ -1,4 +1,5 @@
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { formatCurrencyRound } from '../../utils/format';
 
 export default function KPICard({
   title,
@@ -11,12 +12,7 @@ export default function KPICard({
 }) {
   const formatValue = (val) => {
     if (format === 'currency') {
-      return new Intl.NumberFormat('fr-CH', {
-        style: 'currency',
-        currency: 'CHF',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0
-      }).format(val);
+      return formatCurrencyRound(val);
     }
     if (format === 'percent') {
       return `${val}%`;

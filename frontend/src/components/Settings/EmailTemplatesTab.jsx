@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import { Plus, Edit2, Trash2, Eye, Sparkles } from 'lucide-react';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
@@ -326,7 +327,7 @@ export default function EmailTemplatesTab() {
           </div>
           <div
             className="prose dark:prose-invert max-w-none bg-white dark:bg-dark-bg rounded-lg p-4 border border-slate-200 dark:border-dark-border"
-            dangerouslySetInnerHTML={{ __html: previewHtml }}
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewHtml) }}
           />
         </div>
       </Modal>

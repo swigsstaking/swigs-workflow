@@ -68,20 +68,38 @@ export function renderHTML(templateName, data) {
   return compileTemplate(templateName, data);
 }
 
+let activePdfJobs = 0;
+const MAX_CONCURRENT_PDFS = 5;
+
 export async function renderPDF(templateName, data) {
+  if (activePdfJobs >= MAX_CONCURRENT_PDFS) {
+    throw new Error('Too many concurrent PDF jobs. Please try again later.');
+  }
+  activePdfJobs++;
+
   const html = compileTemplate(templateName, data);
   const b = await getBrowser();
   let page;
   try {
     page = await b.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
+
+    // Block all external requests — only allow data: URIs (SSRF protection)
+    await page.setRequestInterception(true);
+    page.on('request', (req) => {
+      if (req.url().startsWith('data:')) req.continue();
+      else req.abort();
+    });
+
+    await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 15000 });
     const pdf = await page.pdf({
       format: 'A4',
       printBackground: true,
-      margin: { top: '15mm', bottom: '15mm', left: '12mm', right: '12mm' }
+      margin: { top: '15mm', bottom: '15mm', left: '12mm', right: '12mm' },
+      timeout: 15000
     });
     return Buffer.from(pdf);
   } finally {
+    activePdfJobs--;
     if (page) await page.close();
   }
 }

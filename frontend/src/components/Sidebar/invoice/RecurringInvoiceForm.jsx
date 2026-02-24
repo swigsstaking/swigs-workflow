@@ -12,8 +12,7 @@ const FREQUENCY_OPTIONS = [
 export default function RecurringInvoiceForm({
   form,
   setForm,
-  onSelectService,
-  formatCurrency
+  onSelectService
 }) {
   const showDayOfMonth = ['monthly', 'quarterly', 'yearly'].includes(form.frequency);
 
@@ -39,7 +38,6 @@ export default function RecurringInvoiceForm({
         updateLine={updateLine}
         removeLine={removeLine}
         addLine={addLine}
-        formatCurrency={formatCurrency}
       />
 
       {/* Fréquence et dates */}

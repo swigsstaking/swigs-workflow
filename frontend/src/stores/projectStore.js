@@ -133,7 +133,7 @@ export const useProjectStore = create((set, get) => ({
       await projectsApi.updatePositions(positions);
     } catch (error) {
       // Silently ignore - positions are saved in localStorage
-      console.log('Positions saved locally (backend not deployed)');
+      // Positions saved in localStorage
     }
   },
 

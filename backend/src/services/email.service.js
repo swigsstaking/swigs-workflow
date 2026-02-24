@@ -56,7 +56,7 @@ export const appendToSentFolder = async (smtpConfig, rawMessage) => {
         port: 993,
         tls: true,
         authTimeout: 15000,
-        tlsOptions: { rejectUnauthorized: false }
+        tlsOptions: { rejectUnauthorized: process.env.NODE_ENV !== 'production' ? false : true }
       }
     };
 

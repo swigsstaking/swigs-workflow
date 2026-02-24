@@ -1,20 +1,25 @@
-import { forwardRef } from 'react';
+import { forwardRef, useId } from 'react';
 
 const Input = forwardRef(({
   label,
   error,
+  id,
   className = '',
   ...props
 }, ref) => {
+  const generatedId = useId();
+  const inputId = id || generatedId;
+
   return (
     <div className="space-y-1">
       {label && (
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+        <label htmlFor={inputId} className="block text-sm font-medium text-slate-700 dark:text-slate-300">
           {label}
         </label>
       )}
       <input
         ref={ref}
+        id={inputId}
         className={`
           w-full px-3 py-2
           text-sm text-slate-900 dark:text-white
@@ -39,19 +44,24 @@ Input.displayName = 'Input';
 export const Textarea = forwardRef(({
   label,
   error,
+  id,
   className = '',
   rows = 3,
   ...props
 }, ref) => {
+  const generatedId = useId();
+  const inputId = id || generatedId;
+
   return (
     <div className="space-y-1">
       {label && (
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+        <label htmlFor={inputId} className="block text-sm font-medium text-slate-700 dark:text-slate-300">
           {label}
         </label>
       )}
       <textarea
         ref={ref}
+        id={inputId}
         rows={rows}
         className={`
           w-full px-3 py-2
@@ -78,20 +88,25 @@ Textarea.displayName = 'Textarea';
 export const Select = forwardRef(({
   label,
   error,
+  id,
   options = [],
   placeholder = 'Sélectionner...',
   className = '',
   ...props
 }, ref) => {
+  const generatedId = useId();
+  const inputId = id || generatedId;
+
   return (
     <div className="space-y-1">
       {label && (
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+        <label htmlFor={inputId} className="block text-sm font-medium text-slate-700 dark:text-slate-300">
           {label}
         </label>
       )}
       <select
         ref={ref}
+        id={inputId}
         className={`
           w-full px-3 py-2
           text-sm text-slate-900 dark:text-white

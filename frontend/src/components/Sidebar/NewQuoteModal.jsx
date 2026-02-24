@@ -7,6 +7,7 @@ import ServicePicker from './invoice/ServicePicker';
 import { useProjectStore } from '../../stores/projectStore';
 import { useToastStore } from '../../stores/toastStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { formatCurrency } from '../../utils/format';
 
 // Statuses that allow full editing
 const FULL_EDIT_STATUSES = ['draft', 'sent', 'refused', 'expired'];
@@ -137,13 +138,6 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('fr-CH', {
-      style: 'currency',
-      currency: 'CHF'
-    }).format(amount);
   };
 
   const getStatusLabel = (status) => {

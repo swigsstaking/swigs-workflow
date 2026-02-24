@@ -1,8 +1,7 @@
 // Pure logic for the briefing interface
 // No React imports — all functions are pure data transforms
 
-const fmt = (n) =>
-  new Intl.NumberFormat('fr-CH', { style: 'currency', currency: 'CHF' }).format(n || 0);
+import { formatCurrency as fmt } from '../../../utils/format';
 
 const fmtShort = (n) => {
   if (!n && n !== 0) return '0';

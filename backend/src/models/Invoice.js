@@ -140,6 +140,10 @@ const invoiceSchema = new mongoose.Schema({
   },
 
   // Reminders
+  skipReminders: {
+    type: Boolean,
+    default: false
+  },
   reminders: [{
     sentAt: {
       type: Date,

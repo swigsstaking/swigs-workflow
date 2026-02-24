@@ -2,16 +2,21 @@ import crypto from 'crypto';
 
 const ALGORITHM = 'aes-256-gcm';
 
-// Primary key: ENCRYPTION_KEY (opt-in) or fallback to JWT_SECRET
-const PRIMARY_KEY = crypto.scryptSync(
-  process.env.ENCRYPTION_KEY || process.env.JWT_SECRET || 'default-key-change-me',
-  'salt',
-  32
-);
+// Require ENCRYPTION_KEY or JWT_SECRET — refuse to start with a default key
+const encryptionKeySource = process.env.ENCRYPTION_KEY || process.env.JWT_SECRET;
+if (!encryptionKeySource) {
+  throw new Error('ENCRYPTION_KEY or JWT_SECRET must be set in environment variables. Refusing to start with a default key.');
+}
+
+const SALT = process.env.ENCRYPTION_SALT || 'swigs-workflow-2026-v1';
+
+// Primary key derived with a unique salt
+const PRIMARY_KEY = crypto.scryptSync(encryptionKeySource, SALT, 32);
 
 // Legacy key for key rotation: if ENCRYPTION_KEY_LEGACY is set, try it as fallback during decrypt
+// Uses the same salt for backward compatibility with the legacy key material
 const LEGACY_KEY = process.env.ENCRYPTION_KEY_LEGACY
-  ? crypto.scryptSync(process.env.ENCRYPTION_KEY_LEGACY, 'salt', 32)
+  ? crypto.scryptSync(process.env.ENCRYPTION_KEY_LEGACY, SALT, 32)
   : null;
 
 /**

@@ -8,18 +8,10 @@ import {
   ResponsiveContainer
 } from 'recharts';
 import { Clock } from 'lucide-react';
+import { formatCurrencyRound } from '../../utils/format';
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
-
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('fr-CH', {
-      style: 'currency',
-      currency: 'CHF',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(value);
-  };
 
   const data = payload[0]?.payload;
   const isCurrentMonth = data?.isCurrentMonth;
@@ -40,7 +32,7 @@ const CustomTooltip = ({ active, payload, label }) => {
         </p>
         {data?.revenue > 0 && (
           <p className="text-sm text-slate-600 dark:text-slate-400">
-            Valeur: <span className="font-medium text-slate-900 dark:text-white">{formatCurrency(data.revenue)}</span>
+            Valeur: <span className="font-medium text-slate-900 dark:text-white">{formatCurrencyRound(data.revenue)}</span>
           </p>
         )}
       </div>
@@ -77,15 +69,6 @@ export default function HoursChart({ data }) {
       </div>
     );
   }
-
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('fr-CH', {
-      style: 'currency',
-      currency: 'CHF',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(value);
-  };
 
   return (
     <div className="bg-white dark:bg-slate-800/50 rounded-2xl p-6 border border-slate-200/50 dark:border-slate-700/50">
@@ -159,7 +142,7 @@ export default function HoursChart({ data }) {
         <div>
           <p className="text-xs text-slate-500 dark:text-slate-400">Valeur totale</p>
           <p className="text-lg font-semibold text-slate-900 dark:text-white">
-            {formatCurrency(data.totals.revenue)}
+            {formatCurrencyRound(data.totals.revenue)}
           </p>
         </div>
       </div>

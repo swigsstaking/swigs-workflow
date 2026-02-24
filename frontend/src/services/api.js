@@ -264,13 +264,13 @@ export const timerApi = {
 
 // Recurring Invoices
 export const recurringInvoicesApi = {
-  getAll: () => api.get('/recurring-invoices').then(r => r.data),
-  getById: (id) => api.get(`/recurring-invoices/${id}`).then(r => r.data),
-  create: (data) => api.post('/recurring-invoices', data).then(r => r.data),
-  update: (id, data) => api.put(`/recurring-invoices/${id}`, data).then(r => r.data),
-  changeStatus: (id, status) => api.patch(`/recurring-invoices/${id}/status`, { status }).then(r => r.data),
-  delete: (id) => api.delete(`/recurring-invoices/${id}`).then(r => r.data),
-  generateNow: (id) => api.post(`/recurring-invoices/${id}/generate`).then(r => r.data),
+  getAll: () => api.get('/recurring-invoices'),
+  getById: (id) => api.get(`/recurring-invoices/${id}`),
+  create: (data) => api.post('/recurring-invoices', data),
+  update: (id, data) => api.put(`/recurring-invoices/${id}`, data),
+  changeStatus: (id, status) => api.patch(`/recurring-invoices/${id}/status`, { status }),
+  delete: (id) => api.delete(`/recurring-invoices/${id}`),
+  generateNow: (id) => api.post(`/recurring-invoices/${id}/generate`),
 };
 
 // AbaNinja

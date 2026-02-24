@@ -48,17 +48,6 @@ export default function Badge({
   );
 }
 
-// Status specific badges
-export const StatusBadge = {
-  Draft: () => <Badge color="#6B7280">Brouillon</Badge>,
-  Sent: () => <Badge color="#3B82F6">Envoyé</Badge>,
-  Signed: () => <Badge color="#10B981">Signé</Badge>,
-  Refused: () => <Badge color="#EF4444">Refusé</Badge>,
-  Expired: () => <Badge color="#F59E0B">Expiré</Badge>,
-  Paid: () => <Badge color="#10B981">Payé</Badge>,
-  Cancelled: () => <Badge color="#EF4444">Annulé</Badge>
-};
-
 export const InvoiceStatusBadge = ({ status }) => {
   const statusConfig = {
     draft: { color: '#6B7280', label: 'Brouillon' },

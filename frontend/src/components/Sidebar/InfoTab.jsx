@@ -11,6 +11,7 @@ import { useToastStore } from '../../stores/toastStore';
 import Button from '../ui/Button';
 import Input, { Textarea, Select } from '../ui/Input';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import { formatCurrency } from '../../utils/format';
 
 export default function InfoTab({ project }) {
   const { statuses, updateProject, changeProjectStatus, archiveProject, fetchProjects } = useProjectStore();
@@ -74,13 +75,6 @@ export default function InfoTab({ project }) {
       ...prev,
       [e.target.name]: e.target.value
     }));
-  };
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('fr-CH', {
-      style: 'currency',
-      currency: 'CHF'
-    }).format(amount);
   };
 
   return (

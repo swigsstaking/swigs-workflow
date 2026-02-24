@@ -9,6 +9,7 @@ import NewInvoiceModal from './NewInvoiceModal';
 import NewQuoteModal from './NewQuoteModal';
 import InvoiceList from './documents/InvoiceList';
 import QuoteList from './documents/QuoteList';
+import { formatCurrency } from '../../utils/format';
 
 export default function DocumentsTab({ project }) {
   const { projectInvoices, projectQuotes, updateInvoiceStatus, updateQuoteStatus, deleteInvoice, deleteQuote, fetchProjectInvoices, fetchProjectQuotes } = useProjectStore();
@@ -36,13 +37,6 @@ export default function DocumentsTab({ project }) {
       fetchProjectQuotes(project._id)
     ]).finally(() => setDocsLoading(false));
   }, [project?._id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('fr-CH', {
-      style: 'currency',
-      currency: 'CHF'
-    }).format(amount);
-  };
 
   const handleInvoiceStatusChange = async (id, status) => {
     try {
@@ -225,6 +219,17 @@ export default function DocumentsTab({ project }) {
     }
   };
 
+  // Toggle skipReminders on an invoice
+  const handleToggleSkipReminders = async (invoiceId, skipReminders) => {
+    try {
+      await invoicesApi.update(invoiceId, { skipReminders });
+      addToast({ type: 'success', message: skipReminders ? 'Relances désactivées pour cette facture' : 'Relances activées pour cette facture' });
+      fetchProjectInvoices(project._id);
+    } catch {
+      addToast({ type: 'error', message: 'Erreur lors de la mise à jour' });
+    }
+  };
+
   // Download invoice PDF
   const handleDownloadPdf = async (invoice) => {
     try {
@@ -281,7 +286,6 @@ export default function DocumentsTab({ project }) {
         onSyncAbaNinja={handleSyncAbaNinja}
         canDeleteQuote={canDeleteQuote}
         generateMailtoLink={generateMailtoLink}
-        formatCurrency={formatCurrency}
       />
 
       {/* Invoices */}
@@ -301,8 +305,8 @@ export default function DocumentsTab({ project }) {
         onGeneratePortalLink={handleGeneratePortalLink}
         onSyncAbaNinja={handleSyncAbaNinja}
         onDownloadPdf={handleDownloadPdf}
+        onToggleSkipReminders={handleToggleSkipReminders}
         generateMailtoLink={generateMailtoLink}
-        formatCurrency={formatCurrency}
         getDaysOverdue={getDaysOverdue}
       />
 

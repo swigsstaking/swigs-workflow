@@ -12,6 +12,7 @@ import Button from '../ui/Button';
 import Input, { Textarea, Select } from '../ui/Input';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import NewQuoteModal from './NewQuoteModal';
+import { formatCurrency } from '../../utils/format';
 
 const eventTypeConfig = {
   hours: { icon: Clock, label: 'Heures', color: '#3B82F6' },
@@ -175,13 +176,6 @@ export default function EventsTab({ project }) {
         message: err.response?.data?.error || 'Erreur lors du démarrage du timer'
       });
     }
-  };
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('fr-CH', {
-      style: 'currency',
-      currency: 'CHF'
-    }).format(amount);
   };
 
   const getEventTotal = (event) => {

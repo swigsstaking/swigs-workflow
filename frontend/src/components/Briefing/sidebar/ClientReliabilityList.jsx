@@ -1,4 +1,5 @@
 import { Users } from 'lucide-react';
+import { formatCurrency } from '../../../utils/format';
 
 function ReliabilityBadge({ score }) {
   if (score === null || score === undefined) {
@@ -42,7 +43,7 @@ export default function ClientReliabilityList({ clients }) {
               </span>
               {c.totalOverdue > 0 && (
                 <span className="text-[10px] text-red-500 dark:text-red-400/70">
-                  {new Intl.NumberFormat('fr-CH', { style: 'currency', currency: 'CHF' }).format(c.totalOverdue)} en retard
+                  {formatCurrency(c.totalOverdue)} en retard
                 </span>
               )}
             </div>

@@ -6,7 +6,9 @@ import {
 import { recurringInvoicesApi } from '../../../services/api';
 import { useToastStore } from '../../../stores/toastStore';
 import Button from '../../ui/Button';
+import ConfirmDialog from '../../ui/ConfirmDialog';
 import RecurringInvoiceModal from './RecurringInvoiceModal';
+import { formatCurrency } from '../../../utils/format';
 
 const FREQUENCY_LABELS = {
   weekly: 'Hebdomadaire',
@@ -21,10 +23,6 @@ const FREQUENCY_BADGE = {
   quarterly: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
   yearly: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300',
 };
-
-function formatCurrency(amount) {
-  return new Intl.NumberFormat('fr-CH', { style: 'currency', currency: 'CHF' }).format(amount || 0);
-}
 
 function formatDate(dateStr) {
   if (!dateStr) return '—';
@@ -250,12 +248,13 @@ export default function RecurringSection({ settings }) {
   const [generatingId, setGeneratingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [statusChangingId, setStatusChangingId] = useState(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await recurringInvoicesApi.getAll();
-      setItems(res?.data || []);
+      const { data } = await recurringInvoicesApi.getAll();
+      setItems(data?.data || []);
     } catch {
       addToast({ type: 'error', message: 'Erreur lors du chargement des récurrences' });
     } finally {
@@ -290,11 +289,16 @@ export default function RecurringSection({ settings }) {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Supprimer cette récurrence ? Cette action est irréversible.')) return;
-    setDeletingId(id);
+  const handleDelete = (id) => {
+    setDeleteConfirmId(id);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirmId) return;
+    setDeletingId(deleteConfirmId);
+    setDeleteConfirmId(null);
     try {
-      await recurringInvoicesApi.delete(id);
+      await recurringInvoicesApi.delete(deleteConfirmId);
       addToast({ type: 'success', message: 'Récurrence supprimée' });
       await load();
     } catch {
@@ -398,6 +402,16 @@ export default function RecurringSection({ settings }) {
         editItem={editItem}
         settings={settings}
         onSaved={load}
+      />
+
+      <ConfirmDialog
+        isOpen={!!deleteConfirmId}
+        onClose={() => setDeleteConfirmId(null)}
+        onConfirm={handleDeleteConfirm}
+        title="Supprimer la récurrence"
+        message="Supprimer cette récurrence ? Cette action est irréversible."
+        confirmLabel="Supprimer"
+        variant="danger"
       />
     </div>
   );

@@ -10,7 +10,6 @@ import { useProjectStore } from '../stores/projectStore';
 import { useToastStore } from '../stores/toastStore';
 import CalendarGrid, { QUARTER_HEIGHT, START_HOUR, HOUR_HEIGHT } from '../components/Planning/CalendarGrid';
 import ProjectTierList from '../components/Planning/ProjectTierList';
-import PlannedBlockCard from '../components/Planning/PlannedBlockCard';
 import Button from '../components/ui/Button';
 import { Skeleton } from '../components/ui/Skeleton';
 

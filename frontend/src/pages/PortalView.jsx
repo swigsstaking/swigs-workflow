@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { FileText, Receipt, Download, CheckCircle, AlertCircle, XCircle } from 'lucide-react';
 import { portalApi } from '../services/api';
+import { formatCurrency } from '../utils/format';
 
 export default function PortalView() {
   const { token } = useParams();
@@ -78,13 +79,6 @@ export default function PortalView() {
     } finally {
       setSigning(false);
     }
-  };
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('fr-CH', {
-      style: 'currency',
-      currency: 'CHF'
-    }).format(amount || 0);
   };
 
   if (loading) {

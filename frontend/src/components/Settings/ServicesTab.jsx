@@ -372,7 +372,7 @@ const ServicesTab = () => {
                         <PriceIcon size={14} />
                         {formatPrice(service)}
                       </span>
-                      {service.priceType === 'hourly' && service.estimatedHours && (
+                      {service.priceType === 'hourly' && service.estimatedHours > 0 && (
                         <span className="text-slate-500 dark:text-slate-400">
                           ~{service.estimatedHours}h estimées ({(service.unitPrice * service.estimatedHours).toLocaleString('fr-CH')} CHF)
                         </span>

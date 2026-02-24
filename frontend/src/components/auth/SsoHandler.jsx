@@ -73,8 +73,8 @@ export default function SsoHandler() {
   const handleSsoVerify = async (token) => {
     setStatus('verifying');
 
-    // IMPORTANT: Deconnecter l'utilisateur existant avant de verifier le nouveau token SSO
-    // Cela evite le bug ou un utilisateur reste connecte avec l'ancien compte
+    // IMPORTANT: Déconnecter l'utilisateur existant avant de vérifier le nouveau token SSO
+    // Cela évite le bug où un utilisateur reste connecté avec l'ancien compte
     await logout();
 
     const result = await verifySsoToken(token);
@@ -96,7 +96,7 @@ export default function SsoHandler() {
               Connexion en cours...
             </h3>
             <p className="text-slate-500 dark:text-slate-400 text-sm">
-              Verification de votre session SWIGS Hub
+              Vérification de votre session SWIGS Hub
             </p>
           </div>
         )}
@@ -105,10 +105,10 @@ export default function SsoHandler() {
           <div className="text-center">
             <Loader2 className="w-12 h-12 text-primary-500 animate-spin mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
-              Chargement des donnees...
+              Chargement des données...
             </h3>
             <p className="text-slate-500 dark:text-slate-400 text-sm">
-              Preparation de votre espace de travail
+              Préparation de votre espace de travail
             </p>
           </div>
         )}
@@ -117,7 +117,7 @@ export default function SsoHandler() {
           <div className="text-center">
             <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
-              Connecte !
+              Connecté !
             </h3>
             <p className="text-slate-500 dark:text-slate-400 text-sm">
               Bienvenue dans votre espace Workflow
@@ -132,7 +132,7 @@ export default function SsoHandler() {
               Erreur de connexion
             </h3>
             <p className="text-slate-500 dark:text-slate-400 text-sm mb-4">
-              {error || 'Impossible de verifier votre session'}
+              {error || 'Impossible de vérifier votre session'}
             </p>
             <button
               onClick={() => navigate('/', { replace: true })}

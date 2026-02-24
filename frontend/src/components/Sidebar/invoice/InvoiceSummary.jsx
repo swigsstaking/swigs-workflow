@@ -1,4 +1,5 @@
 import { Settings2, ChevronDown, ChevronUp, Calendar, Send, Bell } from 'lucide-react';
+import { formatCurrency } from '../../../utils/format';
 
 const FREQUENCY_LABELS = {
   weekly: 'Hebdomadaire',
@@ -46,7 +47,6 @@ export default function InvoiceSummary({
   getCustomTotal,
   getSelectedTotal,
   customLines,
-  formatCurrency,
   showAdvanced,
   setShowAdvanced,
   customIssueDate,
@@ -58,6 +58,8 @@ export default function InvoiceSummary({
   // Smart features
   autoSend,
   setAutoSend,
+  skipReminders,
+  setSkipReminders,
   settings
 }) {
   const hasSmtp = !!(settings?.smtp?.host && settings?.smtp?.user);
@@ -107,7 +109,6 @@ export default function InvoiceSummary({
         {mode === 'recurring' ? (
           <RecurringSummary
             recurringForm={recurringForm}
-            formatCurrency={formatCurrency}
             vatRate={vatRate}
           />
         ) : totalSelected === 0 ? (
@@ -215,24 +216,45 @@ export default function InvoiceSummary({
             </div>
           )}
 
-          {/* Reminders info badge */}
-          <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs ${
-            hasReminders
-              ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300'
-              : 'bg-slate-50 dark:bg-slate-800/30 text-slate-400'
-          }`}>
-            <Bell className="w-3.5 h-3.5" />
-            <span>
-              {hasReminders ? 'Relances automatiques actives' : 'Relances désactivées'}
-            </span>
-          </div>
+          {/* Reminders toggle */}
+          {hasReminders && (
+            <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800/30">
+              <div className="flex items-center gap-2">
+                <Bell className="w-3.5 h-3.5 text-slate-400" />
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                  Relances automatiques
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSkipReminders?.(!skipReminders)}
+                className={`relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none ${
+                  !skipReminders
+                    ? 'bg-primary-600'
+                    : 'bg-slate-200 dark:bg-slate-700'
+                }`}
+              >
+                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                  !skipReminders
+                    ? 'translate-x-[18px]'
+                    : 'translate-x-0.5'
+                }`} />
+              </button>
+            </div>
+          )}
+          {!hasReminders && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs bg-slate-50 dark:bg-slate-800/30 text-slate-400">
+              <Bell className="w-3.5 h-3.5" />
+              <span>Relances désactivées (activer dans Paramètres)</span>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-function RecurringSummary({ recurringForm, formatCurrency, vatRate }) {
+function RecurringSummary({ recurringForm, vatRate }) {
   if (!recurringForm) return null;
 
   const subtotal = recurringForm.lines.reduce((sum, l) => {

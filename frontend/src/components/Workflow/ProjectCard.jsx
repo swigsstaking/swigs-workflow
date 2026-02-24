@@ -5,6 +5,7 @@ import { fr } from 'date-fns/locale';
 import { useUIStore } from '../../stores/uiStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useToastStore } from '../../stores/toastStore';
+import { formatCurrencyRound as formatCurrency } from '../../utils/format';
 
 const sizeConfig = {
   small: {
@@ -45,15 +46,6 @@ export default function ProjectCard({
   const { restoreProject, fetchProjects } = useProjectStore();
   const { addToast } = useToastStore();
   const isExpanded = expandedCards[project._id] || false;
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('fr-CH', {
-      style: 'currency',
-      currency: 'CHF',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(amount);
-  };
 
   const statusColor = project.status?.color || '#6B7280';
   const size = sizeConfig[cardSize] || sizeConfig.medium;

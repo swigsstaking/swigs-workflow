@@ -36,11 +36,7 @@ export const testConnection = async (req, res, next) => {
         error: 'Clé API invalide'
       });
     }
-    res.status(500).json({
-      success: false,
-      error: 'Erreur de connexion à AbaNinja',
-      details: error.message
-    });
+    next(error);
   }
 };
 
@@ -127,8 +123,6 @@ export const syncInvoice = async (req, res, next) => {
       }
     });
   } catch (error) {
-    console.error('AbaNinja sync error:', error);
-
     // Update error status
     try {
       const invoice = await Invoice.findById(req.params.id);
@@ -140,11 +134,7 @@ export const syncInvoice = async (req, res, next) => {
       console.error('Failed to update sync status:', updateError);
     }
 
-    res.status(500).json({
-      success: false,
-      error: 'Erreur lors de la synchronisation',
-      details: error.message
-    });
+    next(error);
   }
 };
 
@@ -231,8 +221,6 @@ export const syncQuote = async (req, res, next) => {
       }
     });
   } catch (error) {
-    console.error('AbaNinja sync error:', error);
-
     // Update error status
     try {
       const quote = await Quote.findById(req.params.id);
@@ -244,11 +232,7 @@ export const syncQuote = async (req, res, next) => {
       console.error('Failed to update sync status:', updateError);
     }
 
-    res.status(500).json({
-      success: false,
-      error: 'Erreur lors de la synchronisation',
-      details: error.message
-    });
+    next(error);
   }
 };
 
@@ -312,12 +296,7 @@ export const syncClient = async (req, res, next) => {
       }
     });
   } catch (error) {
-    console.error('AbaNinja sync error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Erreur lors de la synchronisation',
-      details: error.message
-    });
+    next(error);
   }
 };
 
@@ -488,12 +467,7 @@ export const syncAll = async (req, res, next) => {
       data: stats
     });
   } catch (error) {
-    console.error('AbaNinja bulk sync error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Erreur lors de la synchronisation groupée',
-      details: error.message
-    });
+    next(error);
   }
 };
 

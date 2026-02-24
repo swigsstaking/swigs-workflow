@@ -124,19 +124,18 @@ router.get('/callback', async (req, res) => {
 
     const { access_token, id_token } = await tokenResponse.json();
 
-    // Verify id_token with APP_SECRET, fallback to decode if verification fails
+    // Verify id_token with APP_SECRET — reject if not configured or verification fails
+    if (!APP_SECRET) {
+      console.error('APP_SECRET not configured — cannot verify id_token');
+      return res.status(500).json({ error: 'Configuration serveur incomplete' });
+    }
+
     let hubUser;
-    if (APP_SECRET) {
-      try {
-        hubUser = jwt.verify(id_token, APP_SECRET);
-      } catch {
-        // Fallback: decode without verification (backward compat)
-        const [, payloadB64] = id_token.split('.');
-        hubUser = JSON.parse(Buffer.from(payloadB64, 'base64url').toString());
-      }
-    } else {
-      const [, payloadB64] = id_token.split('.');
-      hubUser = JSON.parse(Buffer.from(payloadB64, 'base64url').toString());
+    try {
+      hubUser = jwt.verify(id_token, APP_SECRET);
+    } catch (err) {
+      console.error('id_token verification failed:', err.message);
+      return res.redirect('/?auth_error=token_verification_failed');
     }
 
     // Validate avatar URL (only https allowed)
@@ -170,10 +169,10 @@ router.get('/callback', async (req, res) => {
     const appAccessToken = generateToken(user._id);
     const refreshToken = crypto.randomBytes(64).toString('hex');
 
-    // Store session with hashed refresh token
+    // Store session with hashed refresh token only (no plaintext)
     await Session.create({
       userId: user._id,
-      refreshToken,
+      refreshToken: '',
       refreshTokenHash: hashRefreshToken(refreshToken),
       userAgent: req.headers['user-agent'],
       ipAddress: req.ip,
@@ -330,7 +329,8 @@ router.post('/sso-verify', async (req, res) => {
     const refreshToken = crypto.randomBytes(64).toString('hex');
     await Session.create({
       userId: user._id,
-      refreshToken,
+      refreshToken: '',
+      refreshTokenHash: hashRefreshToken(refreshToken),
       userAgent: req.headers['user-agent'],
       ipAddress: req.ip,
       expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 jours
@@ -366,28 +366,13 @@ router.post('/refresh', async (req, res) => {
       return res.status(400).json({ error: 'Refresh token requis' });
     }
 
-    // Lookup by hash first (preferred), fallback to plain token (backward compat)
+    // Lookup by hash only (no plaintext fallback)
     const tokenHash = hashRefreshToken(refreshToken);
-    let session = await Session.findOne({
+    const session = await Session.findOne({
       refreshTokenHash: tokenHash,
       isRevoked: false,
       expiresAt: { $gt: new Date() }
     });
-
-    if (!session) {
-      // Fallback: lookup by plain refresh token (pre-migration sessions)
-      session = await Session.findOne({
-        refreshToken,
-        isRevoked: false,
-        expiresAt: { $gt: new Date() }
-      });
-
-      // Backfill hash if found by plain token
-      if (session && !session.refreshTokenHash) {
-        session.refreshTokenHash = tokenHash;
-        await session.save();
-      }
-    }
 
     if (!session) {
       return res.status(401).json({ error: 'Session invalide ou expiree' });
@@ -405,7 +390,7 @@ router.post('/refresh', async (req, res) => {
     const newRefreshToken = crypto.randomBytes(64).toString('hex');
     await Session.create({
       userId: user._id,
-      refreshToken: newRefreshToken,
+      refreshToken: '',
       refreshTokenHash: hashRefreshToken(newRefreshToken),
       userAgent: req.headers['user-agent'],
       ipAddress: req.ip,
@@ -457,8 +442,9 @@ router.post('/logout', async (req, res) => {
     const { refreshToken } = req.body;
 
     if (refreshToken) {
+      const tokenHash = hashRefreshToken(refreshToken);
       await Session.updateOne(
-        { refreshToken },
+        { refreshTokenHash: tokenHash },
         { isRevoked: true }
       );
     }

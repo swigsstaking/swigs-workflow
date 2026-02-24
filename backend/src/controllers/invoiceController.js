@@ -54,7 +54,12 @@ export const getInvoices = async (req, res, next) => {
 // @route   GET /api/invoices
 export const getAllInvoices = async (req, res, next) => {
   try {
-    const { status, limit } = req.query;
+    const { status } = req.query;
+
+    // Pagination
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(Math.max(1, parseInt(req.query.limit) || 50), 100);
+    const skip = (page - 1) * limit;
 
     // Filter by user's projects
     const projectIds = await getUserProjectIds(req.user?._id);
@@ -65,17 +70,20 @@ export const getAllInvoices = async (req, res, next) => {
     }
     if (status) query.status = status;
 
-    let invoicesQuery = Invoice.find(query)
-      .populate('project', 'name client')
-      .sort('-createdAt');
+    const [invoices, total] = await Promise.all([
+      Invoice.find(query)
+        .populate('project', 'name client')
+        .sort('-createdAt')
+        .skip(skip)
+        .limit(limit),
+      Invoice.countDocuments(query)
+    ]);
 
-    if (limit) {
-      invoicesQuery = invoicesQuery.limit(parseInt(limit));
-    }
-
-    const invoices = await invoicesQuery;
-
-    res.json({ success: true, data: invoices });
+    res.json({
+      success: true,
+      data: invoices,
+      pagination: { page, limit, total }
+    });
   } catch (error) {
     next(error);
   }
@@ -128,7 +136,8 @@ export const createInvoice = async (req, res, next) => {
       customLines = [],
       notes,
       dueDate,
-      issueDate
+      issueDate,
+      skipReminders
     } = req.body;
 
     // Verify project ownership
@@ -188,7 +197,8 @@ export const createInvoice = async (req, res, next) => {
         total,
         issueDate: finalIssueDate,
         dueDate: finalDueDate,
-        notes
+        notes,
+        skipReminders: !!skipReminders
       });
 
       // Log history
@@ -303,7 +313,8 @@ export const createInvoice = async (req, res, next) => {
       total,
       issueDate: finalIssueDate,
       dueDate: finalDueDate,
-      notes
+      notes,
+      skipReminders: !!skipReminders
     });
 
     // Step 2: Mark events as billed (compensatory rollback: unbill on error)
@@ -404,6 +415,16 @@ export const updateInvoice = async (req, res, next) => {
       }
     }
 
+    // skipReminders can be toggled on any invoice (not just drafts)
+    if (req.body.skipReminders !== undefined) {
+      invoice.skipReminders = !!req.body.skipReminders;
+      // If only toggling skipReminders, save and return early
+      if (Object.keys(req.body).length === 1) {
+        await invoice.save();
+        return res.json({ success: true, data: invoice });
+      }
+    }
+
     // Only draft invoices can be fully updated
     if (invoice.status !== 'draft') {
       return res.status(400).json({
@@ -466,6 +487,22 @@ export const changeInvoiceStatus = async (req, res, next) => {
       }
     }
 
+    // Validate status transition
+    const ALLOWED_TRANSITIONS = {
+      'draft': ['sent', 'cancelled'],
+      'sent': ['paid', 'cancelled'],
+      'paid': ['cancelled'],
+      'cancelled': []
+    };
+
+    const allowed = ALLOWED_TRANSITIONS[invoice.status];
+    if (!allowed || !allowed.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        error: `Transition de "${invoice.status}" vers "${status}" non autorisée`
+      });
+    }
+
     const oldStatus = invoice.status;
     invoice.status = status;
 
@@ -474,51 +511,64 @@ export const changeInvoiceStatus = async (req, res, next) => {
       invoice.paidAt = new Date();
     }
 
-    // If cancelled, unbill the events and quotes
+    // If cancelled, unbill the events and quotes (with compensatory rollback)
     if (status === 'cancelled' && oldStatus !== 'cancelled') {
+      // Step 1: Unbill events
       await Event.updateMany(
         { invoice: invoice._id },
         { billed: false, invoice: null }
       );
 
-      // Handle partial quote invoicing: decrement invoicedAmount and recalculate status
-      if (invoice.quotes && invoice.quotes.length > 0) {
-        for (const quoteSnapshot of invoice.quotes) {
-          const quote = await Quote.findById(quoteSnapshot.quoteId);
-          if (!quote) continue;
+      // Step 2: Update quotes (with rollback if it fails)
+      try {
+        if (invoice.quotes && invoice.quotes.length > 0) {
+          for (const quoteSnapshot of invoice.quotes) {
+            const quote = await Quote.findById(quoteSnapshot.quoteId);
+            if (!quote) continue;
 
-          // Decrement invoicedAmount by the amount from this invoice
-          const newInvoicedAmount = Math.max(0, (quote.invoicedAmount || 0) - (quoteSnapshot.invoicedAmount || quoteSnapshot.subtotal || 0));
+            const newInvoicedAmount = Math.max(0, (quote.invoicedAmount || 0) - (quoteSnapshot.invoicedAmount || quoteSnapshot.subtotal || 0));
 
-          // Remove this invoice from the invoices array
-          const updatedInvoices = (quote.invoices || []).filter(
-            inv => inv.invoice.toString() !== invoice._id.toString()
-          );
+            const updatedInvoices = (quote.invoices || []).filter(
+              inv => inv.invoice.toString() !== invoice._id.toString()
+            );
 
-          // Recalculate status based on new invoicedAmount
-          let newStatus = 'signed';
-          if (newInvoicedAmount > 0 && newInvoicedAmount < quote.subtotal) {
-            newStatus = 'partial';
-          } else if (newInvoicedAmount >= quote.subtotal) {
-            newStatus = 'invoiced';
-          }
-
-          await Quote.findByIdAndUpdate(quote._id, {
-            $set: {
-              status: newStatus,
-              invoicedAmount: newInvoicedAmount,
-              invoice: newStatus === 'invoiced' ? quote.invoice : null,
-              invoicedAt: newStatus === 'invoiced' ? quote.invoicedAt : null,
-              invoices: updatedInvoices
+            let newStatus = 'signed';
+            if (newInvoicedAmount > 0 && newInvoicedAmount < quote.subtotal) {
+              newStatus = 'partial';
+            } else if (newInvoicedAmount >= quote.subtotal) {
+              newStatus = 'invoiced';
             }
-          });
+
+            await Quote.findByIdAndUpdate(quote._id, {
+              $set: {
+                status: newStatus,
+                invoicedAmount: newInvoicedAmount,
+                invoice: newStatus === 'invoiced' ? quote.invoice : null,
+                invoicedAt: newStatus === 'invoiced' ? quote.invoicedAt : null,
+                invoices: updatedInvoices
+              }
+            });
+          }
+        } else {
+          await Quote.updateMany(
+            { invoice: invoice._id },
+            { status: 'signed', invoice: null, invoicedAt: null }
+          );
         }
-      } else {
-        // Legacy: Reset quotes status back to 'signed' (for old invoices without partial tracking)
-        await Quote.updateMany(
-          { invoice: invoice._id },
-          { status: 'signed', invoice: null, invoicedAt: null }
-        );
+      } catch (quoteErr) {
+        // Rollback step 1: re-bill events since quote update failed
+        try {
+          const eventIds = (invoice.events || []).map(e => e.eventId).filter(Boolean);
+          if (eventIds.length > 0) {
+            await Event.updateMany(
+              { _id: { $in: eventIds } },
+              { billed: true, invoice: invoice._id }
+            );
+          }
+        } catch (rollbackErr) {
+          console.error('Cancellation rollback failed (re-billing events):', rollbackErr.message, { invoiceId: invoice._id });
+        }
+        throw quoteErr;
       }
 
       await historyService.invoiceCancelled(invoice.project._id, invoice.number);
@@ -591,59 +641,70 @@ export const deleteInvoice = async (req, res, next) => {
       }
     }
 
-    // Block deletion of paid invoices
-    if (invoice.status === 'paid') {
+    // Block deletion of sent or paid invoices
+    if (['paid', 'sent'].includes(invoice.status)) {
       return res.status(400).json({
         success: false,
-        error: 'Impossible de supprimer une facture payée. Annulez-la d\'abord.'
+        error: 'Impossible de supprimer une facture envoyée ou payée. Annulez-la d\'abord.'
       });
     }
 
-    // Unbill all events linked to this invoice
+    // Step 1: Unbill all events linked to this invoice
     await Event.updateMany(
       { invoice: invoice._id },
       { billed: false, invoice: null }
     );
 
-    // Handle partial quote invoicing: decrement invoicedAmount and recalculate status
-    if (invoice.quotes && invoice.quotes.length > 0) {
-      for (const quoteSnapshot of invoice.quotes) {
-        const quote = await Quote.findById(quoteSnapshot.quoteId);
-        if (!quote) continue;
+    // Step 2: Update quotes (with rollback if it fails)
+    try {
+      if (invoice.quotes && invoice.quotes.length > 0) {
+        for (const quoteSnapshot of invoice.quotes) {
+          const quote = await Quote.findById(quoteSnapshot.quoteId);
+          if (!quote) continue;
 
-        // Decrement invoicedAmount by the amount from this invoice
-        const newInvoicedAmount = Math.max(0, (quote.invoicedAmount || 0) - (quoteSnapshot.invoicedAmount || quoteSnapshot.subtotal || 0));
+          const newInvoicedAmount = Math.max(0, (quote.invoicedAmount || 0) - (quoteSnapshot.invoicedAmount || quoteSnapshot.subtotal || 0));
 
-        // Remove this invoice from the invoices array
-        const updatedInvoices = quote.invoices.filter(
-          inv => inv.invoice.toString() !== invoice._id.toString()
-        );
+          const updatedInvoices = (quote.invoices || []).filter(
+            inv => inv.invoice.toString() !== invoice._id.toString()
+          );
 
-        // Recalculate status based on new invoicedAmount
-        let newStatus = 'signed';
-        if (newInvoicedAmount > 0 && newInvoicedAmount < quote.subtotal) {
-          newStatus = 'partial';
-        } else if (newInvoicedAmount >= quote.subtotal) {
-          newStatus = 'invoiced';
-        }
-
-        // Update quote
-        await Quote.findByIdAndUpdate(quote._id, {
-          $set: {
-            status: newStatus,
-            invoicedAmount: newInvoicedAmount,
-            invoice: newStatus === 'invoiced' ? quote.invoice : null,
-            invoicedAt: newStatus === 'invoiced' ? quote.invoicedAt : null,
-            invoices: updatedInvoices
+          let newStatus = 'signed';
+          if (newInvoicedAmount > 0 && newInvoicedAmount < quote.subtotal) {
+            newStatus = 'partial';
+          } else if (newInvoicedAmount >= quote.subtotal) {
+            newStatus = 'invoiced';
           }
-        });
+
+          await Quote.findByIdAndUpdate(quote._id, {
+            $set: {
+              status: newStatus,
+              invoicedAmount: newInvoicedAmount,
+              invoice: newStatus === 'invoiced' ? quote.invoice : null,
+              invoicedAt: newStatus === 'invoiced' ? quote.invoicedAt : null,
+              invoices: updatedInvoices
+            }
+          });
+        }
+      } else {
+        await Quote.updateMany(
+          { invoice: invoice._id },
+          { status: 'signed', invoice: null, invoicedAt: null }
+        );
       }
-    } else {
-      // Legacy: Reset quotes status back to 'signed' (for old invoices without partial tracking)
-      await Quote.updateMany(
-        { invoice: invoice._id },
-        { status: 'signed', invoice: null, invoicedAt: null }
-      );
+    } catch (quoteErr) {
+      // Rollback step 1: re-bill events since quote update failed
+      try {
+        const eventIds = (invoice.events || []).map(e => e.eventId).filter(Boolean);
+        if (eventIds.length > 0) {
+          await Event.updateMany(
+            { _id: { $in: eventIds } },
+            { billed: true, invoice: invoice._id }
+          );
+        }
+      } catch (rollbackErr) {
+        console.error('Deletion rollback failed (re-billing events):', rollbackErr.message, { invoiceId: invoice._id });
+      }
+      throw quoteErr;
     }
 
     // Log history

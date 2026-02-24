@@ -1,4 +1,5 @@
 import { Plus, Trash2 } from 'lucide-react';
+import { formatCurrency } from '../../../utils/format';
 
 function getLineTotal(line) {
   const qty = parseFloat(line.quantity);
@@ -7,16 +8,11 @@ function getLineTotal(line) {
   return qty * price;
 }
 
-function formatCurrencyDefault(amount) {
-  return new Intl.NumberFormat('fr-CH', { style: 'currency', currency: 'CHF' }).format(amount);
-}
-
 export default function LinesEditor({
   lines,
   updateLine,
   removeLine,
   addLine,
-  formatCurrency = formatCurrencyDefault,
   disabled = false
 }) {
   return (

@@ -9,6 +9,7 @@ import {
   ResponsiveContainer,
   Cell
 } from 'recharts';
+import { formatCurrencyRound } from '../../utils/format';
 
 const COLORS = {
   revenue: '#10B981',
@@ -65,15 +66,6 @@ const PatternBar = (props) => {
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
 
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('fr-CH', {
-      style: 'currency',
-      currency: 'CHF',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(value);
-  };
-
   const currentData = payload.find(p => !p.dataKey.startsWith('lastYear'));
   const isCurrentMonth = currentData?.payload?.isCurrentMonth;
 
@@ -105,7 +97,7 @@ const CustomTooltip = ({ active, payload, label }) => {
                 </span>
               </div>
               <span className={`text-sm font-medium ${isLastYear ? 'text-slate-400' : 'text-slate-900 dark:text-white'}`}>
-                {formatCurrency(entry.value)}
+                {formatCurrencyRound(entry.value)}
               </span>
             </div>
           );

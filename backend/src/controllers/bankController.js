@@ -63,20 +63,21 @@ export const importCamt = async (req, res, next) => {
         userId
       });
 
-      // Auto-mark invoice as paid if confidence >= 80
+      // Auto-mark invoice as paid if confidence >= 80 (atomic to prevent double-pay)
       if (reconciliation.matchedInvoice && reconciliation.matchConfidence >= 80) {
-        const invoice = await Invoice.findById(reconciliation.matchedInvoice).populate('project');
-        if (invoice && invoice.status === 'sent') {
-          invoice.status = 'paid';
-          invoice.paidAt = tx.bookingDate;
-          await invoice.save();
+        const paidInvoice = await Invoice.findOneAndUpdate(
+          { _id: reconciliation.matchedInvoice, status: 'sent' },
+          { $set: { status: 'paid', paidAt: tx.bookingDate } },
+          { new: true }
+        ).populate('project');
 
+        if (paidInvoice) {
           // Log in history
           try {
             await historyService.log(
-              invoice.project._id || invoice.project,
+              paidInvoice.project._id || paidInvoice.project,
               'bank_reconciled',
-              `Facture ${invoice.number} marquée payée via import bancaire (${reconciliation.matchMethod}, confiance ${reconciliation.matchConfidence}%)`,
+              `Facture ${paidInvoice.number} marquée payée via import bancaire (${reconciliation.matchMethod}, confiance ${reconciliation.matchConfidence}%)`,
               { importId, txId: tx.txId, amount: tx.amount }
             );
           } catch (e) {
@@ -196,6 +197,11 @@ export const matchTransaction = async (req, res, next) => {
       return res.status(404).json({ success: false, error: 'Facture non trouvée' });
     }
 
+    // Verify invoice belongs to the user
+    if (invoice.project.userId && invoice.project.userId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, error: 'Accès refusé' });
+    }
+
     // Update transaction
     tx.matchedInvoice = invoiceId;
     tx.matchMethod = 'manual';
@@ -203,17 +209,19 @@ export const matchTransaction = async (req, res, next) => {
     tx.matchStatus = 'matched';
     await tx.save();
 
-    // Mark invoice as paid
-    if (invoice.status === 'sent') {
-      invoice.status = 'paid';
-      invoice.paidAt = tx.bookingDate;
-      await invoice.save();
+    // Atomically mark invoice as paid (only if currently 'sent')
+    const paidInvoice = await Invoice.findOneAndUpdate(
+      { _id: invoiceId, status: 'sent' },
+      { $set: { status: 'paid', paidAt: tx.bookingDate } },
+      { new: true }
+    ).populate('project');
 
+    if (paidInvoice) {
       try {
         await historyService.log(
-          invoice.project._id || invoice.project,
+          paidInvoice.project._id || paidInvoice.project,
           'bank_reconciled',
-          `Facture ${invoice.number} rapprochée manuellement via import bancaire`,
+          `Facture ${paidInvoice.number} rapprochée manuellement via import bancaire`,
           { txId: tx.txId, amount: tx.amount }
         );
       } catch (e) {

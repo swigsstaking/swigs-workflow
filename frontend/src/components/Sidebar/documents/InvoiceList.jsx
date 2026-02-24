@@ -1,10 +1,11 @@
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import {
-  Receipt, Plus, Send, Check, MoreVertical, Trash2, Mail, Bell, ExternalLink, Link2, Clock, CheckCircle, XCircle, FileDown
+  Receipt, Plus, Send, Check, MoreVertical, Trash2, Mail, Bell, BellOff, ExternalLink, Link2, Clock, CheckCircle, XCircle, FileDown
 } from 'lucide-react';
 import Button from '../../ui/Button';
 import { InvoiceStatusBadge } from '../../ui/Badge';
+import { formatCurrency } from '../../../utils/format';
 
 const REMINDER_LABELS = {
   reminder_1: '1er Rappel',
@@ -29,8 +30,8 @@ export default function InvoiceList({
   onGeneratePortalLink,
   onSyncAbaNinja,
   onDownloadPdf,
+  onToggleSkipReminders,
   generateMailtoLink,
-  formatCurrency,
   getDaysOverdue
 }) {
   return (
@@ -87,6 +88,13 @@ export default function InvoiceList({
                   {invoice.status === 'sent' && new Date(invoice.dueDate) < new Date() && (
                     <span className="px-1.5 py-0.5 text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded">
                       Retard {getDaysOverdue(invoice.dueDate)}j
+                    </span>
+                  )}
+
+                  {/* Skip reminders badge */}
+                  {invoice.skipReminders && invoice.status === 'sent' && (
+                    <span className="px-1.5 py-0.5 text-xs font-medium bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 rounded" title="Relances désactivées">
+                      <BellOff className="w-3 h-3 inline" />
                     </span>
                   )}
 
@@ -187,7 +195,7 @@ export default function InvoiceList({
                           className="w-full px-4 py-2 text-sm text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-dark-hover flex items-center gap-2"
                         >
                           <ExternalLink className="w-4 h-4" />
-                          Générer lien portal
+                          Générer lien portail
                         </button>
 
                         {/* Send reminder */}
@@ -198,6 +206,29 @@ export default function InvoiceList({
                           >
                             <Bell className="w-4 h-4" />
                             Envoyer relance
+                          </button>
+                        )}
+
+                        {/* Toggle reminders */}
+                        {settings?.reminders?.enabled && invoice.status === 'sent' && (
+                          <button
+                            onClick={() => {
+                              onToggleSkipReminders(invoice._id, !invoice.skipReminders);
+                              setActiveMenu(null);
+                            }}
+                            className="w-full px-4 py-2 text-sm text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-dark-hover flex items-center gap-2"
+                          >
+                            {invoice.skipReminders ? (
+                              <>
+                                <Bell className="w-4 h-4" />
+                                Activer les relances
+                              </>
+                            ) : (
+                              <>
+                                <BellOff className="w-4 h-4" />
+                                Désactiver les relances
+                              </>
+                            )}
                           </button>
                         )}
 
