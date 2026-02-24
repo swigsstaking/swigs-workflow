@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutGrid, Settings, Plus, Search, Archive, Sun, Moon, Calendar, BarChart3, Zap, LogIn, LogOut } from 'lucide-react';
+import { Settings, Plus, Search, Archive, Sun, Moon, Calendar, BarChart3, Zap, LogIn, LogOut } from 'lucide-react';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimerStore } from '../../stores/timerStore';
 import TimerWidget from './TimerWidget';
+import Logo from './Logo';
 
 export default function Header() {
   const location = useLocation();
@@ -15,7 +16,9 @@ export default function Header() {
     toggleShowArchived,
     toggleNewProjectModal,
     darkMode,
-    toggleDarkMode
+    toggleDarkMode,
+    accentColor,
+    setAccentColor
   } = useUIStore();
 
   const { user, isAuthenticated, logout, loginWithHub } = useAuthStore();
@@ -42,16 +45,14 @@ export default function Header() {
     : '?';
 
   return (
-    <header className="sticky top-0 z-40 bg-white/80 dark:bg-[#0d1117]/80 backdrop-blur-xl border-b border-slate-200 dark:border-white/[0.06]">
+    <header className="sticky top-0 z-40 bg-white/80 dark:bg-dark-bg/80 backdrop-blur-xl border-b border-slate-200 dark:border-white/[0.06] border-t-[2px] border-t-primary-500">
       <div className="px-4 h-11 flex items-center gap-3">
 
         {/* Zone 1: Logo + Nav */}
         <div className="flex items-center gap-1 shrink-0">
           <Link to="/" className="flex items-center gap-2 mr-3 group">
-            <div className="w-6 h-6 bg-primary-500 rounded-md flex items-center justify-center group-hover:bg-primary-400 transition-colors">
-              <LayoutGrid className="w-3.5 h-3.5 text-white" />
-            </div>
-            <span className="text-sm font-semibold text-slate-900 dark:text-white hidden sm:inline">
+            <Logo size={24} />
+            <span className="text-sm font-semibold font-display tracking-tight text-slate-900 dark:text-white hidden sm:inline">
               Swigs
             </span>
           </Link>
@@ -186,14 +187,37 @@ export default function Header() {
             </button>
           )}
 
-          {/* Dark mode */}
+          {/* Accent color picker */}
+          <div className="flex items-center gap-1.5">
+            {[
+              { name: 'emerald', color: 'bg-emerald-500' },
+              { name: 'teal', color: 'bg-teal-500' },
+              { name: 'lime', color: 'bg-lime-500' },
+            ].map(({ name, color }) => (
+              <button
+                key={name}
+                onClick={() => setAccentColor(name)}
+                className={`w-4 h-4 rounded-full ${color} transition-all duration-200 ${
+                  accentColor === name
+                    ? 'ring-2 ring-offset-1 ring-offset-white dark:ring-offset-zinc-900 ring-slate-300 dark:ring-white/30 scale-110'
+                    : 'opacity-40 hover:opacity-75 hover:scale-110'
+                }`}
+                title={name.charAt(0).toUpperCase() + name.slice(1)}
+                aria-label={`Accent ${name}`}
+              />
+            ))}
+          </div>
+
+          {/* Dark mode — pill switch */}
           <button
             onClick={toggleDarkMode}
-            className="p-1.5 rounded-md text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.04] transition-all duration-200 opacity-60 hover:opacity-100"
+            className="relative flex items-center w-10 h-5 rounded-full bg-slate-200 dark:bg-white/[0.08] transition-colors duration-300"
             title={darkMode ? 'Mode clair' : 'Mode sombre'}
             aria-label={darkMode ? 'Activer le mode clair' : 'Activer le mode sombre'}
           >
-            {darkMode ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+            <span className={`absolute flex items-center justify-center w-4 h-4 rounded-full bg-white dark:bg-zinc-700 shadow-sm transition-transform duration-300 ${darkMode ? 'translate-x-[22px]' : 'translate-x-[2px]'}`}>
+              {darkMode ? <Moon className="w-2.5 h-2.5 text-primary-400" /> : <Sun className="w-2.5 h-2.5 text-amber-500" />}
+            </span>
           </button>
         </div>
       </div>

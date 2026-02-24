@@ -19,7 +19,6 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import ProjectCard from './ProjectCard';
 import Button from '../ui/Button';
-import { useSettingsStore } from '../../stores/settingsStore';
 import { useUIStore } from '../../stores/uiStore';
 
 const gridConfig = {
@@ -67,8 +66,7 @@ function SortableProjectCard({ project, cardStyle, cardSize, onProjectClick, isA
 }
 
 export default function WorkflowGrid({ projects, onProjectClick, onPositionsChange, showArchived }) {
-  const { personalization } = useSettingsStore();
-  const { toggleNewProjectModal } = useUIStore();
+  const { toggleNewProjectModal, cardStyle: uiCardStyle, cardSize: uiCardSize } = useUIStore();
   const [activeId, setActiveId] = useState(null);
   // Local state for optimistic reordering during drag
   const [localProjects, setLocalProjects] = useState(projects);
@@ -80,8 +78,8 @@ export default function WorkflowGrid({ projects, onProjectClick, onPositionsChan
     }
   }, [projects, activeId]);
 
-  const cardStyle = personalization?.cardStyle || 'left-border';
-  const cardSize = personalization?.cardSize || 'medium';
+  const cardStyle = uiCardStyle || 'left-border';
+  const cardSize = uiCardSize || 'medium';
 
   // Configure sensors for both mouse and touch
   const sensors = useSensors(

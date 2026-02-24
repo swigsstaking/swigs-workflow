@@ -55,6 +55,8 @@ export default function ProjectCard({
     (project.recentEvents && project.recentEvents.length > 0) ||
     (project.recentQuotes && project.recentQuotes.length > 0);
 
+  const isTopGradient = cardStyle === 'top-gradient';
+
   const getStyleProps = () => {
     if (cardStyle === 'full-border') {
       return {
@@ -64,6 +66,12 @@ export default function ProjectCard({
           borderWidth: '2px',
           borderStyle: 'solid'
         }
+      };
+    }
+    if (isTopGradient) {
+      return {
+        className: 'border border-slate-200 dark:border-dark-border',
+        style: {}
       };
     }
     return {
@@ -115,14 +123,20 @@ export default function ProjectCard({
       layout
       onClick={onClick}
       className={`
-        bg-white dark:bg-dark-card rounded-xl shadow-sm
+        project-card group/card bg-white dark:bg-dark-card rounded-xl shadow-sm
         transition-shadow duration-200
-        overflow-hidden select-none
+        overflow-hidden select-none relative
         ${styleProps.className}
         ${isDragging ? 'shadow-xl ring-2 ring-primary-500 scale-105' : 'hover:shadow-md'}
       `}
-      style={{ ...styleProps.style, pointerEvents: isDragging ? 'none' : 'auto' }}
+      style={{ ...styleProps.style, '--card-status-color': statusColor, pointerEvents: isDragging ? 'none' : 'auto' }}
     >
+      {isTopGradient && (
+        <div
+          className="absolute top-0 left-0 right-0 h-[3px] rounded-t-xl z-[1] transition-all duration-500 ease-out group-hover/card:h-[4px]"
+          style={{ background: `linear-gradient(90deg, ${statusColor} 0%, ${statusColor}88 60%, transparent 100%)` }}
+        />
+      )}
       <div className={size.padding}>
         {/* Project name */}
         <h3 className={`font-semibold text-slate-900 dark:text-white truncate mb-1 ${size.titleSize}`}>

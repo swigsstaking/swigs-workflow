@@ -74,7 +74,7 @@ export default function Modal({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+            className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm modal-backdrop"
             onClick={onClose}
           />
 
@@ -88,7 +88,7 @@ export default function Modal({
               transition={{ duration: 0.2 }}
               onClick={(e) => e.stopPropagation()}
               className={`
-                pointer-events-auto
+                pointer-events-auto modal-content
                 w-full ${sizes[size]}
                 bg-white dark:bg-dark-card rounded-xl shadow-2xl
                 max-h-[85vh] overflow-hidden

@@ -27,6 +27,7 @@ const Button = forwardRef(({
   return (
     <button
       ref={ref}
+      data-variant={variant}
       disabled={disabled || loading}
       className={`
         inline-flex items-center justify-center gap-2

@@ -6,6 +6,11 @@ export const useUIStore = create(
     (set) => ({
       // Theme
       darkMode: true, // Default to dark mode like Swigs Task
+      accentColor: 'emerald', // 'emerald' | 'teal' | 'lime'
+
+      // Card personalization
+      cardStyle: 'left-border', // 'left-border' | 'full-border' | 'top-gradient'
+      cardSize: 'medium', // 'small' | 'medium' | 'large'
 
       // Sidebar
       sidebarOpen: false,
@@ -32,6 +37,9 @@ export const useUIStore = create(
       // Theme Actions
       toggleDarkMode: () => set(state => ({ darkMode: !state.darkMode })),
       setDarkMode: (value) => set({ darkMode: value }),
+      setAccentColor: (color) => set({ accentColor: color }),
+      setCardStyle: (style) => set({ cardStyle: style }),
+      setCardSize: (size) => set({ cardSize: size }),
 
       // Sidebar Actions
       openSidebar: (tab = 'info') => set({ sidebarOpen: true, sidebarTab: tab }),
@@ -94,9 +102,12 @@ export const useUIStore = create(
       name: 'swigs-workflow-ui',
       partialize: (state) => ({
         darkMode: state.darkMode,
+        accentColor: state.accentColor,
         expandedCards: state.expandedCards,
         hiddenStatuses: state.hiddenStatuses,
-        analyticsHiddenStatuses: state.analyticsHiddenStatuses
+        analyticsHiddenStatuses: state.analyticsHiddenStatuses,
+        cardStyle: state.cardStyle,
+        cardSize: state.cardSize
       })
     }
   )

@@ -34,7 +34,7 @@ const Toast = ({ id, type, message }) => {
       exit={{ opacity: 0, x: 100, scale: 0.95 }}
       transition={{ duration: 0.2 }}
       className={`
-        flex items-start gap-3 p-4 rounded-lg border shadow-lg
+        toast-item flex items-start gap-3 p-4 rounded-lg border shadow-lg
         min-w-[320px] max-w-md
         ${toastStyles[type]}
       `}

@@ -1,16 +1,21 @@
 import { Square, RectangleHorizontal, Maximize2, User } from 'lucide-react';
-import { useSettingsStore } from '../../stores/settingsStore';
+import { useUIStore } from '../../stores/uiStore';
 
 const cardStyles = [
   {
     id: 'left-border',
-    label: 'Style actuel',
+    label: 'Bordure gauche',
     description: 'Bordure gauche colorée'
   },
   {
     id: 'full-border',
     label: 'Bordure complète',
     description: 'Bordure tout autour'
+  },
+  {
+    id: 'top-gradient',
+    label: 'Gradient haut',
+    description: 'Barre dégradée en haut'
   }
 ];
 
@@ -35,6 +40,10 @@ function CardPreview({ style, size }) {
     'full-border': {
       className: '',
       style: { border: '2px solid #3B82F6' }
+    },
+    'top-gradient': {
+      className: 'border border-slate-200 dark:border-dark-border relative overflow-hidden',
+      style: {}
     }
   };
 
@@ -43,12 +52,18 @@ function CardPreview({ style, size }) {
   return (
     <div
       className={`
-        bg-white dark:bg-dark-card rounded-lg shadow-sm
+        bg-white dark:bg-dark-card rounded-lg shadow-sm group/preview
         ${currentStyle.className}
         ${sizeClasses[size] || sizeClasses.medium}
       `}
       style={currentStyle.style}
     >
+      {style === 'top-gradient' && (
+        <div
+          className="absolute top-0 left-0 right-0 h-[3px] rounded-t-lg transition-all duration-500 group-hover/preview:h-[4px]"
+          style={{ background: 'linear-gradient(90deg, #3B82F6 0%, #3B82F688 60%, transparent 100%)' }}
+        />
+      )}
       <div className="font-semibold text-slate-900 dark:text-white truncate">
         Exemple projet
       </div>
@@ -69,19 +84,10 @@ function CardPreview({ style, size }) {
 }
 
 export default function PersonnalisationTab() {
-  const { personalization, updatePersonalization } = useSettingsStore();
+  const { cardStyle, cardSize, setCardStyle, setCardSize } = useUIStore();
 
-  // Use settingsStore personalization (persisted in localStorage)
-  const currentStyle = personalization?.cardStyle || 'left-border';
-  const currentSize = personalization?.cardSize || 'medium';
-
-  const handleStyleChange = (styleId) => {
-    updatePersonalization({ cardStyle: styleId });
-  };
-
-  const handleSizeChange = (sizeId) => {
-    updatePersonalization({ cardSize: sizeId });
-  };
+  const currentStyle = cardStyle || 'left-border';
+  const currentSize = cardSize || 'medium';
 
   return (
     <div className="space-y-8">
@@ -94,11 +100,11 @@ export default function PersonnalisationTab() {
           Choisissez l'apparence des cartes de projet dans le workflow.
         </p>
 
-        <div className="grid grid-cols-2 gap-4 mb-6">
+        <div className="grid grid-cols-3 gap-4 mb-6">
           {cardStyles.map(style => (
             <button
               key={style.id}
-              onClick={() => handleStyleChange(style.id)}
+              onClick={() => setCardStyle(style.id)}
               className={`
                 p-4 rounded-xl border-2 text-left transition-all
                 ${currentStyle === style.id
@@ -143,7 +149,7 @@ export default function PersonnalisationTab() {
             return (
               <button
                 key={size.id}
-                onClick={() => handleSizeChange(size.id)}
+                onClick={() => setCardSize(size.id)}
                 className={`
                   flex-1 flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all
                   ${currentSize === size.id
