@@ -72,11 +72,24 @@ const buildCompany = (settings) => {
  */
 const buildClient = (project) => {
   const client = project.client || {};
+  // Build formatted address: prefer structured fields, fallback to legacy address
+  let address = client.address || '';
+  if (client.street) {
+    address = client.street;
+    if (client.zip || client.city) {
+      address += '\n' + [client.zip, client.city].filter(Boolean).join(' ');
+    }
+  }
   return {
     name: client.name || '-',
     email: client.email || '',
     phone: client.phone || '',
-    address: client.address || ''
+    address,
+    street: client.street || '',
+    zip: client.zip || '',
+    city: client.city || '',
+    country: client.country || '',
+    che: client.che || ''
   };
 };
 

@@ -6,18 +6,69 @@ import ConfirmDialog from '../../ui/ConfirmDialog';
 import { clientsApi } from '../../../services/api';
 import { useToastStore } from '../../../stores/toastStore';
 
+const emptyClient = {
+  name: '',
+  email: '',
+  phone: '',
+  company: '',
+  street: '',
+  zip: '',
+  city: '',
+  che: ''
+};
+
+const formatClientAddress = (client) => {
+  if (client.street) {
+    const line1 = client.street;
+    const line2 = [client.zip, client.city].filter(Boolean).join(' ');
+    return [line1, line2].filter(Boolean).join(', ');
+  }
+  return client.address || '';
+};
+
+const AddressFields = ({ data, onChange, prefix = '' }) => {
+  const update = (field, value) => {
+    onChange({ ...data, [field]: value });
+  };
+
+  return (
+    <>
+      <div className="md:col-span-2">
+        <Input
+          label="Rue"
+          value={data.street || ''}
+          onChange={(e) => update('street', e.target.value)}
+          placeholder="Rue de la Poste 1"
+        />
+      </div>
+      <Input
+        label="NPA"
+        value={data.zip || ''}
+        onChange={(e) => update('zip', e.target.value)}
+        placeholder="1200"
+      />
+      <Input
+        label="Localité"
+        value={data.city || ''}
+        onChange={(e) => update('city', e.target.value)}
+        placeholder="Genève"
+      />
+      <Input
+        label="N° IDE (CHE)"
+        value={data.che || ''}
+        onChange={(e) => update('che', e.target.value)}
+        placeholder="CHE-123.456.789"
+      />
+    </>
+  );
+};
+
 export default function ClientsSection() {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingClient, setEditingClient] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [newClient, setNewClient] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    company: '',
-    address: ''
-  });
+  const [newClient, setNewClient] = useState({ ...emptyClient });
   const [showNewClientForm, setShowNewClientForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const { addToast } = useToastStore();
@@ -47,7 +98,7 @@ export default function ClientsSection() {
     try {
       await clientsApi.create(newClient);
       await loadClients();
-      setNewClient({ name: '', email: '', phone: '', company: '', address: '' });
+      setNewClient({ ...emptyClient });
       setShowNewClientForm(false);
       addToast({ type: 'success', message: 'Client créé avec succès' });
     } catch (error) {
@@ -91,16 +142,6 @@ export default function ClientsSection() {
     } finally {
       setDeleteTarget(null);
     }
-  };
-
-  const startEdit = (client) => {
-    setEditingClient({
-      name: client.name,
-      email: client.email || '',
-      phone: client.phone || '',
-      company: client.company || '',
-      address: client.address || ''
-    });
   };
 
   if (loading) {
@@ -162,22 +203,14 @@ export default function ClientsSection() {
               onChange={(e) => setNewClient({ ...newClient, phone: e.target.value })}
               placeholder="+41 22 123 45 67"
             />
-          </div>
-          <div className="mb-4">
-            <Textarea
-              label="Adresse"
-              value={newClient.address}
-              onChange={(e) => setNewClient({ ...newClient, address: e.target.value })}
-              placeholder="Rue de la Poste 1, 1200 Genève"
-              rows={3}
-            />
+            <AddressFields data={newClient} onChange={setNewClient} />
           </div>
           <div className="flex justify-end gap-3">
             <Button
               variant="secondary"
               onClick={() => {
                 setShowNewClientForm(false);
-                setNewClient({ name: '', email: '', phone: '', company: '', address: '' });
+                setNewClient({ ...emptyClient });
               }}
             >
               Annuler
@@ -237,15 +270,7 @@ export default function ClientsSection() {
                       onChange={(e) => setEditingClient({ ...editingClient, phone: e.target.value })}
                       placeholder="+41 22 123 45 67"
                     />
-                  </div>
-                  <div className="mb-4">
-                    <Textarea
-                      label="Adresse"
-                      value={editingClient.address}
-                      onChange={(e) => setEditingClient({ ...editingClient, address: e.target.value })}
-                      placeholder="Rue de la Poste 1, 1200 Genève"
-                      rows={3}
-                    />
+                    <AddressFields data={editingClient} onChange={setEditingClient} />
                   </div>
                   <div className="flex justify-end gap-3">
                     <Button
@@ -308,10 +333,18 @@ export default function ClientsSection() {
                         <span className="text-slate-700 dark:text-slate-200">{client.phone}</span>
                       </div>
                     )}
-                    {client.address && (
+                    {(client.street || client.address) && (
                       <div className="md:col-span-2">
                         <span className="text-slate-500 dark:text-slate-400">Adresse:</span>{' '}
-                        <span className="text-slate-700 dark:text-slate-200">{client.address}</span>
+                        <span className="text-slate-700 dark:text-slate-200">
+                          {formatClientAddress(client)}
+                        </span>
+                      </div>
+                    )}
+                    {client.che && (
+                      <div>
+                        <span className="text-slate-500 dark:text-slate-400">IDE:</span>{' '}
+                        <span className="text-slate-700 dark:text-slate-200">{client.che}</span>
                       </div>
                     )}
                   </div>

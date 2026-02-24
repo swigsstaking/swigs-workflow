@@ -69,7 +69,8 @@
       <div class="info-block-title">Destinataire</div>
       <div class="info-block-content">
         <strong>{{client.name}}</strong>
-        {{#if client.address}}<br>{{client.address}}{{/if}}
+        {{#if client.street}}<br>{{client.street}}{{#if client.zip}}<br>{{client.zip}} {{client.city}}{{/if}}{{else}}{{#if client.address}}<br>{{client.address}}{{/if}}{{/if}}
+        {{#if client.che}}<br>{{client.che}}{{/if}}
         {{#if client.email}}<br>{{client.email}}{{/if}}
         {{#if client.phone}}<br>{{client.phone}}{{/if}}
         {{#if design.showProjectName}}

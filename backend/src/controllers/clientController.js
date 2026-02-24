@@ -49,7 +49,7 @@ export const getClient = async (req, res, next) => {
 // @route   POST /api/clients
 export const createClient = async (req, res, next) => {
   try {
-    const { name, email, phone, address, company, siret, notes } = req.body;
+    const { name, email, phone, address, street, zip, city, country, che, company, siret, notes } = req.body;
 
     const client = await Client.create({
       userId: req.user?._id,
@@ -57,6 +57,11 @@ export const createClient = async (req, res, next) => {
       email,
       phone,
       address,
+      street,
+      zip,
+      city,
+      country,
+      che,
       company,
       siret,
       notes
@@ -72,7 +77,7 @@ export const createClient = async (req, res, next) => {
 // @route   PUT /api/clients/:id
 export const updateClient = async (req, res, next) => {
   try {
-    const { name, email, phone, address, company, siret, notes } = req.body;
+    const { name, email, phone, address, street, zip, city, country, che, company, siret, notes } = req.body;
 
     const query = { _id: req.params.id };
     if (req.user) {
@@ -81,7 +86,7 @@ export const updateClient = async (req, res, next) => {
 
     const client = await Client.findOneAndUpdate(
       query,
-      { name, email, phone, address, company, siret, notes },
+      { name, email, phone, address, street, zip, city, country, che, company, siret, notes },
       { new: true, runValidators: true }
     );
 

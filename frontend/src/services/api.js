@@ -173,6 +173,15 @@ export const servicesApi = {
   toggle: (id) => api.patch(`/services/${id}/toggle`)
 };
 
+// Service Categories
+export const serviceCategoriesApi = {
+  getAll: () => api.get('/service-categories'),
+  create: (data) => api.post('/service-categories', data),
+  update: (id, data) => api.put(`/service-categories/${id}`, data),
+  delete: (id) => api.delete(`/service-categories/${id}`),
+  seed: () => api.post('/service-categories/seed')
+};
+
 // Automations
 export const automationsApi = {
   getAll: () => api.get('/automations'),

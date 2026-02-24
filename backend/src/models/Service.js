@@ -17,7 +17,6 @@ const serviceSchema = new mongoose.Schema({
   },
   category: {
     type: String,
-    enum: ['development', 'design', 'maintenance', 'hosting', 'consulting', 'other'],
     default: 'other'
   },
   // Pricing options

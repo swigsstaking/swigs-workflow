@@ -24,6 +24,27 @@ const clientSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  street: {
+    type: String,
+    trim: true
+  },
+  zip: {
+    type: String,
+    trim: true
+  },
+  city: {
+    type: String,
+    trim: true
+  },
+  country: {
+    type: String,
+    trim: true,
+    default: 'CH'
+  },
+  che: {
+    type: String,
+    trim: true
+  },
   company: {
     type: String,
     trim: true

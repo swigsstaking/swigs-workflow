@@ -1,20 +1,11 @@
-import { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2, Package, Clock, Calendar, DollarSign, ToggleLeft, ToggleRight } from 'lucide-react';
-import { servicesApi } from '../../services/api';
+import { useState, useEffect, useCallback } from 'react';
+import { Plus, Pencil, Trash2, Package, Clock, Calendar, DollarSign, ToggleLeft, ToggleRight, X } from 'lucide-react';
+import { servicesApi, serviceCategoriesApi } from '../../services/api';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Modal from '../ui/Modal';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { useToastStore } from '../../stores/toastStore';
-
-const CATEGORIES = [
-  { value: 'development', label: 'Développement', color: 'bg-blue-500' },
-  { value: 'design', label: 'Design', color: 'bg-purple-500' },
-  { value: 'maintenance', label: 'Maintenance', color: 'bg-green-500' },
-  { value: 'hosting', label: 'Hébergement', color: 'bg-orange-500' },
-  { value: 'consulting', label: 'Consulting', color: 'bg-yellow-500' },
-  { value: 'other', label: 'Autre', color: 'bg-gray-500' }
-];
 
 const PRICE_TYPES = [
   { value: 'fixed', label: 'Prix fixe', icon: DollarSign },
@@ -23,7 +14,7 @@ const PRICE_TYPES = [
   { value: 'yearly', label: 'Annuel', icon: Calendar }
 ];
 
-const ServiceModal = ({ isOpen, onClose, service, onSave }) => {
+const ServiceModal = ({ isOpen, onClose, service, onSave, categories }) => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -50,14 +41,14 @@ const ServiceModal = ({ isOpen, onClose, service, onSave }) => {
       setFormData({
         name: '',
         description: '',
-        category: 'other',
+        category: categories[0]?.name || 'other',
         priceType: 'fixed',
         unitPrice: '',
         estimatedHours: '',
         defaultQuantity: 1
       });
     }
-  }, [service, isOpen]);
+  }, [service, isOpen, categories]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -105,18 +96,19 @@ const ServiceModal = ({ isOpen, onClose, service, onSave }) => {
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Catégorie</label>
           <div className="grid grid-cols-3 gap-2">
-            {CATEGORIES.map((cat) => (
+            {categories.map((cat) => (
               <button
-                key={cat.value}
+                key={cat._id || cat.name}
                 type="button"
-                onClick={() => setFormData({ ...formData, category: cat.value })}
+                onClick={() => setFormData({ ...formData, category: cat.name })}
                 className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                  formData.category === cat.value
-                    ? `${cat.color} text-white`
+                  formData.category === cat.name
+                    ? 'text-white'
                     : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
                 }`}
+                style={formData.category === cat.name ? { backgroundColor: cat.color } : undefined}
               >
-                {cat.label}
+                {cat.name}
               </button>
             ))}
           </div>
@@ -205,11 +197,34 @@ const ServiceModal = ({ isOpen, onClose, service, onSave }) => {
 const ServicesTab = () => {
   const { addToast } = useToastStore();
   const [services, setServices] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingService, setEditingService] = useState(null);
   const [filterCategory, setFilterCategory] = useState('all');
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteCatTarget, setDeleteCatTarget] = useState(null);
+  const [newCatForm, setNewCatForm] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatColor, setNewCatColor] = useState('#6B7280');
+  const [savingCat, setSavingCat] = useState(false);
+
+  const fetchCategories = useCallback(async () => {
+    try {
+      const { data } = await serviceCategoriesApi.getAll();
+      let cats = data.data;
+      // Auto-seed if no categories exist
+      if (cats.length === 0) {
+        const seedRes = await serviceCategoriesApi.seed();
+        cats = seedRes.data.data;
+      }
+      setCategories(cats);
+      return cats;
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      return [];
+    }
+  }, []);
 
   const fetchServices = async () => {
     try {
@@ -217,14 +232,12 @@ const ServicesTab = () => {
       setServices(data.data);
     } catch (error) {
       console.error('Error fetching services:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchServices();
-  }, []);
+    Promise.all([fetchCategories(), fetchServices()]).finally(() => setLoading(false));
+  }, [fetchCategories]);
 
   const handleEdit = (service) => {
     setEditingService(service);
@@ -262,11 +275,53 @@ const ServicesTab = () => {
     setModalOpen(true);
   };
 
+  const handleCreateCategory = async () => {
+    if (!newCatName.trim()) return;
+    setSavingCat(true);
+    try {
+      await serviceCategoriesApi.create({ name: newCatName.trim(), color: newCatColor });
+      await fetchCategories();
+      setNewCatName('');
+      setNewCatColor('#6B7280');
+      setNewCatForm(false);
+      addToast({ type: 'success', message: 'Catégorie créée' });
+    } catch (error) {
+      const msg = error.response?.data?.error || 'Erreur lors de la création';
+      addToast({ type: 'error', message: msg });
+    } finally {
+      setSavingCat(false);
+    }
+  };
+
+  const handleDeleteCategory = (cat) => {
+    setDeleteCatTarget(cat);
+  };
+
+  const handleDeleteCatConfirm = async () => {
+    if (!deleteCatTarget) return;
+    try {
+      await serviceCategoriesApi.delete(deleteCatTarget._id);
+      await fetchCategories();
+      if (filterCategory === deleteCatTarget.name) {
+        setFilterCategory('all');
+      }
+      addToast({ type: 'success', message: 'Catégorie supprimée' });
+    } catch (error) {
+      const msg = error.response?.data?.error || 'Erreur lors de la suppression';
+      addToast({ type: 'error', message: msg });
+    } finally {
+      setDeleteCatTarget(null);
+    }
+  };
+
   const filteredServices = filterCategory === 'all'
     ? services
     : services.filter(s => s.category === filterCategory);
 
-  const getCategoryInfo = (category) => CATEGORIES.find(c => c.value === category) || CATEGORIES[5];
+  const getCategoryInfo = (categoryName) => {
+    return categories.find(c => c.name === categoryName) || { name: categoryName, color: '#6B7280' };
+  };
+
   const getPriceTypeInfo = (priceType) => PRICE_TYPES.find(p => p.value === priceType) || PRICE_TYPES[0];
 
   const formatPrice = (service) => {
@@ -299,35 +354,82 @@ const ServicesTab = () => {
         </Button>
       </div>
 
-      {/* Category filter */}
-      <div className="flex gap-2 flex-wrap">
-        <button
-          onClick={() => setFilterCategory('all')}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-            filterCategory === 'all'
-              ? 'bg-slate-200 dark:bg-slate-600 text-slate-900 dark:text-white'
-              : 'bg-slate-100 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-          }`}
-        >
-          Tous ({services.length})
-        </button>
-        {CATEGORIES.map((cat) => {
-          const count = services.filter(s => s.category === cat.value).length;
-          if (count === 0) return null;
-          return (
-            <button
-              key={cat.value}
-              onClick={() => setFilterCategory(cat.value)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                filterCategory === cat.value
-                  ? `${cat.color} text-white`
-                  : 'bg-slate-100 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-              }`}
+      {/* Category filter + management */}
+      <div className="space-y-3">
+        <div className="flex gap-2 flex-wrap items-center">
+          <button
+            onClick={() => setFilterCategory('all')}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+              filterCategory === 'all'
+                ? 'bg-slate-200 dark:bg-slate-600 text-slate-900 dark:text-white'
+                : 'bg-slate-100 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+            }`}
+          >
+            Tous ({services.length})
+          </button>
+          {categories.map((cat) => {
+            const count = services.filter(s => s.category === cat.name).length;
+            return (
+              <div key={cat._id} className="relative group flex items-center">
+                <button
+                  onClick={() => setFilterCategory(cat.name)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                    filterCategory === cat.name
+                      ? 'text-white'
+                      : 'bg-slate-100 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                  style={filterCategory === cat.name ? { backgroundColor: cat.color } : undefined}
+                >
+                  {cat.name} ({count})
+                </button>
+                <button
+                  onClick={() => handleDeleteCategory(cat)}
+                  className="ml-0.5 p-0.5 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Supprimer la catégorie"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            );
+          })}
+          <button
+            onClick={() => setNewCatForm(!newCatForm)}
+            className="px-2 py-1.5 rounded-lg text-sm font-medium bg-slate-100 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+            title="Ajouter une catégorie"
+          >
+            <Plus size={14} />
+          </button>
+        </div>
+
+        {newCatForm && (
+          <div className="flex items-end gap-3 bg-slate-50 dark:bg-dark-bg rounded-lg p-3">
+            <Input
+              label="Nom"
+              value={newCatName}
+              onChange={(e) => setNewCatName(e.target.value)}
+              placeholder="Nom de la catégorie"
+            />
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Couleur</label>
+              <input
+                type="color"
+                value={newCatColor}
+                onChange={(e) => setNewCatColor(e.target.value)}
+                className="w-10 h-10 rounded border border-slate-200 dark:border-dark-border cursor-pointer"
+              />
+            </div>
+            <Button
+              onClick={handleCreateCategory}
+              disabled={savingCat || !newCatName.trim()}
+              size="sm"
             >
-              {cat.label} ({count})
-            </button>
-          );
-        })}
+              {savingCat ? '...' : 'Ajouter'}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setNewCatForm(false)}>
+              Annuler
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Services list */}
@@ -355,8 +457,11 @@ const ServicesTab = () => {
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-1">
                       <h3 className="font-semibold text-slate-900 dark:text-white">{service.name}</h3>
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${catInfo.color} text-white`}>
-                        {catInfo.label}
+                      <span
+                        className="px-2 py-0.5 rounded text-xs font-medium text-white"
+                        style={{ backgroundColor: catInfo.color }}
+                      >
+                        {catInfo.name}
                       </span>
                       {!service.isActive && (
                         <span className="px-2 py-0.5 rounded text-xs font-medium bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300">
@@ -416,7 +521,8 @@ const ServicesTab = () => {
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         service={editingService}
-        onSave={fetchServices}
+        onSave={() => { fetchServices(); fetchCategories(); }}
+        categories={categories}
       />
 
       <ConfirmDialog
@@ -425,6 +531,16 @@ const ServicesTab = () => {
         onConfirm={handleDeleteConfirm}
         title="Supprimer le service"
         message={`Êtes-vous sûr de vouloir supprimer le service "${deleteTarget?.name}" ?`}
+        confirmLabel="Supprimer"
+        variant="danger"
+      />
+
+      <ConfirmDialog
+        isOpen={!!deleteCatTarget}
+        onClose={() => setDeleteCatTarget(null)}
+        onConfirm={handleDeleteCatConfirm}
+        title="Supprimer la catégorie"
+        message={`Êtes-vous sûr de vouloir supprimer la catégorie "${deleteCatTarget?.name}" ?`}
         confirmLabel="Supprimer"
         variant="danger"
       />

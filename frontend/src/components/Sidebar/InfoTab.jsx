@@ -27,7 +27,10 @@ export default function InfoTab({ project }) {
     clientEmail: project.client?.email || '',
     clientPhone: project.client?.phone || '',
     clientCompany: project.client?.company || '',
-    clientAddress: project.client?.address || ''
+    clientStreet: project.client?.street || '',
+    clientZip: project.client?.zip || '',
+    clientCity: project.client?.city || '',
+    clientChe: project.client?.che || ''
   });
 
   const handleStatusChange = async (e) => {
@@ -49,7 +52,10 @@ export default function InfoTab({ project }) {
           email: formData.clientEmail,
           phone: formData.clientPhone,
           company: formData.clientCompany,
-          address: formData.clientAddress
+          street: formData.clientStreet,
+          zip: formData.clientZip,
+          city: formData.clientCity,
+          che: formData.clientChe
         }
       });
       addToast({ type: 'success', message: 'Projet mis à jour' });
@@ -148,7 +154,10 @@ export default function InfoTab({ project }) {
                     clientEmail: project.client?.email || '',
                     clientPhone: project.client?.phone || '',
                     clientCompany: project.client?.company || '',
-                    clientAddress: project.client?.address || ''
+                    clientStreet: project.client?.street || '',
+                    clientZip: project.client?.zip || '',
+                    clientCity: project.client?.city || '',
+                    clientChe: project.client?.che || ''
                   });
                 }}
                 className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-hover rounded-lg transition-colors"
@@ -226,11 +235,37 @@ export default function InfoTab({ project }) {
               value={formData.clientPhone}
               onChange={handleChange}
             />
-            <Textarea
-              label="Adresse"
-              name="clientAddress"
-              value={formData.clientAddress}
+            <Input
+              label="Rue"
+              name="clientStreet"
+              value={formData.clientStreet}
               onChange={handleChange}
+              placeholder="Rue de la Poste 1"
+            />
+            <div className="grid grid-cols-3 gap-2">
+              <Input
+                label="NPA"
+                name="clientZip"
+                value={formData.clientZip}
+                onChange={handleChange}
+                placeholder="1200"
+              />
+              <div className="col-span-2">
+                <Input
+                  label="Localité"
+                  name="clientCity"
+                  value={formData.clientCity}
+                  onChange={handleChange}
+                  placeholder="Genève"
+                />
+              </div>
+            </div>
+            <Input
+              label="N° IDE (CHE)"
+              name="clientChe"
+              value={formData.clientChe}
+              onChange={handleChange}
+              placeholder="CHE-123.456.789"
             />
           </div>
         ) : (
@@ -271,10 +306,16 @@ export default function InfoTab({ project }) {
               </div>
             )}
 
-            {project.client?.address && (
+            {(project.client?.street || project.client?.address) && (
               <div className="flex items-start gap-3">
                 <MapPin className="w-4 h-4 text-slate-400 mt-0.5" />
-                <span className="text-sm text-slate-700 dark:text-slate-300">{project.client.address}</span>
+                <span className="text-sm text-slate-700 dark:text-slate-300">
+                  {project.client.street ? (
+                    <>{project.client.street}{(project.client.zip || project.client.city) && <br />}{[project.client.zip, project.client.city].filter(Boolean).join(' ')}</>
+                  ) : (
+                    project.client.address
+                  )}
+                </span>
               </div>
             )}
           </div>

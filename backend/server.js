@@ -19,6 +19,7 @@ import clientRoutes from './src/routes/clients.js';
 import planningRoutes from './src/routes/planning.js';
 import analyticsRoutes from './src/routes/analytics.js';
 import serviceRoutes from './src/routes/services.js';
+import serviceCategoryRoutes from './src/routes/serviceCategories.js';
 import authRoutes from './src/routes/auth.js';
 import dashboardRoutes from './src/routes/dashboard.js';
 import automationRoutes from './src/routes/automations.js';
@@ -204,6 +205,7 @@ app.use('/api/clients', requireAuth, clientRoutes);
 app.use('/api/planning', requireAuth, planningRoutes);
 app.use('/api/analytics', requireAuth, analyticsRoutes);
 app.use('/api/services', requireAuth, serviceRoutes);
+app.use('/api/service-categories', requireAuth, serviceCategoryRoutes);
 
 // Automation routes (protected)
 app.use('/api/automations', requireAuth, automationRoutes);
