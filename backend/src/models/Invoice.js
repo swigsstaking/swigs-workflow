@@ -55,6 +55,27 @@ const invoiceQuoteSchema = new mongoose.Schema({
   signedAt: Date
 }, { _id: false });
 
+const paymentSchema = new mongoose.Schema({
+  amount: {
+    type: Number,
+    required: true,
+    min: 0.01
+  },
+  date: {
+    type: Date,
+    default: Date.now
+  },
+  method: {
+    type: String,
+    enum: ['bank_transfer', 'cash', 'card', 'other'],
+    default: 'bank_transfer'
+  },
+  notes: {
+    type: String,
+    trim: true
+  }
+}, { _id: true });
+
 const invoiceSchema = new mongoose.Schema({
   project: {
     type: mongoose.Schema.Types.ObjectId,
@@ -89,6 +110,22 @@ const invoiceSchema = new mongoose.Schema({
     required: true,
     min: 0
   },
+
+  // Discount
+  discountType: {
+    type: String,
+    enum: ['percentage', 'fixed']
+  },
+  discountValue: {
+    type: Number,
+    min: 0
+  },
+  discountAmount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+
   vatRate: {
     type: Number,
     default: 20,
@@ -109,8 +146,16 @@ const invoiceSchema = new mongoose.Schema({
   // Status
   status: {
     type: String,
-    enum: ['draft', 'sent', 'paid', 'cancelled'],
+    enum: ['draft', 'sent', 'paid', 'partial', 'cancelled'],
     default: 'draft'
+  },
+
+  // Payments
+  payments: [paymentSchema],
+  paidAmount: {
+    type: Number,
+    default: 0,
+    min: 0
   },
 
   // Dates

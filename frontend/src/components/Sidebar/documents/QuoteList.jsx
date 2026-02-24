@@ -1,7 +1,7 @@
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import {
-  FileText, Plus, Send, Check, Receipt, MoreVertical, Trash2, Mail, Pencil, ExternalLink, Link2, X
+  FileText, Plus, Send, Check, Receipt, MoreVertical, Trash2, Mail, Pencil, ExternalLink, Link2, X, FileDown
 } from 'lucide-react';
 import Button from '../../ui/Button';
 import { QuoteStatusBadge } from '../../ui/Badge';
@@ -23,6 +23,7 @@ export default function QuoteList({
   onSendEmail,
   onGeneratePortalLink,
   onSyncAbaNinja,
+  onDownloadPdf,
   canDeleteQuote,
   generateMailtoLink
 }) {
@@ -82,6 +83,15 @@ export default function QuoteList({
                       AN
                     </span>
                   )}
+
+                  {/* PDF download */}
+                  <button
+                    onClick={() => onDownloadPdf(quote)}
+                    className="p-1.5 text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded transition-colors"
+                    title="Télécharger le PDF"
+                  >
+                    <FileDown className="w-4 h-4" />
+                  </button>
 
                   {/* Mail button — SMTP send or mailto fallback */}
                   {hasSmtp && project.client?.email ? (

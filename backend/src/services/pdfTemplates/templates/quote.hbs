@@ -137,6 +137,12 @@
         <span class="label">Sous-total HT</span>
         <span class="value">{{formatCurrency totals.subtotal}}</span>
       </div>
+      {{#if totals.discountAmount}}
+      <div class="totals-row">
+        <span class="label">Rabais{{#if_eq totals.discountType 'percentage'}} ({{totals.discountValue}}%){{/if_eq}}</span>
+        <span class="value" style="color: var(--success-color);">-{{formatCurrency totals.discountAmount}}</span>
+      </div>
+      {{/if}}
       <div class="totals-row">
         <span class="label">TVA ({{totals.vatRate}}%)</span>
         <span class="value">{{formatCurrency totals.vatAmount}}</span>

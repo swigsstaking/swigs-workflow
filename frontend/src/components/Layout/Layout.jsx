@@ -4,7 +4,7 @@ import { ToastContainer } from '../ui/Toast';
 
 export default function Layout() {
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#0d1117] transition-colors">
+    <div className="min-h-screen bg-[rgb(var(--body-light))] dark:bg-dark-bg transition-colors">
       <Header />
       <main>
         <Outlet />

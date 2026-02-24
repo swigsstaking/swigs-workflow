@@ -7,6 +7,7 @@ import ConfirmDialog from '../ui/ConfirmDialog';
 import { Skeleton } from '../ui/Skeleton';
 import NewInvoiceModal from './NewInvoiceModal';
 import NewQuoteModal from './NewQuoteModal';
+import RecordPaymentModal from './RecordPaymentModal';
 import InvoiceList from './documents/InvoiceList';
 import QuoteList from './documents/QuoteList';
 import { formatCurrency } from '../../utils/format';
@@ -19,6 +20,8 @@ export default function DocumentsTab({ project }) {
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [showQuoteModal, setShowQuoteModal] = useState(false);
   const [editingQuote, setEditingQuote] = useState(null);
+  const [editingInvoice, setEditingInvoice] = useState(null);
+  const [paymentInvoice, setPaymentInvoice] = useState(null);
   const [preselectedQuoteId, setPreselectedQuoteId] = useState(null);
   const [activeMenu, setActiveMenu] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -74,9 +77,21 @@ export default function DocumentsTab({ project }) {
     setActiveMenu(null);
   };
 
+  const handleEditInvoice = (invoice) => {
+    setEditingInvoice(invoice);
+    setShowInvoiceModal(true);
+    setActiveMenu(null);
+  };
+
+  const handleRecordPayment = (invoice) => {
+    setPaymentInvoice(invoice);
+    setActiveMenu(null);
+  };
+
   const handleCloseInvoiceModal = () => {
     setShowInvoiceModal(false);
     setPreselectedQuoteId(null);
+    setEditingInvoice(null);
   };
 
   const handleEditQuote = (quote) => {
@@ -247,6 +262,23 @@ export default function DocumentsTab({ project }) {
     }
   };
 
+  // Download quote PDF
+  const handleDownloadQuotePdf = async (quote) => {
+    try {
+      const response = await quotesApi.getPdf(quote._id);
+      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.setAttribute('download', `Devis-${quote.number}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      addToast({ type: 'error', message: 'Erreur lors du téléchargement du PDF' });
+    }
+  };
+
   if (docsLoading) {
     return (
       <div className="p-6 space-y-8">
@@ -284,6 +316,7 @@ export default function DocumentsTab({ project }) {
         onSendEmail={handleSendEmail}
         onGeneratePortalLink={handleGeneratePortalLink}
         onSyncAbaNinja={handleSyncAbaNinja}
+        onDownloadPdf={handleDownloadQuotePdf}
         canDeleteQuote={canDeleteQuote}
         generateMailtoLink={generateMailtoLink}
       />
@@ -300,6 +333,8 @@ export default function DocumentsTab({ project }) {
         onStatusChange={handleInvoiceStatusChange}
         onDelete={handleDeleteInvoice}
         onShowInvoiceModal={() => setShowInvoiceModal(true)}
+        onEdit={handleEditInvoice}
+        onRecordPayment={handleRecordPayment}
         onSendReminder={handleSendReminder}
         onSendEmail={handleSendEmail}
         onGeneratePortalLink={handleGeneratePortalLink}
@@ -317,12 +352,18 @@ export default function DocumentsTab({ project }) {
         onClose={handleCloseInvoiceModal}
         preselectedQuoteId={preselectedQuoteId}
         vatRate={settings?.invoicing?.defaultVatRate != null ? parseFloat((settings.invoicing.defaultVatRate / 100).toFixed(4)) : undefined}
+        editInvoice={editingInvoice}
       />
       <NewQuoteModal
         project={project}
         isOpen={showQuoteModal}
         onClose={handleCloseQuoteModal}
         editQuote={editingQuote}
+      />
+      <RecordPaymentModal
+        invoice={paymentInvoice}
+        isOpen={!!paymentInvoice}
+        onClose={() => setPaymentInvoice(null)}
       />
 
       {/* Delete Invoice Confirmation */}

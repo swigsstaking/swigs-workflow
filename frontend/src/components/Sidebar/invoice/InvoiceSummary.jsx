@@ -46,6 +46,7 @@ export default function InvoiceSummary({
   getQuotesTotal,
   getCustomTotal,
   getSelectedTotal,
+  getDiscountAmount,
   customLines,
   showAdvanced,
   setShowAdvanced,
@@ -157,6 +158,22 @@ export default function InvoiceSummary({
             )}
 
             <div className="pt-4 border-t border-slate-200/80 dark:border-slate-700/50 space-y-2">
+              {mode === 'custom' && getDiscountAmount && getDiscountAmount() > 0 && (
+                <>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-600 dark:text-slate-400">Sous-total</span>
+                    <span className="font-medium text-slate-800 dark:text-slate-200">
+                      {formatCurrency(getCustomTotal())}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-emerald-600 dark:text-emerald-400">Rabais</span>
+                    <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                      -{formatCurrency(getDiscountAmount())}
+                    </span>
+                  </div>
+                </>
+              )}
               <div className="flex justify-between text-sm">
                 <span className="text-slate-600 dark:text-slate-400">Total HT</span>
                 <span className="font-medium text-slate-800 dark:text-slate-200">

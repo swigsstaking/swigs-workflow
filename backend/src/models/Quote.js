@@ -44,6 +44,22 @@ const quoteSchema = new mongoose.Schema({
     required: true,
     min: 0
   },
+
+  // Discount
+  discountType: {
+    type: String,
+    enum: ['percentage', 'fixed']
+  },
+  discountValue: {
+    type: Number,
+    min: 0
+  },
+  discountAmount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+
   vatRate: {
     type: Number,
     default: 20,
@@ -141,9 +157,9 @@ const quoteSchema = new mongoose.Schema({
 });
 
 // Generate quote number (atomic — safe for PM2 cluster)
-quoteSchema.statics.generateNumber = async function(userId) {
+quoteSchema.statics.generateNumber = async function() {
   const year = new Date().getFullYear();
-  const seq = await Counter.getNextSequence(`quote_${year}_${userId || 'global'}`);
+  const seq = await Counter.getNextSequence(`quote_${year}`);
   return `DEV-${year}-${String(seq).padStart(3, '0')}`;
 };
 

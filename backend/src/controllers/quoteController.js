@@ -159,7 +159,7 @@ export const getQuote = async (req, res, next) => {
 // @route   POST /api/projects/:projectId/quotes
 export const createQuote = async (req, res, next) => {
   try {
-    const { lines, notes, validUntil } = req.body;
+    const { lines, notes, validUntil, discountType, discountValue } = req.body;
 
     // Verify project ownership
     const project = await verifyProjectOwnership(req.params.projectId, req.user?._id);
@@ -179,12 +179,22 @@ export const createQuote = async (req, res, next) => {
     }));
 
     const subtotal = processedLines.reduce((sum, line) => sum + line.total, 0);
+
+    // Calculate discount
+    let discountAmount = 0;
+    if (discountType && discountValue > 0) {
+      discountAmount = discountType === 'percentage'
+        ? subtotal * (discountValue / 100)
+        : Math.min(discountValue, subtotal);
+    }
+
+    const netTotal = subtotal - discountAmount;
     const vatRate = settings.invoicing.defaultVatRate;
-    const vatAmount = subtotal * (vatRate / 100);
-    const total = subtotal + vatAmount;
+    const vatAmount = netTotal * (vatRate / 100);
+    const total = netTotal + vatAmount;
 
     // Generate quote number
-    const number = await Quote.generateNumber(req.user?._id);
+    const number = await Quote.generateNumber();
 
     // Calculate validity date (default 30 days)
     const finalValidUntil = validUntil || new Date(
@@ -197,6 +207,9 @@ export const createQuote = async (req, res, next) => {
       number,
       lines: processedLines,
       subtotal,
+      discountType: discountType || undefined,
+      discountValue: discountValue || undefined,
+      discountAmount,
       vatRate,
       vatAmount,
       total,
@@ -233,7 +246,7 @@ export const updateQuote = async (req, res, next) => {
       }
     }
 
-    const { lines, notes, validUntil, vatRate } = req.body;
+    const { lines, notes, validUntil, vatRate, discountType, discountValue } = req.body;
     const previousStatus = quote.status;
 
     // Determine what can be edited based on status
@@ -278,8 +291,24 @@ export const updateQuote = async (req, res, next) => {
       quote.vatRate = vatRate;
     }
 
-    quote.vatAmount = quote.subtotal * (quote.vatRate / 100);
-    quote.total = quote.subtotal + quote.vatAmount;
+    // Update discount
+    if (discountType !== undefined) {
+      quote.discountType = discountType || undefined;
+      quote.discountValue = discountValue || 0;
+    }
+
+    // Calculate discount amount
+    let discountAmt = 0;
+    if (quote.discountType && quote.discountValue > 0) {
+      discountAmt = quote.discountType === 'percentage'
+        ? quote.subtotal * (quote.discountValue / 100)
+        : Math.min(quote.discountValue, quote.subtotal);
+    }
+    quote.discountAmount = discountAmt;
+
+    const netTotal = quote.subtotal - discountAmt;
+    quote.vatAmount = netTotal * (quote.vatRate / 100);
+    quote.total = netTotal + quote.vatAmount;
 
     if (notes !== undefined) quote.notes = notes;
     if (validUntil) quote.validUntil = validUntil;

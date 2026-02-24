@@ -12,8 +12,11 @@ import RecurringInvoiceForm from './invoice/RecurringInvoiceForm';
 import InvoiceSummary from './invoice/InvoiceSummary';
 import { formatCurrency } from '../../utils/format';
 
-export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQuoteId, vatRate }) {
-  const { createInvoice } = useProjectStore();
+export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQuoteId, vatRate, editInvoice = null }) {
+  const { createInvoice, updateInvoice } = useProjectStore();
+  const isEditMode = !!editInvoice;
+  const isCustomEdit = isEditMode && editInvoice.invoiceType === 'custom';
+  const isStandardEdit = isEditMode && editInvoice.invoiceType === 'standard';
   const { addToast } = useToastStore();
   const { settings, fetchSettings } = useSettingsStore();
 
@@ -47,6 +50,10 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
     autoSend: false,
   });
 
+  // Discount (custom invoices)
+  const [discountType, setDiscountType] = useState('');
+  const [discountValue, setDiscountValue] = useState('');
+
   // Reminder opt-out
   const [skipReminders, setSkipReminders] = useState(false);
 
@@ -59,10 +66,43 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
       loadData();
       if (!settings) fetchSettings();
     }
-  }, [isOpen, project?._id, preselectedQuoteId]);
+  }, [isOpen, project?._id, preselectedQuoteId, editInvoice?._id]);
 
   const loadData = async () => {
     try {
+      // In edit mode, pre-fill from the invoice
+      if (isEditMode) {
+        if (isCustomEdit) {
+          setMode('custom');
+          setCustomLines(
+            editInvoice.customLines?.length > 0
+              ? editInvoice.customLines.map(l => ({
+                  description: l.description || '',
+                  quantity: l.quantity || 1,
+                  unitPrice: l.unitPrice || 0
+                }))
+              : [{ description: '', quantity: 1, unitPrice: 0 }]
+          );
+        } else {
+          setMode('standard');
+          setCustomLines([{ description: '', quantity: 1, unitPrice: 0 }]);
+        }
+        setNotes(editInvoice.notes || '');
+        setDiscountType(editInvoice.discountType || '');
+        setDiscountValue(editInvoice.discountValue || '');
+        setSkipReminders(!!editInvoice.skipReminders);
+        setAutoSend(false);
+        setShowAdvanced(false);
+        setCustomIssueDate('');
+        setSelectedEvents([]);
+        setSelectedQuotes([]);
+        setQuotePartials({});
+        setCollapsedSections({});
+        setUnbilledEvents([]);
+        setInvoiceableQuotes([]);
+        return;
+      }
+
       const [eventsRes, quotesRes] = await Promise.all([
         eventsApi.getUnbilled(project._id),
         quotesApi.getInvoiceable(project._id)
@@ -177,7 +217,7 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
   const addServiceLine = (service) => {
     const newLine = {
       description: service.description
-        ? `${service.name} - ${service.description}`
+        ? `${service.name}\n${service.description}`
         : service.name,
       quantity: service.defaultQuantity || 1,
       unitPrice: service.priceType === 'hourly' && service.estimatedHours
@@ -237,9 +277,17 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
     return customLines.reduce((sum, line) => sum + getCustomLineTotal(line), 0);
   };
 
+  const getDiscountAmount = () => {
+    if (mode !== 'custom' || !discountType || !discountValue) return 0;
+    const sub = getCustomTotal();
+    const val = parseFloat(discountValue) || 0;
+    if (val <= 0) return 0;
+    return discountType === 'percentage' ? sub * (val / 100) : Math.min(val, sub);
+  };
+
   const getSelectedTotal = () => {
     if (mode === 'custom') {
-      return getCustomTotal();
+      return getCustomTotal() - getDiscountAmount();
     }
     return getEventsTotal() + getQuotesTotal();
   };
@@ -259,6 +307,35 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
   };
 
   const handleSubmit = async () => {
+    // Edit mode: update existing invoice
+    if (isEditMode) {
+      setLoading(true);
+      try {
+        const payload = { notes: notes || '' };
+
+        if (isCustomEdit) {
+          if (!isCustomValid()) return;
+          payload.customLines = customLines.map(line => ({
+            description: line.description,
+            quantity: parseFloat(line.quantity) || 1,
+            unitPrice: parseFloat(line.unitPrice) || 0
+          }));
+          payload.discountType = discountType || undefined;
+          payload.discountValue = discountValue ? parseFloat(discountValue) : undefined;
+        }
+
+        await updateInvoice(editInvoice._id, payload);
+        addToast({ type: 'success', message: `Facture ${editInvoice.number} mise à jour` });
+        resetForm();
+        onClose();
+      } catch (error) {
+        addToast({ type: 'error', message: error.response?.data?.error || 'Erreur lors de la modification' });
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     if (mode === 'standard' && selectedEvents.length === 0 && selectedQuotes.length === 0) return;
     if (mode === 'custom' && !isCustomValid()) return;
     if (mode === 'recurring' && !isRecurringValid()) return;
@@ -299,6 +376,8 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
             quantity: parseFloat(line.quantity) || 1,
             unitPrice: parseFloat(line.unitPrice) || 0
           })),
+          discountType: discountType || undefined,
+          discountValue: discountValue ? parseFloat(discountValue) : undefined,
           notes: notes || undefined,
           skipReminders: skipReminders || undefined
         };
@@ -353,6 +432,8 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
     setNotes('');
     setAutoSend(false);
     setSkipReminders(false);
+    setDiscountType('');
+    setDiscountValue('');
     setMode('standard');
     setRecurringForm({
       lines: [{ description: '', quantity: 1, unitPrice: 0 }],
@@ -366,30 +447,78 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
     });
   };
 
-  const totalSelected = mode === 'standard'
-    ? selectedEvents.length + selectedQuotes.length
-    : mode === 'custom'
-      ? (isCustomValid() ? customLines.length : 0)
-      : (isRecurringValid() ? recurringForm.lines.length : 0);
+  const totalSelected = isEditMode
+    ? (isCustomEdit ? (isCustomValid() ? customLines.length : 0) : 1)
+    : mode === 'standard'
+      ? selectedEvents.length + selectedQuotes.length
+      : mode === 'custom'
+        ? (isCustomValid() ? customLines.length : 0)
+        : (isRecurringValid() ? recurringForm.lines.length : 0);
 
-  const submitLabel = mode === 'recurring' ? 'Créer la récurrence' : 'Créer la facture';
+  const submitLabel = isEditMode
+    ? `Modifier ${editInvoice?.number || 'la facture'}`
+    : mode === 'recurring' ? 'Créer la récurrence' : 'Créer la facture';
+
+  const modalTitle = isEditMode
+    ? `Modifier ${editInvoice?.number || 'la facture'}`
+    : 'Créer une facture';
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Créer une facture"
+      title={modalTitle}
       size="2xl"
     >
       <div className="flex flex-col -m-6">
-        {/* Mode selector */}
-        <InvoiceModeSelector mode={mode} setMode={setMode} />
+        {/* Mode selector — hidden in edit mode */}
+        {!isEditMode && <InvoiceModeSelector mode={mode} setMode={setMode} />}
 
         {/* Content - two columns */}
         <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
           {/* Left column */}
           <div className="flex-1 overflow-y-auto max-h-[50vh] lg:max-h-none px-6 py-4 lg:border-r border-slate-200 dark:border-slate-700/50">
-            {mode === 'standard' ? (
+            {isStandardEdit ? (
+              <div className="space-y-4">
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Les lignes d'une facture standard ne peuvent pas être modifiées. Vous pouvez modifier les notes ci-dessous.
+                </p>
+                {/* Read-only events */}
+                {editInvoice.events?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">Événements</p>
+                    {editInvoice.events.map((e, i) => (
+                      <div key={i} className="flex justify-between text-sm py-1.5 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
+                        <span className="text-slate-700 dark:text-slate-300">{e.description}</span>
+                        <span className="text-slate-900 dark:text-white font-medium">{formatCurrency(e.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Read-only quotes */}
+                {editInvoice.quotes?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">Devis</p>
+                    {editInvoice.quotes.map((q, i) => (
+                      <div key={i} className="flex justify-between text-sm py-1.5 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
+                        <span className="text-slate-700 dark:text-slate-300">{q.number}</span>
+                        <span className="text-slate-900 dark:text-white font-medium">{formatCurrency(q.subtotal)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Notes</label>
+                  <textarea
+                    value={notes}
+                    onChange={e => setNotes(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-dark-card text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    rows={3}
+                    placeholder="Notes optionnelles..."
+                  />
+                </div>
+              </div>
+            ) : mode === 'standard' ? (
               <StandardInvoiceForm
                 unbilledEvents={unbilledEvents}
                 invoiceableQuotes={invoiceableQuotes}
@@ -414,6 +543,11 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
                 notes={notes}
                 setNotes={setNotes}
                 onSelectService={addServiceLine}
+                discountType={discountType}
+                setDiscountType={setDiscountType}
+                discountValue={discountValue}
+                setDiscountValue={setDiscountValue}
+                getDiscountAmount={getDiscountAmount}
               />
             ) : (
               <RecurringInvoiceForm
@@ -435,6 +569,7 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
             getQuotesTotal={getQuotesTotal}
             getCustomTotal={getCustomTotal}
             getSelectedTotal={getSelectedTotal}
+            getDiscountAmount={getDiscountAmount}
             customLines={customLines}
             showAdvanced={showAdvanced}
             setShowAdvanced={setShowAdvanced}

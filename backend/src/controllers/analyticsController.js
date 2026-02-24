@@ -102,7 +102,7 @@ export const getRevenueStats = async (req, res, next) => {
             { $group: { _id: null, total: { $sum: '$total' } } }
           ],
           pending: [
-            { $match: { status: 'sent' } },
+            { $match: { status: { $in: ['sent', 'partial'] } } },
             {
               $group: {
                 _id: null,

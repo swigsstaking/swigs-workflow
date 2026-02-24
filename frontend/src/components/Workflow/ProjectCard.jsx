@@ -123,17 +123,17 @@ export default function ProjectCard({
       layout
       onClick={onClick}
       className={`
-        project-card group/card bg-white dark:bg-dark-card rounded-xl shadow-sm
+        project-card bg-white dark:bg-dark-card rounded-xl shadow-sm
         transition-shadow duration-200
         overflow-hidden select-none relative
         ${styleProps.className}
         ${isDragging ? 'shadow-xl ring-2 ring-primary-500 scale-105' : 'hover:shadow-md'}
       `}
-      style={{ ...styleProps.style, '--card-status-color': statusColor, pointerEvents: isDragging ? 'none' : 'auto' }}
+      style={{ ...styleProps.style, pointerEvents: isDragging ? 'none' : 'auto' }}
     >
       {isTopGradient && (
         <div
-          className="absolute top-0 left-0 right-0 h-[3px] rounded-t-xl z-[1] transition-all duration-500 ease-out group-hover/card:h-[4px]"
+          className="absolute top-0 left-0 right-0 h-[3px] rounded-t-xl z-[1]"
           style={{ background: `linear-gradient(90deg, ${statusColor} 0%, ${statusColor}88 60%, transparent 100%)` }}
         />
       )}

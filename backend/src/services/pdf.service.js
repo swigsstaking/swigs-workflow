@@ -150,9 +150,10 @@ const buildInvoiceLines = (invoice) => {
   // Custom lines
   if (invoice.customLines && invoice.customLines.length > 0) {
     for (const line of invoice.customLines) {
+      const { title, detail } = splitDescription(line.description);
       lines.push({
-        description: line.description,
-        detail: null,
+        description: title,
+        detail,
         quantity: line.quantity || 1,
         unitPrice: line.unitPrice || 0,
         total: line.total || 0
@@ -164,17 +165,35 @@ const buildInvoiceLines = (invoice) => {
 };
 
 /**
+ * Split a description on first newline into title (bold) + detail (muted)
+ */
+const splitDescription = (description) => {
+  if (!description) return { title: '', detail: null };
+  const nlIndex = description.indexOf('\n');
+  if (nlIndex > 0) {
+    return {
+      title: description.substring(0, nlIndex),
+      detail: description.substring(nlIndex + 1)
+    };
+  }
+  return { title: description, detail: null };
+};
+
+/**
  * Build lines array from quote
  */
 const buildQuoteLines = (quote) => {
   if (!quote.lines || quote.lines.length === 0) return [];
-  return quote.lines.map(line => ({
-    description: line.description,
-    detail: null,
-    quantity: line.quantity,
-    unitPrice: line.unitPrice,
-    total: line.total
-  }));
+  return quote.lines.map(line => {
+    const { title, detail } = splitDescription(line.description);
+    return {
+      description: title,
+      detail,
+      quantity: line.quantity,
+      unitPrice: line.unitPrice,
+      total: line.total
+    };
+  });
 };
 
 /**
@@ -212,6 +231,9 @@ export const generateInvoicePDF = async (invoice, project, settings) => {
     lines: buildInvoiceLines(invoice),
     totals: {
       subtotal: invoice.subtotal || 0,
+      discountType: invoice.discountType || null,
+      discountValue: invoice.discountValue || 0,
+      discountAmount: invoice.discountAmount || 0,
       vatRate,
       vatAmount: invoice.vatAmount || 0,
       total: invoice.total || 0
@@ -312,6 +334,9 @@ export const generateQuotePDF = async (quote, project, settings) => {
     lines: buildQuoteLines(quote),
     totals: {
       subtotal: quote.subtotal || 0,
+      discountType: quote.discountType || null,
+      discountValue: quote.discountValue || 0,
+      discountAmount: quote.discountAmount || 0,
       vatRate,
       vatAmount: quote.vatAmount || 0,
       total: quote.total || 0
@@ -358,7 +383,7 @@ export const generatePreviewHTML = (settings) => {
       { description: 'Licence logiciel annuelle', detail: null, quantity: 1, unitPrice: 250, total: 250 },
       { description: 'Hébergement serveur', detail: null, quantity: 1, unitPrice: 500, total: 500 }
     ],
-    totals: { subtotal, vatRate, vatAmount, total },
+    totals: { subtotal, vatRate, vatAmount, total, discountType: null, discountValue: 0, discountAmount: 0 },
     design,
     qrBillSvg: ''
   };

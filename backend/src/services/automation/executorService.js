@@ -207,37 +207,84 @@ const executeSendEmail = async (run, config) => {
 };
 
 /**
- * Check if a URL targets a private/internal network (SSRF protection)
+ * Check if an IPv4 address string targets a private/internal/cloud-metadata range.
+ * Used both for literal IPs in the URL and for DNS-resolved IPs.
  */
-const isUrlAllowed = (urlString) => {
+const isIpBlocked = (ip) => {
+  // Exact matches for cloud metadata services
+  const blockedExact = [
+    '169.254.169.254', // AWS / GCP / Azure IMDS
+    '168.63.129.16',   // Azure Wire Server / IMDS alternate
+    '100.100.100.200', // Alibaba Cloud metadata
+  ];
+  if (blockedExact.includes(ip)) return true;
+
+  const parts = ip.split('.');
+  if (parts.length !== 4 || !parts.every(p => /^\d+$/.test(p))) return false;
+
+  const [a, b] = parts.map(Number);
+
+  if (a === 0) return true;           // 0.0.0.0/8  (localhost equiv on Linux)
+  if (a === 10) return true;          // 10.0.0.0/8
+  if (a === 127) return true;         // 127.0.0.0/8 loopback
+  if (a === 169 && b === 254) return true; // 169.254.0.0/16 link-local
+  if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12
+  if (a === 192 && b === 168) return true; // 192.168.0.0/16
+  if (a === 198 && b === 51) return true;  // 198.51.100.0/24 TEST-NET-2
+  if (a === 203 && b === 0) return true;   // 203.0.113.0/24 TEST-NET-3
+  if (a === 240) return true;         // 240.0.0.0/4 reserved
+
+  return false;
+};
+
+/**
+ * Check if a URL targets a private/internal network (SSRF protection).
+ * Performs a DNS pre-resolution to defeat DNS-rebinding attacks.
+ * Exported for reuse in other services (e.g. settings validation).
+ */
+export const isUrlAllowed = async (urlString) => {
+  let parsed;
   try {
-    const parsed = new URL(urlString);
-    const hostname = parsed.hostname.toLowerCase();
-
-    // Block non-http(s) schemes
-    if (!['http:', 'https:'].includes(parsed.protocol)) return false;
-
-    // Block localhost
-    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') return false;
-
-    // Block .internal / .local domains
-    if (hostname.endsWith('.internal') || hostname.endsWith('.local')) return false;
-
-    // Block private IPs (10.x, 172.16-31.x, 192.168.x, 169.254.x link-local)
-    const parts = hostname.split('.');
-    if (parts.length === 4 && parts.every(p => /^\d+$/.test(p))) {
-      const [a, b] = parts.map(Number);
-      if (a === 10) return false;
-      if (a === 172 && b >= 16 && b <= 31) return false;
-      if (a === 192 && b === 168) return false;
-      if (a === 169 && b === 254) return false;
-      if (a === 0) return false;
-    }
-
-    return true;
+    parsed = new URL(urlString);
   } catch {
     return false;
   }
+
+  const hostname = parsed.hostname.toLowerCase();
+
+  // Block non-http(s) schemes
+  if (!['http:', 'https:'].includes(parsed.protocol)) return false;
+
+  // Block localhost variants
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') return false;
+
+  // Block .internal / .local / .localhost domains
+  if (
+    hostname.endsWith('.internal') ||
+    hostname.endsWith('.local') ||
+    hostname.endsWith('.localhost')
+  ) return false;
+
+  // If the hostname is a literal IPv4, check it directly
+  const ipv4Parts = hostname.split('.');
+  if (ipv4Parts.length === 4 && ipv4Parts.every(p => /^\d+$/.test(p))) {
+    if (isIpBlocked(hostname)) return false;
+    return true;
+  }
+
+  // For hostnames: resolve DNS to catch SSRF via DNS rebinding
+  try {
+    const { promises: dns } = await import('dns');
+    const addresses = await dns.resolve4(hostname);
+    for (const addr of addresses) {
+      if (isIpBlocked(addr)) return false;
+    }
+  } catch {
+    // DNS resolution failed — deny to be safe
+    return false;
+  }
+
+  return true;
 };
 
 /**
@@ -250,7 +297,7 @@ const executeWebhook = async (run, config) => {
     throw new Error('Webhook URL is required');
   }
 
-  if (!isUrlAllowed(webhookUrl)) {
+  if (!await isUrlAllowed(webhookUrl)) {
     throw new Error('Webhook URL targets a disallowed address');
   }
 

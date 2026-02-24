@@ -52,6 +52,7 @@ export const InvoiceStatusBadge = ({ status }) => {
   const statusConfig = {
     draft: { color: '#6B7280', label: 'Brouillon' },
     sent: { color: '#3B82F6', label: 'Envoyée' },
+    partial: { color: '#F59E0B', label: 'Partiel' },
     paid: { color: '#10B981', label: 'Payée' },
     cancelled: { color: '#EF4444', label: 'Annulée' }
   };

@@ -28,6 +28,8 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
     { description: '', quantity: 1, unitPrice: 0 }
   ]);
   const [notes, setNotes] = useState('');
+  const [discountType, setDiscountType] = useState('');
+  const [discountValue, setDiscountValue] = useState('');
   const [statusChangeWarning, setStatusChangeWarning] = useState(null);
 
   const statusTimeoutRef = useRef(null);
@@ -42,10 +44,14 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
           unitPrice: l.unitPrice
         })));
         setNotes(editQuote.notes || '');
+        setDiscountType(editQuote.discountType || '');
+        setDiscountValue(editQuote.discountValue || '');
       } else {
         // Reset form for new quote
         setLines([{ description: '', quantity: 1, unitPrice: 0 }]);
         setNotes('');
+        setDiscountType('');
+        setDiscountValue('');
       }
       setStatusChangeWarning(null);
     }
@@ -65,7 +71,7 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
   const addServiceLine = (service) => {
     const newLine = {
       description: service.description
-        ? `${service.name} - ${service.description}`
+        ? `${service.name}\n${service.description}`
         : service.name,
       quantity: service.defaultQuantity || 1,
       unitPrice: service.priceType === 'hourly' && service.estimatedHours
@@ -90,6 +96,17 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
     return lines.reduce((sum, line) => sum + (line.quantity * line.unitPrice), 0);
   };
 
+  const getDiscountAmount = () => {
+    const sub = getSubtotal();
+    const val = parseFloat(discountValue) || 0;
+    if (!discountType || val <= 0) return 0;
+    return discountType === 'percentage' ? sub * (val / 100) : Math.min(val, sub);
+  };
+
+  const getNetTotal = () => {
+    return getSubtotal() - getDiscountAmount();
+  };
+
   const getVatRate = () => {
     if (editQuote?.vatRate) return editQuote.vatRate;
     return settings?.invoicing?.defaultVatRate || 8.1;
@@ -106,7 +123,7 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
       if (isEditMode) {
         const payload = isNotesOnly
           ? { notes }
-          : { lines: validLines, notes };
+          : { lines: validLines, notes, discountType: discountType || undefined, discountValue: discountValue ? parseFloat(discountValue) : undefined };
 
         const result = await updateQuote(editQuote._id, payload);
 
@@ -123,7 +140,9 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
       } else {
         await createQuote(project._id, {
           lines: validLines,
-          notes
+          notes,
+          discountType: discountType || undefined,
+          discountValue: discountValue ? parseFloat(discountValue) : undefined
         });
       }
       onClose();
@@ -209,10 +228,12 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
             {lines.map((line, index) => (
               <div key={index} className="grid grid-cols-12 gap-2 items-start">
                 <div className="col-span-6">
-                  <Input
+                  <textarea
                     value={line.description}
                     onChange={(e) => updateLine(index, 'description', e.target.value)}
                     placeholder="Description..."
+                    rows={line.description?.includes('\n') ? 2 : 1}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-dark-card text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
                   />
                 </div>
                 <div className="col-span-2">
@@ -274,6 +295,40 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
           </div>
         )}
 
+        {/* Discount */}
+        {canFullEdit && (
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Rabais</p>
+            <div className="flex items-center gap-2">
+              <select
+                value={discountType}
+                onChange={(e) => { setDiscountType(e.target.value); if (!e.target.value) setDiscountValue(''); }}
+                className="px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-dark-card text-slate-900 dark:text-white"
+              >
+                <option value="">Aucun</option>
+                <option value="percentage">%</option>
+                <option value="fixed">CHF</option>
+              </select>
+              {discountType && (
+                <Input
+                  type="number"
+                  min="0"
+                  step={discountType === 'percentage' ? '1' : '0.01'}
+                  max={discountType === 'percentage' ? '100' : undefined}
+                  value={discountValue}
+                  onChange={(e) => setDiscountValue(e.target.value)}
+                  placeholder={discountType === 'percentage' ? '10' : '100.00'}
+                />
+              )}
+              {discountType && discountValue && (
+                <span className="text-sm text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                  -{formatCurrency(getDiscountAmount())}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Notes */}
         <Textarea
           label="Notes (optionnel)"
@@ -290,16 +345,32 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
               {formatCurrency(isNotesOnly ? editQuote.subtotal : getSubtotal())}
             </span>
           </div>
+          {getDiscountAmount() > 0 && !isNotesOnly && (
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-emerald-600 dark:text-emerald-400">Rabais{discountType === 'percentage' ? ` (${discountValue}%)` : ''}</span>
+              <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                -{formatCurrency(getDiscountAmount())}
+              </span>
+            </div>
+          )}
+          {isNotesOnly && editQuote.discountAmount > 0 && (
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-emerald-600 dark:text-emerald-400">Rabais</span>
+              <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                -{formatCurrency(editQuote.discountAmount)}
+              </span>
+            </div>
+          )}
           <div className="flex items-center justify-between mt-1">
             <span className="text-slate-600 dark:text-slate-400">TVA ({getVatRate()}%)</span>
             <span className="font-medium dark:text-slate-200">
-              {formatCurrency(isNotesOnly ? editQuote.vatAmount : getSubtotal() * (getVatRate() / 100))}
+              {formatCurrency(isNotesOnly ? editQuote.vatAmount : getNetTotal() * (getVatRate() / 100))}
             </span>
           </div>
           <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-200 dark:border-dark-border text-lg font-bold dark:text-white">
             <span>Total TTC</span>
             <span className="text-primary-600">
-              {formatCurrency(isNotesOnly ? editQuote.total : getSubtotal() * (1 + getVatRate() / 100))}
+              {formatCurrency(isNotesOnly ? editQuote.total : getNetTotal() * (1 + getVatRate() / 100))}
             </span>
           </div>
         </div>

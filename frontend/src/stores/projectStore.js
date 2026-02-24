@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { projectsApi, statusesApi, eventsApi, invoicesApi, quotesApi, historyApi } from '../services/api';
+import { trackEvent } from '../lib/posthog';
 
 export const useProjectStore = create((set, get) => ({
   // State
@@ -46,6 +47,7 @@ export const useProjectStore = create((set, get) => ({
         projects: [data.data, ...state.projects],
         loading: false
       }));
+      trackEvent('project_created', { project_name: data.data.name, client_name: data.data.client?.name });
       return data.data;
     } catch (error) {
       set({ error: error.message, loading: false });
@@ -78,6 +80,7 @@ export const useProjectStore = create((set, get) => ({
           ? { ...state.selectedProject, status: data.data.status }
           : state.selectedProject
       }));
+      trackEvent('project_status_changed', { status: data.data.status?.name });
       return data.data;
     } catch (error) {
       set({ error: error.message });
@@ -239,6 +242,7 @@ export const useProjectStore = create((set, get) => ({
       set(state => ({
         projectEvents: [data.data, ...state.projectEvents]
       }));
+      trackEvent('event_created', { type: data.data.type, hours: data.data.hours, amount: data.data.amount });
       // Refresh only the current project to update unbilled totals
       get().fetchProject(projectId);
       return data.data;
@@ -293,6 +297,7 @@ export const useProjectStore = create((set, get) => ({
           ? { ...state.selectedProject, invoiceCount: (state.selectedProject.invoiceCount || 0) + 1 }
           : state.selectedProject
       }));
+      trackEvent('invoice_created', { invoice_number: data.data.number, total: data.data.total });
       // Refresh events to update billed status — no need to refetch all projects
       get().fetchProjectEvents(projectId);
       return data.data;
@@ -305,6 +310,33 @@ export const useProjectStore = create((set, get) => ({
   updateInvoiceStatus: async (id, status) => {
     try {
       const { data } = await invoicesApi.changeStatus(id, status);
+      set(state => ({
+        projectInvoices: state.projectInvoices.map(i => i._id === id ? data.data : i)
+      }));
+      trackEvent('invoice_status_changed', { status, invoice_number: data.data.number });
+      return data.data;
+    } catch (error) {
+      set({ error: error.message });
+      throw error;
+    }
+  },
+
+  updateInvoice: async (id, invoiceData) => {
+    try {
+      const { data } = await invoicesApi.update(id, invoiceData);
+      set(state => ({
+        projectInvoices: state.projectInvoices.map(i => i._id === id ? data.data : i)
+      }));
+      return data.data;
+    } catch (error) {
+      set({ error: error.message });
+      throw error;
+    }
+  },
+
+  recordInvoicePayment: async (id, paymentData) => {
+    try {
+      const { data } = await invoicesApi.recordPayment(id, paymentData);
       set(state => ({
         projectInvoices: state.projectInvoices.map(i => i._id === id ? data.data : i)
       }));
@@ -348,6 +380,7 @@ export const useProjectStore = create((set, get) => ({
       set(state => ({
         projectQuotes: [data.data, ...state.projectQuotes]
       }));
+      trackEvent('quote_created', { quote_number: data.data.number, total: data.data.total });
       return data.data;
     } catch (error) {
       set({ error: error.message });
@@ -374,6 +407,7 @@ export const useProjectStore = create((set, get) => ({
       set(state => ({
         projectQuotes: state.projectQuotes.map(q => q._id === id ? data.data : q)
       }));
+      trackEvent('quote_status_changed', { status, quote_number: data.data.number });
       return data.data;
     } catch (error) {
       set({ error: error.message });

@@ -47,10 +47,10 @@ export const getDashboard = async (req, res, next) => {
       settings,
       vatAgg
     ] = await Promise.all([
-      // Overdue invoices (sent, past due date)
+      // Overdue invoices (sent or partial, past due date)
       Invoice.find({
         ...projectFilter,
-        status: 'sent',
+        status: { $in: ['sent', 'partial'] },
         dueDate: { $lt: now }
       }).populate({ path: 'project', select: 'client name' }).lean(),
 
@@ -80,9 +80,9 @@ export const getDashboard = async (req, res, next) => {
         paidAt: { $ne: null }
       }).populate({ path: 'project', select: 'client name' }).sort('-paidAt').limit(500).lean(),
 
-      // Recovery rate via aggregation (count sent vs paid, no full docs in memory)
+      // Recovery rate via aggregation (count sent/partial vs paid, no full docs in memory)
       Invoice.aggregate([
-        { $match: { ...projectFilter, status: { $in: ['sent', 'paid'] } } },
+        { $match: { ...projectFilter, status: { $in: ['sent', 'partial', 'paid'] } } },
         { $group: { _id: '$status', count: { $sum: 1 } } }
       ]),
 
@@ -260,7 +260,7 @@ export const getDashboard = async (req, res, next) => {
     };
 
     // 6. Recovery rate (from aggregation)
-    const sentCount = recoveryAgg.find(r => r._id === 'sent')?.count || 0;
+    const sentCount = (recoveryAgg.find(r => r._id === 'sent')?.count || 0) + (recoveryAgg.find(r => r._id === 'partial')?.count || 0);
     const paidCount = recoveryAgg.find(r => r._id === 'paid')?.count || 0;
     const totalSentAndPaid = sentCount + paidCount;
     const recoveryRate = totalSentAndPaid > 0
@@ -281,7 +281,7 @@ export const getDashboard = async (req, res, next) => {
     const pendingSent = overdueInvoices.concat(
       await Invoice.find({
         ...projectFilter,
-        status: 'sent',
+        status: { $in: ['sent', 'partial'] },
         dueDate: { $gte: now }
       }).populate({ path: 'project', select: 'client name' }).lean()
     );

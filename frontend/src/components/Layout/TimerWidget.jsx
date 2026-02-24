@@ -77,9 +77,9 @@ export default function TimerWidget() {
     <div className="relative flex items-center">
       {/* Stop confirmation popover */}
       {showStopConfirm && (
-        <div className="absolute top-full right-0 mt-2.5 w-72 bg-white dark:bg-[#161b22] border border-slate-200 dark:border-white/[0.1] rounded-xl shadow-xl dark:shadow-2xl dark:shadow-black/40 p-3.5 z-50">
+        <div className="absolute top-full right-0 mt-2.5 w-72 bg-white dark:bg-dark-card border border-slate-200 dark:border-white/[0.1] rounded-xl shadow-xl dark:shadow-2xl dark:shadow-black/40 p-3.5 z-50">
           <p className="text-xs font-semibold text-slate-900 dark:text-white mb-1.5">Arrêter le timer</p>
-          <p className="text-[11px] text-slate-500 mb-3">
+          <p className="text-xs text-slate-500 mb-3">
             {formatElapsed(elapsed)} travaillées sur <span className="text-slate-700 dark:text-slate-400">{projectName}</span>
           </p>
           <input
@@ -109,9 +109,9 @@ export default function TimerWidget() {
 
       {/* Discard confirmation popover */}
       {showDiscardConfirm && (
-        <div className="absolute top-full right-0 mt-2.5 w-64 bg-white dark:bg-[#161b22] border border-slate-200 dark:border-white/[0.1] rounded-xl shadow-xl dark:shadow-2xl dark:shadow-black/40 p-3.5 z-50">
+        <div className="absolute top-full right-0 mt-2.5 w-64 bg-white dark:bg-dark-card border border-slate-200 dark:border-white/[0.1] rounded-xl shadow-xl dark:shadow-2xl dark:shadow-black/40 p-3.5 z-50">
           <p className="text-xs font-semibold text-slate-900 dark:text-white mb-1">Supprimer le timer ?</p>
-          <p className="text-[11px] text-slate-500 mb-3">Le temps enregistré sera perdu.</p>
+          <p className="text-xs text-slate-500 mb-3">Le temps enregistré sera perdu.</p>
           <div className="flex gap-2">
             <button
               onClick={handleDiscardConfirm}
@@ -149,7 +149,7 @@ export default function TimerWidget() {
         <span className="text-[13px] font-mono font-medium text-slate-900 dark:text-white tabular-nums">
           {formatElapsed(elapsed)}
         </span>
-        <span className="text-[11px] text-slate-500 hidden sm:inline max-w-[80px] truncate">
+        <span className="text-xs text-slate-500 hidden sm:inline max-w-[80px] truncate">
           {projectName}
         </span>
 

@@ -1,6 +1,7 @@
 import Settings from '../models/Settings.js';
 import History from '../models/History.js';
 import { encrypt, decrypt } from '../utils/crypto.js';
+import { isUrlAllowed } from '../services/automation/executorService.js';
 
 function isValidIBAN(iban) {
   if (!iban) return true; // Optional field
@@ -110,6 +111,11 @@ export const updateSettings = async (req, res, next) => {
     // Support both `cms` and `cmsIntegration` keys from frontend
     const cmsPayload = cmsIntegration || cms;
     if (cmsPayload) {
+      // Validate apiUrl against SSRF blocklist before saving
+      if (cmsPayload.apiUrl && !(await isUrlAllowed(cmsPayload.apiUrl))) {
+        return res.status(400).json({ success: false, error: 'URL CMS invalide ou non autorisée' });
+      }
+
       const cmsData = { ...(settings.cmsIntegration?.toObject ? settings.cmsIntegration.toObject() : {}), ...cmsPayload };
       // If serviceToken is empty/absent, keep existing value
       if (!cmsData.serviceToken || cmsData.serviceToken === '') {

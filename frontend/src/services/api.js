@@ -90,7 +90,8 @@ export const invoicesApi = {
   changeStatus: (id, status) => api.patch(`/invoices/${id}/status`, { status }),
   delete: (id) => api.delete(`/invoices/${id}`),
   send: (id) => api.post(`/invoices/${id}/send`),
-  getPdf: (id) => api.get(`/invoices/${id}/pdf`, { responseType: 'blob' })
+  getPdf: (id) => api.get(`/invoices/${id}/pdf`, { responseType: 'blob' }),
+  recordPayment: (id, data) => api.post(`/invoices/${id}/payments`, data)
 };
 
 // Quotes
@@ -103,7 +104,8 @@ export const quotesApi = {
   update: (id, data) => api.put(`/quotes/${id}`, data),
   changeStatus: (id, status) => api.patch(`/quotes/${id}/status`, { status }),
   delete: (id) => api.delete(`/quotes/${id}`),
-  send: (id) => api.post(`/quotes/${id}/send`)
+  send: (id) => api.post(`/quotes/${id}/send`),
+  getPdf: (id) => api.get(`/quotes/${id}/pdf`, { responseType: 'blob' })
 };
 
 // History

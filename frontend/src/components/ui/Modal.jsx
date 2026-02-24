@@ -10,6 +10,7 @@ export default function Modal({
   size = 'md'
 }) {
   const modalRef = useRef(null);
+  const titleId = useRef(`modal-title-${Math.random().toString(36).slice(2)}`).current;
 
   // Close on escape
   useEffect(() => {
@@ -82,6 +83,9 @@ export default function Modal({
           <div className="absolute inset-0 grid place-items-center p-4 pointer-events-none">
             <motion.div
               ref={modalRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={title ? titleId : undefined}
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -97,7 +101,7 @@ export default function Modal({
             >
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-dark-border shrink-0">
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{title}</h2>
+                <h2 id={titleId} className="text-lg font-semibold text-slate-900 dark:text-white">{title}</h2>
                 <button
                   onClick={onClose}
                   className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-hover rounded-lg transition-colors"

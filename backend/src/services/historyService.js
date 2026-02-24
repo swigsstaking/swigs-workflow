@@ -87,6 +87,10 @@ export const historyService = {
     return this.log(projectId, 'invoice_sent', `Facture ${invoiceNumber} envoyée`, { invoiceNumber });
   },
 
+  async invoicePaymentReceived(projectId, invoiceNumber, amount) {
+    return this.log(projectId, 'invoice_payment_received', `Paiement de ${amount} CHF reçu pour facture ${invoiceNumber}`, { invoiceNumber, amount });
+  },
+
   async invoicePaid(projectId, invoiceNumber) {
     return this.log(projectId, 'invoice_paid', `Facture ${invoiceNumber} payée`, { invoiceNumber });
   },

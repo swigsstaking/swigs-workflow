@@ -30,13 +30,14 @@ export default function LinesEditor({
           className="grid grid-cols-12 gap-2 items-center p-2 rounded-lg bg-slate-50/80 dark:bg-slate-800/30"
         >
           <div className="col-span-6">
-            <input
-              type="text"
+            <textarea
               value={line.description}
               onChange={(e) => updateLine(index, 'description', e.target.value)}
               placeholder="Description..."
               disabled={disabled}
-              className="w-full px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 disabled:opacity-50 disabled:cursor-not-allowed"
+              rows={line.description?.includes?.('\n') ? 2 : 1}
+              aria-label={`Description ligne ${index + 1}`}
+              className="w-full px-2 py-1.5 text-sm rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 disabled:opacity-50 disabled:cursor-not-allowed resize-none"
             />
           </div>
           <div className="col-span-2">
@@ -48,6 +49,7 @@ export default function LinesEditor({
               onChange={(e) => updateLine(index, 'quantity', e.target.value === '' ? '' : e.target.value)}
               onBlur={(e) => updateLine(index, 'quantity', parseFloat(e.target.value) || 1)}
               disabled={disabled}
+              aria-label={`Quantité ligne ${index + 1}`}
               className="w-full px-2 py-1.5 text-sm text-center rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
             />
           </div>
@@ -60,6 +62,7 @@ export default function LinesEditor({
               onChange={(e) => updateLine(index, 'unitPrice', e.target.value === '' ? '' : e.target.value)}
               onBlur={(e) => updateLine(index, 'unitPrice', parseFloat(e.target.value) || 0)}
               disabled={disabled}
+              aria-label={`Prix ligne ${index + 1}`}
               className="w-full px-2 py-1.5 text-sm text-center rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
             />
           </div>

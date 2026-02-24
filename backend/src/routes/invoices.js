@@ -7,7 +7,8 @@ import {
   changeInvoiceStatus,
   deleteInvoice,
   getInvoicePDF,
-  sendInvoice
+  sendInvoice,
+  recordPayment
 } from '../controllers/invoiceController.js';
 import { validate } from '../middleware/validate.js';
 
@@ -31,9 +32,12 @@ router.route('/:id')
 
 router.route('/:id/status')
   .patch(
-    validate({ body: { status: 'required|string|in:draft,sent,paid,cancelled' } }),
+    validate({ body: { status: 'required|string|in:draft,sent,paid,partial,cancelled' } }),
     changeInvoiceStatus
   );
+
+router.route('/:id/payments')
+  .post(recordPayment);
 
 router.route('/:id/pdf')
   .get(pdfLimiter, getInvoicePDF);

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { timerApi } from '../services/api';
+import { trackEvent } from '../lib/posthog';
 
 export const useTimerStore = create((set, get) => ({
   activeTimer: null,
@@ -24,6 +25,7 @@ export const useTimerStore = create((set, get) => ({
     try {
       const { data } = await timerApi.start(payload);
       set({ activeTimer: data.data, loading: false });
+      trackEvent('timer_started', { project_id: payload?.projectId });
       get()._startTick();
     } catch (err) {
       set({ loading: false });
@@ -55,6 +57,8 @@ export const useTimerStore = create((set, get) => ({
     try {
       const { data } = await timerApi.stop(payload);
       get()._stopTick();
+      const elapsed = get().elapsed;
+      trackEvent('timer_stopped', { duration_seconds: Math.round(elapsed / 1000) });
       set({ activeTimer: null, elapsed: 0 });
       return data.data; // returns created event
     } catch (err) {

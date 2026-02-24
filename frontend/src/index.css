@@ -215,10 +215,6 @@ html.dark {
   letter-spacing: -0.02em;
 }
 
-/* V2 Card hover glow */
-[data-theme="v2"].dark .card-hover:hover {
-  box-shadow: 0 0 20px -5px rgb(var(--primary-500) / 0.15);
-}
 
 /* V2 Buttons — Gradient + glow */
 [data-theme="v2"] button[data-variant="primary"] {
@@ -282,13 +278,6 @@ html.dark {
   box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.5), 0 0 40px -10px rgb(var(--primary-500) / 0.1);
 }
 
-/* V2 Project Cards — Hover glow */
-[data-theme="v2"] .project-card {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-[data-theme="v2"] .project-card:hover {
-  box-shadow: 0 0 30px -8px var(--card-status-color, rgb(var(--primary-500) / 0.15));
-}
 
 /* V2 KPI Cards */
 [data-theme="v2"].dark .kpi-card {

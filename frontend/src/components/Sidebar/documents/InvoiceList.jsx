@@ -1,7 +1,7 @@
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import {
-  Receipt, Plus, Send, Check, MoreVertical, Trash2, Mail, Bell, BellOff, ExternalLink, Link2, Clock, CheckCircle, XCircle, FileDown
+  Receipt, Plus, Send, Check, MoreVertical, Trash2, Mail, Bell, BellOff, ExternalLink, Link2, Clock, CheckCircle, XCircle, FileDown, Pencil, CreditCard
 } from 'lucide-react';
 import Button from '../../ui/Button';
 import { InvoiceStatusBadge } from '../../ui/Badge';
@@ -25,6 +25,8 @@ export default function InvoiceList({
   onStatusChange,
   onDelete,
   onShowInvoiceModal,
+  onEdit,
+  onRecordPayment,
   onSendReminder,
   onSendEmail,
   onGeneratePortalLink,
@@ -85,14 +87,21 @@ export default function InvoiceList({
                   <InvoiceStatusBadge status={invoice.status} />
 
                   {/* Overdue badge */}
-                  {invoice.status === 'sent' && new Date(invoice.dueDate) < new Date() && (
+                  {['sent', 'partial'].includes(invoice.status) && new Date(invoice.dueDate) < new Date() && (
                     <span className="px-1.5 py-0.5 text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded">
                       Retard {getDaysOverdue(invoice.dueDate)}j
                     </span>
                   )}
 
+                  {/* Paid amount for partial invoices */}
+                  {invoice.status === 'partial' && invoice.paidAmount > 0 && (
+                    <span className="px-1.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded">
+                      {formatCurrency(invoice.paidAmount)} / {formatCurrency(invoice.total)}
+                    </span>
+                  )}
+
                   {/* Skip reminders badge */}
-                  {invoice.skipReminders && invoice.status === 'sent' && (
+                  {invoice.skipReminders && ['sent', 'partial'].includes(invoice.status) && (
                     <span className="px-1.5 py-0.5 text-xs font-medium bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 rounded" title="Relances désactivées">
                       <BellOff className="w-3 h-3 inline" />
                     </span>
@@ -134,7 +143,7 @@ export default function InvoiceList({
                               </div>
                             ))}
                           </div>
-                          {invoice.nextReminderDate && invoice.status === 'sent' && (
+                          {invoice.nextReminderDate && ['sent', 'partial'].includes(invoice.status) && (
                             <p className="mt-2 pt-2 border-t border-slate-100 dark:border-dark-border text-xs text-slate-500 dark:text-slate-400">
                               Prochaine : {format(new Date(invoice.nextReminderDate), 'dd MMM yyyy', { locale: fr })}
                             </p>
@@ -198,8 +207,30 @@ export default function InvoiceList({
                           Générer lien portail
                         </button>
 
+                        {/* Edit draft */}
+                        {invoice.status === 'draft' && (
+                          <button
+                            onClick={() => { onEdit(invoice); setActiveMenu(null); }}
+                            className="w-full px-4 py-2 text-sm text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-dark-hover flex items-center gap-2"
+                          >
+                            <Pencil className="w-4 h-4" />
+                            Modifier
+                          </button>
+                        )}
+
+                        {/* Record payment */}
+                        {['sent', 'partial'].includes(invoice.status) && (
+                          <button
+                            onClick={() => { onRecordPayment(invoice); setActiveMenu(null); }}
+                            className="w-full px-4 py-2 text-sm text-left text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 flex items-center gap-2"
+                          >
+                            <CreditCard className="w-4 h-4" />
+                            Enregistrer paiement
+                          </button>
+                        )}
+
                         {/* Send reminder */}
-                        {invoice.status === 'sent' && new Date(invoice.dueDate) < new Date() && (
+                        {['sent', 'partial'].includes(invoice.status) && new Date(invoice.dueDate) < new Date() && (
                           <button
                             onClick={() => onSendReminder(invoice._id)}
                             className="w-full px-4 py-2 text-sm text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-dark-hover flex items-center gap-2"
@@ -210,7 +241,7 @@ export default function InvoiceList({
                         )}
 
                         {/* Toggle reminders */}
-                        {settings?.reminders?.enabled && invoice.status === 'sent' && (
+                        {settings?.reminders?.enabled && ['sent', 'partial'].includes(invoice.status) && (
                           <button
                             onClick={() => {
                               onToggleSkipReminders(invoice._id, !invoice.skipReminders);
@@ -252,13 +283,13 @@ export default function InvoiceList({
                             Marquer envoyée
                           </button>
                         )}
-                        {invoice.status === 'sent' && (
+                        {['sent', 'partial'].includes(invoice.status) && (
                           <button
                             onClick={() => onStatusChange(invoice._id, 'paid')}
                             className="w-full px-4 py-2 text-sm text-left text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 flex items-center gap-2"
                           >
                             <Check className="w-4 h-4" />
-                            Marquer payée
+                            Marquer payée (totalité)
                           </button>
                         )}
                         <button

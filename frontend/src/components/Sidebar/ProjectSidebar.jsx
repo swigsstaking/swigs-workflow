@@ -69,20 +69,33 @@ export default function ProjectSidebar({ project, isOpen, onClose }) {
   return (
     <AnimatePresence>
       {isOpen && project && (
-        <motion.aside
-          initial={{ x: '100%' }}
-          animate={{ x: 0 }}
-          exit={{ x: '100%' }}
-          transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="
-            fixed top-[41px] right-0 bottom-0
-            w-full md:w-[480px] max-w-full bg-white dark:bg-dark-card
-            border-l border-slate-200 dark:border-dark-border
-            shadow-xl
-            flex flex-col
-            z-30
-          "
-        >
+        <>
+          {/* Mobile backdrop — closes sidebar on tap, hidden on desktop */}
+          <motion.div
+            key="sidebar-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-20 bg-black/40 md:hidden"
+            onClick={onClose}
+            aria-hidden="true"
+          />
+
+          <motion.aside
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="
+              fixed top-[41px] right-0 bottom-0
+              w-full md:w-[480px] max-w-full bg-white dark:bg-dark-card
+              border-l border-slate-200 dark:border-dark-border
+              shadow-xl
+              flex flex-col
+              z-30
+            "
+          >
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-dark-border">
             <div className="flex-1 min-w-0">
@@ -102,10 +115,13 @@ export default function ProjectSidebar({ project, isOpen, onClose }) {
           </div>
 
           {/* Tabs */}
-          <div className="flex border-b border-slate-200 dark:border-dark-border">
+          <div role="tablist" aria-label="Sections du projet" className="flex border-b border-slate-200 dark:border-dark-border">
             {tabs.map(tab => (
               <button
                 key={tab.id}
+                role="tab"
+                aria-selected={sidebarTab === tab.id}
+                aria-controls={`tabpanel-${tab.id}`}
                 onClick={() => setSidebarTab(tab.id)}
                 className={`
                   flex-1 flex items-center justify-center gap-2
@@ -124,10 +140,16 @@ export default function ProjectSidebar({ project, isOpen, onClose }) {
           </div>
 
           {/* Content */}
-          <div className="flex-1 overflow-y-auto">
+          <div
+            role="tabpanel"
+            id={`tabpanel-${sidebarTab}`}
+            aria-labelledby={sidebarTab}
+            className="flex-1 overflow-y-auto"
+          >
             {renderTabContent()}
           </div>
-        </motion.aside>
+          </motion.aside>
+        </>
       )}
     </AnimatePresence>
   );

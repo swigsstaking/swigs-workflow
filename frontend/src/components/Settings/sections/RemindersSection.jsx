@@ -452,7 +452,7 @@ export default function RemindersSection({ settings, onSettingsUpdate }) {
             {/* Start label */}
             <div className="flex flex-col items-center flex-shrink-0 w-14">
               <Clock className="w-4 h-4 text-slate-400 dark:text-slate-500 mb-1" />
-              <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 text-center leading-tight">
+              <span className="text-xs font-medium text-slate-400 dark:text-slate-500 text-center leading-tight">
                 Échéance
               </span>
             </div>
@@ -464,10 +464,10 @@ export default function RemindersSection({ settings, onSettingsUpdate }) {
                 {/* Node */}
                 <div className="flex flex-col items-center flex-shrink-0 px-1">
                   <div className={`w-3 h-3 rounded-full ${tier.dotBg} ring-2 ring-white dark:ring-dark-card shadow-sm mb-1`} />
-                  <span className={`text-[11px] font-semibold ${tier.badgeBg} px-1.5 py-0.5 rounded-full whitespace-nowrap`}>
+                  <span className={`text-xs font-semibold ${tier.badgeBg} px-1.5 py-0.5 rounded-full whitespace-nowrap`}>
                     {tier.badge}
                   </span>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 text-center leading-tight max-w-[60px]">
+                  <span className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 text-center leading-tight max-w-[60px]">
                     {tier.label}
                   </span>
                 </div>

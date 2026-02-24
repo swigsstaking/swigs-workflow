@@ -1,9 +1,19 @@
 import express from 'express';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
+import rateLimit from 'express-rate-limit';
 import User from '../models/User.js';
 import Session from '../models/Session.js';
 import { generateToken, requireAuth } from '../middleware/auth.js';
+
+// Strict rate limiter for the deprecated sso-verify endpoint (5 req/min per IP)
+const ssoVerifyLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  message: { error: 'Trop de tentatives. Réessayez dans une minute.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 const router = express.Router();
 
@@ -248,7 +258,7 @@ router.post('/exchange', async (req, res) => {
  * DEPRECATED: Use OAuth PKCE flow instead (GET /api/auth/login)
  * Kept for backward compatibility
  */
-router.post('/sso-verify', async (req, res) => {
+router.post('/sso-verify', ssoVerifyLimiter, async (req, res) => {
   console.warn('DEPRECATED: /sso-verify called. Migrate to OAuth PKCE flow.');
 
   try {

@@ -51,7 +51,6 @@ function SortableProjectCard({ project, cardStyle, cardSize, onProjectClick, isA
       style={style}
       {...attributes}
       {...listeners}
-      className="touch-none"
     >
       <ProjectCard
         project={project}
@@ -90,7 +89,7 @@ export default function WorkflowGrid({ projects, onProjectClick, onPositionsChan
     }),
     useSensor(TouchSensor, {
       activationConstraint: {
-        delay: 200, // Short delay for touch to distinguish from tap
+        delay: 250, // Longer delay for touch to clearly distinguish scroll from drag
         tolerance: 5
       }
     })

@@ -137,7 +137,9 @@ export const createInvoice = async (req, res, next) => {
       notes,
       dueDate,
       issueDate,
-      skipReminders
+      skipReminders,
+      discountType,
+      discountValue
     } = req.body;
 
     // Verify project ownership
@@ -180,8 +182,18 @@ export const createInvoice = async (req, res, next) => {
       }));
 
       const subtotal = processedLines.reduce((sum, line) => sum + line.total, 0);
-      const vatAmount = subtotal * (vatRate / 100);
-      const total = subtotal + vatAmount;
+
+      // Calculate discount
+      let discountAmt = 0;
+      if (discountType && discountValue > 0) {
+        discountAmt = discountType === 'percentage'
+          ? subtotal * (discountValue / 100)
+          : Math.min(discountValue, subtotal);
+      }
+
+      const netTotal = subtotal - discountAmt;
+      const vatAmount = netTotal * (vatRate / 100);
+      const total = netTotal + vatAmount;
 
       // Create custom invoice
       invoice = await Invoice.create({
@@ -192,6 +204,9 @@ export const createInvoice = async (req, res, next) => {
         quotes: [],
         customLines: processedLines,
         subtotal,
+        discountType: discountType || undefined,
+        discountValue: discountValue || undefined,
+        discountAmount: discountAmt,
         vatRate,
         vatAmount,
         total,
@@ -433,7 +448,7 @@ export const updateInvoice = async (req, res, next) => {
       });
     }
 
-    const { notes, dueDate, vatRate, customLines } = req.body;
+    const { notes, dueDate, vatRate, customLines, discountType, discountValue } = req.body;
 
     if (notes !== undefined) invoice.notes = notes;
     if (dueDate) invoice.dueDate = dueDate;
@@ -448,15 +463,29 @@ export const updateInvoice = async (req, res, next) => {
       }));
       invoice.customLines = processedLines;
       invoice.subtotal = processedLines.reduce((sum, line) => sum + line.total, 0);
-      invoice.vatAmount = invoice.subtotal * (invoice.vatRate / 100);
-      invoice.total = invoice.subtotal + invoice.vatAmount;
+    }
+
+    // Update discount
+    if (discountType !== undefined) {
+      invoice.discountType = discountType || undefined;
+      invoice.discountValue = discountValue || 0;
     }
 
     if (vatRate !== undefined) {
       invoice.vatRate = vatRate;
-      invoice.vatAmount = invoice.subtotal * (vatRate / 100);
-      invoice.total = invoice.subtotal + invoice.vatAmount;
     }
+
+    // Recalculate totals with discount
+    let discountAmt = 0;
+    if (invoice.discountType && invoice.discountValue > 0) {
+      discountAmt = invoice.discountType === 'percentage'
+        ? invoice.subtotal * (invoice.discountValue / 100)
+        : Math.min(invoice.discountValue, invoice.subtotal);
+    }
+    invoice.discountAmount = discountAmt;
+    const netTotal = invoice.subtotal - discountAmt;
+    invoice.vatAmount = netTotal * (invoice.vatRate / 100);
+    invoice.total = netTotal + invoice.vatAmount;
 
     await invoice.save();
 
@@ -491,6 +520,7 @@ export const changeInvoiceStatus = async (req, res, next) => {
     const ALLOWED_TRANSITIONS = {
       'draft': ['sent', 'cancelled'],
       'sent': ['paid', 'cancelled'],
+      'partial': ['paid', 'cancelled'],
       'paid': ['cancelled'],
       'cancelled': []
     };
@@ -506,9 +536,10 @@ export const changeInvoiceStatus = async (req, res, next) => {
     const oldStatus = invoice.status;
     invoice.status = status;
 
-    // Set paid date if status is paid
+    // Set paid date and paidAmount if status is paid (direct mark as paid)
     if (status === 'paid' && !invoice.paidAt) {
       invoice.paidAt = new Date();
+      invoice.paidAmount = invoice.total;
     }
 
     // If cancelled, unbill the events and quotes (with compensatory rollback)
@@ -621,6 +652,83 @@ export const changeInvoiceStatus = async (req, res, next) => {
   }
 };
 
+// @desc    Record a payment on an invoice
+// @route   POST /api/invoices/:id/payments
+export const recordPayment = async (req, res, next) => {
+  try {
+    const { amount, date, method, notes } = req.body;
+    const invoice = await Invoice.findById(req.params.id).populate('project');
+
+    if (!invoice) {
+      return res.status(404).json({ success: false, error: 'Facture non trouvée' });
+    }
+
+    // Verify project ownership
+    if (req.user) {
+      if (!invoice.project.userId) {
+        return res.status(403).json({ success: false, error: 'Ce projet n\'a pas de propriétaire assigné' });
+      }
+      if (invoice.project.userId.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ success: false, error: 'Accès refusé' });
+      }
+    }
+
+    // Only sent or partial invoices can receive payments
+    if (!['sent', 'partial'].includes(invoice.status)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Seules les factures envoyées ou partiellement payées peuvent recevoir un paiement'
+      });
+    }
+
+    // Validate amount
+    const paymentAmount = parseFloat(amount);
+    if (!paymentAmount || paymentAmount <= 0) {
+      return res.status(400).json({ success: false, error: 'Le montant doit être supérieur à 0' });
+    }
+
+    // Cap to remaining amount
+    const remaining = invoice.total - (invoice.paidAmount || 0);
+    const finalAmount = Math.min(paymentAmount, remaining);
+
+    // Push payment
+    invoice.payments.push({
+      amount: finalAmount,
+      date: date ? new Date(date) : new Date(),
+      method: method || 'bank_transfer',
+      notes: notes || undefined
+    });
+
+    // Update paidAmount
+    invoice.paidAmount = (invoice.paidAmount || 0) + finalAmount;
+
+    // Update status
+    if (invoice.paidAmount >= invoice.total) {
+      invoice.status = 'paid';
+      invoice.paidAt = new Date();
+    } else {
+      invoice.status = 'partial';
+    }
+
+    await invoice.save();
+
+    // Log history
+    await historyService.invoicePaymentReceived(
+      invoice.project._id,
+      invoice.number,
+      finalAmount
+    );
+
+    if (invoice.status === 'paid') {
+      await historyService.invoicePaid(invoice.project._id, invoice.number);
+    }
+
+    res.json({ success: true, data: invoice });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Delete invoice
 // @route   DELETE /api/invoices/:id
 export const deleteInvoice = async (req, res, next) => {
@@ -641,11 +749,11 @@ export const deleteInvoice = async (req, res, next) => {
       }
     }
 
-    // Block deletion of sent or paid invoices
-    if (['paid', 'sent'].includes(invoice.status)) {
+    // Block deletion of sent, partial or paid invoices
+    if (['paid', 'sent', 'partial'].includes(invoice.status)) {
       return res.status(400).json({
         success: false,
-        error: 'Impossible de supprimer une facture envoyée ou payée. Annulez-la d\'abord.'
+        error: 'Impossible de supprimer une facture envoyée, partiellement payée ou payée. Annulez-la d\'abord.'
       });
     }
 

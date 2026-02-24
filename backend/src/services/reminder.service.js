@@ -228,7 +228,7 @@ export const checkOverdueInvoices = async () => {
 
         // Find overdue invoices for this user (skip those with reminders disabled)
         const overdueInvoices = await Invoice.find({
-          status: 'sent',
+          status: { $in: ['sent', 'partial'] },
           dueDate: { $lt: now },
           skipReminders: { $ne: true }
         }).populate({
@@ -308,7 +308,7 @@ export const sendManualReminder = async (invoiceId, userId) => {
     }
 
     // Check if invoice is overdue
-    if (invoice.status !== 'sent') {
+    if (!['sent', 'partial'].includes(invoice.status)) {
       throw new Error('La facture doit être envoyée pour envoyer une relance');
     }
 

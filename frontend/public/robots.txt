@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+Disallow: /workflow
+Disallow: /workflow/*
+Disallow: /settings
+Disallow: /settings/*
+Disallow: /planning
+Disallow: /analytics
+Disallow: /automations
+Disallow: /secretary
+Disallow: /portal/*
+
+Sitemap: https://workflow.swigs.online/sitemap.xml

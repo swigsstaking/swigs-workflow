@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import {
@@ -20,7 +20,7 @@ export default function InfoTab({ project }) {
 
   const [editing, setEditing] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState(() => ({
     name: project.name,
     description: project.description || '',
     clientName: project.client?.name || '',
@@ -31,7 +31,24 @@ export default function InfoTab({ project }) {
     clientZip: project.client?.zip || '',
     clientCity: project.client?.city || '',
     clientChe: project.client?.che || ''
-  });
+  }));
+
+  // Sync form data when project changes (prevents data corruption across projects)
+  useEffect(() => {
+    setFormData({
+      name: project.name,
+      description: project.description || '',
+      clientName: project.client?.name || '',
+      clientEmail: project.client?.email || '',
+      clientPhone: project.client?.phone || '',
+      clientCompany: project.client?.company || '',
+      clientStreet: project.client?.street || '',
+      clientZip: project.client?.zip || '',
+      clientCity: project.client?.city || '',
+      clientChe: project.client?.che || ''
+    });
+    setEditing(false);
+  }, [project._id]);
 
   const handleStatusChange = async (e) => {
     try {
