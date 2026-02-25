@@ -192,33 +192,33 @@ const executeSendEmail = async (run, config) => {
     throw new Error('Template ID is required');
   }
 
+  // Test mode: use test email directly, skip normal recipient resolution
+  if (run.context?._test?.enabled && run.context._test.email) {
+    const testRecipient = run.context._test.email;
+    const result = await sendTemplateEmail(templateId, testRecipient, run.context);
+    return {
+      emailSent: true,
+      to: testRecipient,
+      originalTo: to || 'customer',
+      testMode: true,
+      messageId: result.messageId
+    };
+  }
+
   // Determine recipient
   let recipient = to;
   if (to === 'customer' && run.context.customer?.email) {
     recipient = run.context.customer.email;
   } else if (to === 'admin') {
-    // Get from settings or default
     recipient = process.env.ADMIN_EMAIL || 'admin@swigs.online';
   }
 
-  if (!recipient) {
+  if (!recipient || recipient === 'customer') {
     throw new Error('No recipient email found');
   }
 
-  // Test mode: override recipient with test email
-  const originalTo = recipient;
-  if (run.context?._test?.enabled && run.context._test.email) {
-    recipient = run.context._test.email;
-  }
-
   const result = await sendTemplateEmail(templateId, recipient, run.context);
-
-  const output = { emailSent: true, to: recipient, messageId: result.messageId };
-  if (run.context?._test?.enabled) {
-    output.originalTo = originalTo;
-    output.testMode = true;
-  }
-  return output;
+  return { emailSent: true, to: recipient, messageId: result.messageId };
 };
 
 /**
