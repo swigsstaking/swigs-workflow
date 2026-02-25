@@ -47,7 +47,7 @@ export const executeRun = async (runId) => {
         'stats.totalRuns': 1,
         'stats.successfulRuns': updatedRun.status === 'completed' ? 1 : 0
       },
-      'stats.lastRunAt': new Date()
+      $set: { 'stats.lastRunAt': new Date() }
     });
 
   } catch (error) {
@@ -57,8 +57,10 @@ export const executeRun = async (runId) => {
     // Update automation stats
     await Automation.findByIdAndUpdate(run.automation._id, {
       $inc: { 'stats.totalRuns': 1, 'stats.failedRuns': 1 },
-      'stats.lastRunAt': new Date(),
-      'stats.lastError': error.message
+      $set: {
+        'stats.lastRunAt': new Date(),
+        'stats.lastError': error.message
+      }
     });
   }
 };
@@ -372,11 +374,75 @@ const executeCreateTask = async (run, config) => {
 };
 
 /**
- * Execute update_record action (placeholder for future)
+ * Execute update_record action
+ * Supports updating project, invoice, quote fields with ownership validation
  */
+const ALLOWED_RECORD_FIELDS = {
+  project: ['status', 'description', 'notes'],
+  invoice: ['status', 'notes'],
+  quote: ['status', 'notes']
+};
+
 const executeUpdateRecord = async (run, config) => {
-  // TODO: Implement record updates
-  return { updated: false, reason: 'Not implemented yet' };
+  const { recordType, recordField, recordValue } = config;
+
+  if (!recordType || !recordField) {
+    throw new Error('Record type and field are required');
+  }
+
+  const allowedFields = ALLOWED_RECORD_FIELDS[recordType];
+  if (!allowedFields) {
+    throw new Error(`Record type '${recordType}' not supported. Allowed: ${Object.keys(ALLOWED_RECORD_FIELDS).join(', ')}`);
+  }
+
+  if (!allowedFields.includes(recordField)) {
+    throw new Error(`Field '${recordField}' not allowed for ${recordType}. Allowed: ${allowedFields.join(', ')}`);
+  }
+
+  // Get record ID from context
+  const recordId = run.context[recordType]?._id;
+  if (!recordId) {
+    throw new Error(`No ${recordType} ID found in automation context`);
+  }
+
+  // Resolve {{variable}} references in value
+  let resolvedValue = recordValue || '';
+  if (typeof resolvedValue === 'string') {
+    resolvedValue = resolvedValue.replace(/\{\{(.+?)\}\}/g, (_, path) => {
+      return path.trim().split('.').reduce((obj, key) => obj?.[key], run.context) ?? '';
+    });
+  }
+
+  // Import model
+  let Model;
+  switch (recordType) {
+    case 'project': Model = (await import('../../models/Project.js')).default; break;
+    case 'invoice': Model = (await import('../../models/Invoice.js')).default; break;
+    case 'quote': Model = (await import('../../models/Quote.js')).default; break;
+    default: throw new Error(`No model for record type: ${recordType}`);
+  }
+
+  const record = await Model.findById(recordId);
+  if (!record) {
+    throw new Error(`${recordType} ${recordId} not found`);
+  }
+
+  // Ownership check
+  if (run.automation.userId && record.userId &&
+      record.userId.toString() !== run.automation.userId.toString()) {
+    throw new Error(`Access denied: ${recordType} does not belong to automation owner`);
+  }
+
+  record[recordField] = resolvedValue;
+  await record.save();
+
+  return {
+    updated: true,
+    recordType,
+    recordId: recordId.toString(),
+    field: recordField,
+    value: resolvedValue
+  };
 };
 
 /**

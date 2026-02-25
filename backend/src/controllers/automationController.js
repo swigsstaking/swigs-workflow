@@ -1,6 +1,38 @@
 import Automation from '../models/Automation.js';
 import AutomationRun from '../models/AutomationRun.js';
 
+/**
+ * Detect cycles in node graph using DFS
+ */
+const hasCycle = (nodes) => {
+  const adjacency = {};
+  for (const node of nodes) {
+    adjacency[node.id] = (node.connections || []).map(c =>
+      typeof c === 'string' ? c : c.targetId
+    );
+  }
+
+  const visited = new Set();
+  const inStack = new Set();
+
+  const dfs = (nodeId) => {
+    if (inStack.has(nodeId)) return true;
+    if (visited.has(nodeId)) return false;
+    visited.add(nodeId);
+    inStack.add(nodeId);
+    for (const neighbor of (adjacency[nodeId] || [])) {
+      if (dfs(neighbor)) return true;
+    }
+    inStack.delete(nodeId);
+    return false;
+  };
+
+  for (const node of nodes) {
+    if (dfs(node.id)) return true;
+  }
+  return false;
+};
+
 // @desc    Get all automations
 // @route   GET /api/automations
 export const getAutomations = async (req, res, next) => {
@@ -137,6 +169,14 @@ export const toggleAutomation = async (req, res, next) => {
         return res.status(400).json({
           success: false,
           error: 'L\'automation doit avoir au moins un trigger'
+        });
+      }
+
+      // Check for cycles in the node graph
+      if (hasCycle(automation.nodes)) {
+        return res.status(400).json({
+          success: false,
+          error: 'L\'automation contient une boucle infinie dans les connexions'
         });
       }
     }

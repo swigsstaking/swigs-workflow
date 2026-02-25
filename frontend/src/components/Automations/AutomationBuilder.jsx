@@ -12,7 +12,7 @@ import '@xyflow/react/dist/style.css';
 import {
   ArrowLeft, Save, Play, Plus, Zap, Mail, Clock,
   GitBranch, MoreVertical, Trash2, Settings, History,
-  Globe, ClipboardList, X
+  Globe, ClipboardList, Database, X
 } from 'lucide-react';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
@@ -52,6 +52,7 @@ const NODE_TEMPLATES = [
       { type: 'action', subType: 'send_email', label: 'Envoyer un email', icon: Mail },
       { type: 'action', subType: 'create_task', label: 'Créer une tâche', icon: ClipboardList },
       { type: 'action', subType: 'webhook', label: 'Webhook', icon: Globe },
+      { type: 'action', subType: 'update_record', label: 'Modifier un enregistrement', icon: Database },
     ]
   },
   {

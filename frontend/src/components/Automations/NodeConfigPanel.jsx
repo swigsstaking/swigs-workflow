@@ -256,14 +256,76 @@ export default function NodeConfigPanel({ node, onClose, onUpdateConfig, onDelet
     }
 
     if (node.data.subType === 'update_record') {
+      const RECORD_FIELDS = {
+        project: [
+          { value: 'status', label: 'Statut' },
+          { value: 'description', label: 'Description' },
+          { value: 'notes', label: 'Notes' }
+        ],
+        invoice: [
+          { value: 'status', label: 'Statut' },
+          { value: 'notes', label: 'Notes' }
+        ],
+        quote: [
+          { value: 'status', label: 'Statut' },
+          { value: 'notes', label: 'Notes' }
+        ]
+      };
+
       return (
-        <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-          <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
-            Bientôt disponible
-          </p>
-          <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-            Cette action permettra de mettre à jour des enregistrements automatiquement.
-          </p>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              Type d'enregistrement
+            </label>
+            <select
+              value={config.recordType || ''}
+              onChange={(e) => {
+                const updated = { ...config, recordType: e.target.value, recordField: '', recordValue: '' };
+                setConfig(updated);
+                onUpdateConfig(updated);
+              }}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            >
+              <option value="">Sélectionner</option>
+              <option value="project">Projet</option>
+              <option value="invoice">Facture</option>
+              <option value="quote">Devis</option>
+            </select>
+          </div>
+
+          {config.recordType && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Champ à modifier
+              </label>
+              <select
+                value={config.recordField || ''}
+                onChange={(e) => handleConfigChange('recordField', e.target.value)}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              >
+                <option value="">Sélectionner</option>
+                {(RECORD_FIELDS[config.recordType] || []).map(f => (
+                  <option key={f.value} value={f.value}>{f.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {config.recordField && (
+            <Input
+              label="Nouvelle valeur"
+              value={config.recordValue || ''}
+              onChange={(e) => handleConfigChange('recordValue', e.target.value)}
+              placeholder="Ex: terminé ou {{project.status}}"
+            />
+          )}
+
+          <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+            <p className="text-xs text-blue-700 dark:text-blue-300">
+              Utilisez <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{variable}}'}</code> pour référencer des données du contexte.
+            </p>
+          </div>
         </div>
       );
     }
