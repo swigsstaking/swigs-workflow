@@ -7,6 +7,7 @@ import {
   deleteAutomation,
   toggleAutomation,
   runAutomation,
+  duplicateAutomation,
   getAutomationRuns,
   getAutomationRun,
   retryRun
@@ -33,6 +34,9 @@ router.patch('/:id/toggle', toggleAutomation);
 
 // Manual run
 router.post('/:id/run', runAutomation);
+
+// Duplicate
+router.post('/:id/duplicate', duplicateAutomation);
 
 // Get runs for automation
 router.get('/:id/runs', getAutomationRuns);

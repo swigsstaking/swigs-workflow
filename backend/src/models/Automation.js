@@ -4,7 +4,10 @@ import mongoose from 'mongoose';
 const triggerConfigSchema = new mongoose.Schema({
   siteId: mongoose.Schema.Types.ObjectId,
   statusFilter: String,
-  scheduleExpression: String  // For time.schedule (cron format)
+  statusFilters: [String],           // Multiple status filters for project.status_changed
+  amountMin: Number,                 // Min amount filter for invoice/quote triggers
+  amountMax: Number,                 // Max amount filter for invoice/quote triggers
+  scheduleExpression: String         // For time.schedule (cron format)
 }, { _id: false });
 
 const actionConfigSchema = new mongoose.Schema({
@@ -19,7 +22,12 @@ const actionConfigSchema = new mongoose.Schema({
   // For update_record action
   recordType: String,
   recordField: String,
-  recordValue: String
+  recordValue: String,
+
+  // For create_task action
+  taskTitle: String,
+  taskDescription: String,
+  assignTo: String
 }, { _id: false });
 
 const conditionConfigSchema = new mongoose.Schema({
@@ -58,7 +66,7 @@ const nodeSchema = new mongoose.Schema({
   // Action subtype for action nodes
   actionType: {
     type: String,
-    enum: ['send_email', 'send_sms', 'webhook', 'update_record', 'create_task']
+    enum: ['send_email', 'webhook', 'update_record', 'create_task']
   },
 
   // Position on canvas

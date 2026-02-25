@@ -4,7 +4,7 @@ import {
   Plus, Play, Pause, Settings, Trash2, ChevronRight,
   Zap, Mail, Clock, GitBranch, MoreVertical, Activity,
   ShoppingCart, CreditCard, Package, CheckCircle, UserPlus,
-  FileText, Receipt, PenTool, Hand
+  FileText, Receipt, PenTool, Hand, Copy, TrendingUp, BarChart3
 } from 'lucide-react';
 import Button from '../components/ui/Button';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
@@ -52,6 +52,7 @@ export default function Automations() {
     fetchAutomations,
     toggleAutomation,
     deleteAutomation,
+    duplicateAutomation,
     clearSelection
   } = useAutomationStore();
   const { addToast } = useToastStore();
@@ -89,12 +90,28 @@ export default function Automations() {
     }
   };
 
+  const handleDuplicate = async (automation) => {
+    setActiveMenu(null);
+    try {
+      const dup = await duplicateAutomation(automation._id);
+      addToast({ type: 'success', message: `Automation "${dup.name}" créée` });
+    } catch (error) {
+      addToast({ type: 'error', message: 'Erreur lors de la duplication' });
+    }
+  };
+
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   const handleDelete = async (automation) => {
     setDeleteTarget(automation);
     setActiveMenu(null);
   };
+
+  // Analytics
+  const totalRunsThisMonth = automations.reduce((sum, a) => sum + (a.stats?.totalRuns || 0), 0);
+  const successfulRunsThisMonth = automations.reduce((sum, a) => sum + (a.stats?.successfulRuns || 0), 0);
+  const successRate = totalRunsThisMonth > 0 ? Math.round((successfulRunsThisMonth / totalRunsThisMonth) * 100) : 0;
+  const activeCount = automations.filter(a => a.isActive).length;
 
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
@@ -134,6 +151,45 @@ export default function Automations() {
             Nouvelle automation
           </Button>
         </div>
+
+        {/* Analytics Cards */}
+        {!loading && automations.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+            <div className="bg-white dark:bg-dark-card rounded-xl border border-slate-200 dark:border-dark-border p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                  <BarChart3 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-slate-900 dark:text-white">{totalRunsThisMonth}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Exécutions totales</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white dark:bg-dark-card rounded-xl border border-slate-200 dark:border-dark-border p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-slate-900 dark:text-white">{successRate}%</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Taux de succès</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white dark:bg-dark-card rounded-xl border border-slate-200 dark:border-dark-border p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
+                  <Zap className="w-5 h-5 text-violet-600 dark:text-violet-400" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-slate-900 dark:text-white">{activeCount}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Automations actives</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Automations Grid */}
         {loading ? (
@@ -278,6 +334,13 @@ export default function Automations() {
                           >
                             <Settings className="w-4 h-4" />
                             Modifier
+                          </button>
+                          <button
+                            onClick={() => handleDuplicate(automation)}
+                            className="w-full px-4 py-2 text-sm text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-dark-hover flex items-center gap-2"
+                          >
+                            <Copy className="w-4 h-4" />
+                            Dupliquer
                           </button>
                           <button
                             onClick={() => handleDelete(automation)}

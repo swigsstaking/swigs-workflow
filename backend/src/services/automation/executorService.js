@@ -171,6 +171,9 @@ const executeAction = async (run, node) => {
     case 'webhook':
       return await executeWebhook(run, config);
 
+    case 'create_task':
+      return await executeCreateTask(run, config);
+
     case 'update_record':
       return await executeUpdateRecord(run, config);
 
@@ -202,8 +205,20 @@ const executeSendEmail = async (run, config) => {
     throw new Error('No recipient email found');
   }
 
+  // Test mode: override recipient with test email
+  const originalTo = recipient;
+  if (run.context?._test?.enabled && run.context._test.email) {
+    recipient = run.context._test.email;
+  }
+
   const result = await sendTemplateEmail(templateId, recipient, run.context);
-  return { emailSent: true, to: recipient, messageId: result.messageId };
+
+  const output = { emailSent: true, to: recipient, messageId: result.messageId };
+  if (run.context?._test?.enabled) {
+    output.originalTo = originalTo;
+    output.testMode = true;
+  }
+  return output;
 };
 
 /**
@@ -322,6 +337,38 @@ const executeWebhook = async (run, config) => {
   } finally {
     clearTimeout(timeout);
   }
+};
+
+/**
+ * Execute create_task action via Event Bus
+ */
+const executeCreateTask = async (run, config) => {
+  const { taskTitle, taskDescription, assignTo } = config;
+
+  if (!taskTitle) {
+    throw new Error('Task title is required');
+  }
+
+  // Import the event bus singleton
+  const { default: eventBus } = await import('../eventBus.service.js');
+
+  const taskPayload = {
+    title: taskTitle,
+    description: taskDescription || '',
+    assignTo: assignTo || null,
+    source: 'automation',
+    automationId: run.automation?._id?.toString(),
+    context: run.context
+  };
+
+  const published = eventBus.publish('task.create', taskPayload);
+
+  return {
+    taskCreated: true,
+    published,
+    title: taskTitle,
+    assignTo: assignTo || 'non assignée'
+  };
 };
 
 /**

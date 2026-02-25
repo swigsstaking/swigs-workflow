@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { automationsApi, emailTemplatesApi } from '../services/api';
+import { trackAutomation } from '../lib/posthog';
 
 export const useAutomationStore = create((set, get) => ({
   // Automations
@@ -49,6 +50,7 @@ export const useAutomationStore = create((set, get) => ({
         selectedAutomation: data.data,
         saving: false
       }));
+      trackAutomation('created', { name: data.data.name, trigger: data.data.trigger?.type });
       return data.data;
     } catch (error) {
       set({ error: error.message, saving: false });
@@ -83,6 +85,7 @@ export const useAutomationStore = create((set, get) => ({
         automations: state.automations.filter(a => a._id !== id),
         selectedAutomation: state.selectedAutomation?._id === id ? null : state.selectedAutomation
       }));
+      trackAutomation('deleted');
     } catch (error) {
       set({ error: error.message });
       throw error;
@@ -101,6 +104,7 @@ export const useAutomationStore = create((set, get) => ({
           ? data.data
           : state.selectedAutomation
       }));
+      trackAutomation('toggled', { active: data.data.active, name: data.data.name });
       return data.data;
     } catch (error) {
       set({ error: error.message });
@@ -109,11 +113,26 @@ export const useAutomationStore = create((set, get) => ({
   },
 
   // Run automation manually
-  runAutomation: async (id, testData = {}) => {
+  runAutomation: async (id, { testMode, testEmail, testData } = {}) => {
     try {
-      const { data } = await automationsApi.run(id, testData);
-      // Refresh runs
+      const { data } = await automationsApi.run(id, { testMode, testEmail, testData });
+      trackAutomation('run_manually', { automation_id: id, testMode });
       get().fetchAutomationRuns(id);
+      return data.data;
+    } catch (error) {
+      set({ error: error.message });
+      throw error;
+    }
+  },
+
+  // Duplicate automation
+  duplicateAutomation: async (id) => {
+    try {
+      const { data } = await automationsApi.duplicate(id);
+      set(state => ({
+        automations: [data.data, ...state.automations]
+      }));
+      trackAutomation('duplicated', { automation_id: id });
       return data.data;
     } catch (error) {
       set({ error: error.message });

@@ -119,6 +119,14 @@ function formatRelativeTime(date) {
   });
 }
 
+function TestBadge() {
+  return (
+    <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 uppercase tracking-wider">
+      TEST
+    </span>
+  );
+}
+
 function RunItem({ run, onRetry }) {
   const [expanded, setExpanded] = useState(false);
   const [retrying, setRetrying] = useState(false);
@@ -156,6 +164,7 @@ function RunItem({ run, onRetry }) {
             <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${statusConfig.bgClass} ${statusConfig.textClass}`}>
               {statusConfig.label}
             </span>
+            {run.isTest && <TestBadge />}
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             Trigger: {run.triggerType || 'manual'}
@@ -196,6 +205,10 @@ export default function AutomationRunsPanel({ automationId }) {
   const { addToast } = useToastStore();
   const [runs, setRuns] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
     loadRuns();
@@ -204,14 +217,32 @@ export default function AutomationRunsPanel({ automationId }) {
   const loadRuns = async () => {
     if (!automationId) return;
     setLoading(true);
+    setPage(1);
 
     try {
-      const { data } = await automationsApi.getRuns(automationId);
+      const { data } = await automationsApi.getRuns(automationId, { page: 1, limit: 20 });
       setRuns(data.data || []);
+      setTotal(data.total || 0);
+      setTotalPages(data.pages || 1);
     } catch (error) {
       addToast({ type: 'error', message: 'Erreur lors du chargement de l\'historique' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMore = async () => {
+    const nextPage = page + 1;
+    setLoadingMore(true);
+    try {
+      const { data } = await automationsApi.getRuns(automationId, { page: nextPage, limit: 20 });
+      setRuns(prev => [...prev, ...(data.data || [])]);
+      setPage(nextPage);
+      setTotalPages(data.pages || 1);
+    } catch (error) {
+      addToast({ type: 'error', message: 'Erreur lors du chargement' });
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -248,7 +279,7 @@ export default function AutomationRunsPanel({ automationId }) {
     <div className="space-y-3">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
-          Historique d'exécution ({runs.length})
+          Historique d'exécution ({total})
         </h3>
         <Button
           size="sm"
@@ -263,6 +294,19 @@ export default function AutomationRunsPanel({ automationId }) {
       {runs.map(run => (
         <RunItem key={run._id} run={run} onRetry={handleRetry} />
       ))}
+
+      {page < totalPages && (
+        <div className="flex justify-center pt-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={loadMore}
+            loading={loadingMore}
+          >
+            Charger plus ({runs.length} / {total})
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

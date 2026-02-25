@@ -45,6 +45,9 @@ const automationRunSchema = new mongoose.Schema({
   // Trigger type
   triggerType: String,
 
+  // Test mode flag
+  isTest: { type: Boolean, default: false },
+
   // Overall run status
   status: {
     type: String,

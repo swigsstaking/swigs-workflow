@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Trash2, Mail, Clock, GitBranch, Zap } from 'lucide-react';
+import { X, Trash2, Mail, Clock, GitBranch, Zap, ClipboardList, Globe } from 'lucide-react';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import { useAutomationStore } from '../../stores/automationStore';
@@ -31,7 +31,7 @@ const NODE_COLOR_CLASSES = {
   }
 };
 
-export default function NodeConfigPanel({ node, onClose, onUpdateConfig, onDelete }) {
+export default function NodeConfigPanel({ node, onClose, onUpdateConfig, onDelete, automationTriggerType }) {
   const { emailTemplates, fetchEmailTemplates } = useAutomationStore();
   const [config, setConfig] = useState(node.data.config || {});
 
@@ -54,15 +54,80 @@ export default function NodeConfigPanel({ node, onClose, onUpdateConfig, onDelet
   const Icon = NODE_ICONS[node.type] || Zap;
   const colorClasses = NODE_COLOR_CLASSES[node.type] || { bg: 'bg-slate-100 dark:bg-slate-700', text: 'text-slate-600 dark:text-slate-400' };
 
-  const renderTriggerConfig = () => (
-    <div className="space-y-4">
-      <div className="p-3 rounded-lg bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800">
-        <p className="text-sm text-violet-700 dark:text-violet-300">
-          Le déclencheur est configuré automatiquement lors de la création de l'automation.
-        </p>
+  const renderTriggerConfig = () => {
+    const isCmsTrigger = automationTriggerType?.startsWith('order.') || automationTriggerType?.startsWith('customer.');
+    const isProjectTrigger = automationTriggerType === 'project.status_changed';
+    const isInvoiceQuoteTrigger = automationTriggerType?.startsWith('invoice.') || automationTriggerType?.startsWith('quote.');
+
+    return (
+      <div className="space-y-4">
+        <div className="p-3 rounded-lg bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800">
+          <p className="text-sm text-violet-700 dark:text-violet-300">
+            Configurez les filtres pour ce déclencheur.
+          </p>
+        </div>
+
+        {/* CMS trigger: siteId filter */}
+        {isCmsTrigger && (
+          <Input
+            label="Site ID (filtrer par site CMS)"
+            value={config.siteId || ''}
+            onChange={(e) => handleConfigChange('siteId', e.target.value)}
+            placeholder="Laisser vide pour tous les sites"
+          />
+        )}
+
+        {/* Project trigger: status filters */}
+        {isProjectTrigger && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              Statuts à surveiller
+            </label>
+            <Input
+              value={(config.statusFilters || []).join(', ')}
+              onChange={(e) => handleConfigChange('statusFilters', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+              placeholder="Ex: en cours, terminé, en pause"
+            />
+            <p className="mt-1 text-xs text-slate-500">Séparez les statuts par des virgules</p>
+          </div>
+        )}
+
+        {/* Invoice/quote trigger: amount filters */}
+        {isInvoiceQuoteTrigger && (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Montant min (CHF)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={config.amountMin || ''}
+                onChange={(e) => handleConfigChange('amountMin', e.target.value ? parseFloat(e.target.value) : '')}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Montant max (CHF)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={config.amountMax || ''}
+                onChange={(e) => handleConfigChange('amountMax', e.target.value ? parseFloat(e.target.value) : '')}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                placeholder="Illimité"
+              />
+            </div>
+          </div>
+        )}
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderActionConfig = () => {
     if (node.data.subType === 'send_email') {
@@ -119,6 +184,86 @@ export default function NodeConfigPanel({ node, onClose, onUpdateConfig, onDelet
               );
             })()}
           </div>
+        </div>
+      );
+    }
+
+    if (node.data.subType === 'create_task') {
+      return (
+        <div className="space-y-4">
+          <Input
+            label="Titre de la tâche"
+            value={config.taskTitle || ''}
+            onChange={(e) => handleConfigChange('taskTitle', e.target.value)}
+            placeholder="Ex: Traiter la commande {{number}}"
+          />
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              Description
+            </label>
+            <textarea
+              value={config.taskDescription || ''}
+              onChange={(e) => handleConfigChange('taskDescription', e.target.value)}
+              rows={3}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+              placeholder="Description de la tâche..."
+            />
+          </div>
+          <Input
+            label="Assigner à"
+            value={config.assignTo || ''}
+            onChange={(e) => handleConfigChange('assignTo', e.target.value)}
+            placeholder="Email ou nom de l'assigné"
+          />
+          <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+            <p className="text-xs text-blue-700 dark:text-blue-300">
+              La tâche sera créée dans swigs-task via l'Event Bus.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    if (node.data.subType === 'webhook') {
+      return (
+        <div className="space-y-4">
+          <Input
+            label="URL du webhook"
+            value={config.webhookUrl || ''}
+            onChange={(e) => handleConfigChange('webhookUrl', e.target.value)}
+            placeholder="https://example.com/webhook"
+          />
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              Méthode HTTP
+            </label>
+            <select
+              value={config.webhookMethod || 'POST'}
+              onChange={(e) => handleConfigChange('webhookMethod', e.target.value)}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            >
+              <option value="POST">POST</option>
+              <option value="GET">GET</option>
+            </select>
+          </div>
+          <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+            <p className="text-xs text-blue-700 dark:text-blue-300">
+              Le contexte de l'automation sera envoyé en JSON dans le body (POST).
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    if (node.data.subType === 'update_record') {
+      return (
+        <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+          <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
+            Bientôt disponible
+          </p>
+          <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+            Cette action permettra de mettre à jour des enregistrements automatiquement.
+          </p>
         </div>
       );
     }

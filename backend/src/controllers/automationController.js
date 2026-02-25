@@ -165,7 +165,13 @@ export const runAutomation = async (req, res, next) => {
       return res.status(403).json({ success: false, error: 'Accès refusé' });
     }
 
-    const { testData } = req.body;
+    const { testData, testMode, testEmail } = req.body;
+
+    // Build context — inject test override when testMode is on
+    const context = { ...(testData || {}) };
+    if (testMode && testEmail) {
+      context._test = { enabled: true, email: testEmail };
+    }
 
     // Create a manual run
     const run = await AutomationRun.create({
@@ -174,7 +180,8 @@ export const runAutomation = async (req, res, next) => {
       triggerType: 'manual',
       triggerData: testData || {},
       status: 'pending',
-      context: testData || {}
+      context,
+      isTest: !!testMode
     });
 
     // Import and use executor service
@@ -210,16 +217,60 @@ export const getAutomationRuns = async (req, res, next) => {
       return res.status(403).json({ success: false, error: 'Accès refusé' });
     }
 
-    const { limit = 20, status } = req.query;
+    const { limit = 20, page = 1, status } = req.query;
+    const parsedLimit = parseInt(limit);
+    const parsedPage = parseInt(page);
 
     const query = { automation: req.params.id };
     if (status) query.status = status;
 
-    const runs = await AutomationRun.find(query)
-      .sort('-createdAt')
-      .limit(parseInt(limit));
+    const [runs, total] = await Promise.all([
+      AutomationRun.find(query)
+        .sort('-createdAt')
+        .skip((parsedPage - 1) * parsedLimit)
+        .limit(parsedLimit),
+      AutomationRun.countDocuments(query)
+    ]);
 
-    res.json({ success: true, data: runs });
+    res.json({
+      success: true,
+      data: runs,
+      total,
+      page: parsedPage,
+      pages: Math.ceil(total / parsedLimit)
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Duplicate automation
+// @route   POST /api/automations/:id/duplicate
+export const duplicateAutomation = async (req, res, next) => {
+  try {
+    const automation = await Automation.findById(req.params.id);
+
+    if (!automation) {
+      return res.status(404).json({ success: false, error: 'Automation non trouvée' });
+    }
+
+    // Check ownership
+    if (req.user && automation.userId && automation.userId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, error: 'Accès refusé' });
+    }
+
+    const duplicate = await Automation.create({
+      userId: automation.userId,
+      name: `${automation.name} (copie)`,
+      description: automation.description,
+      triggerType: automation.triggerType,
+      triggerConfig: automation.triggerConfig,
+      nodes: automation.nodes,
+      isActive: false,
+      stats: { totalRuns: 0, successfulRuns: 0, failedRuns: 0 }
+    });
+
+    res.status(201).json({ success: true, data: duplicate });
   } catch (error) {
     next(error);
   }

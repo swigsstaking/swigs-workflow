@@ -192,7 +192,8 @@ export const automationsApi = {
   update: (id, data) => api.put(`/automations/${id}`, data),
   delete: (id) => api.delete(`/automations/${id}`),
   toggle: (id) => api.patch(`/automations/${id}/toggle`),
-  run: (id, testData) => api.post(`/automations/${id}/run`, { testData }),
+  run: (id, data) => api.post(`/automations/${id}/run`, data),
+  duplicate: (id) => api.post(`/automations/${id}/duplicate`),
   getRuns: (id, params) => api.get(`/automations/${id}/runs`, { params })
 };
 

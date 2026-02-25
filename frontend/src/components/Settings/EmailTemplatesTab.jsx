@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import DOMPurify from 'dompurify';
-import { Plus, Edit2, Trash2, Eye, Sparkles } from 'lucide-react';
+import { Plus, Edit2, Trash2, Eye, Sparkles, Send, Code } from 'lucide-react';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 import Input, { Textarea } from '../ui/Input';
@@ -28,6 +28,57 @@ const categoryLabels = {
   general: 'Général'
 };
 
+const CATEGORY_VARIABLES = {
+  order: [
+    { key: 'number', desc: 'Numéro de commande' },
+    { key: 'total', desc: 'Total' },
+    { key: 'clientName', desc: 'Nom du client' },
+    { key: 'orderDate', desc: 'Date de commande' },
+    { key: 'companyName', desc: 'Nom de votre société' },
+  ],
+  customer: [
+    { key: 'clientName', desc: 'Nom du client' },
+    { key: 'clientEmail', desc: 'Email du client' },
+    { key: 'companyName', desc: 'Nom de votre société' },
+  ],
+  project: [
+    { key: 'projectName', desc: 'Nom du projet' },
+    { key: 'clientName', desc: 'Nom du client' },
+    { key: 'status', desc: 'Statut du projet' },
+    { key: 'companyName', desc: 'Nom de votre société' },
+  ],
+  invoice: [
+    { key: 'number', desc: 'Numéro de facture' },
+    { key: 'total', desc: 'Montant total' },
+    { key: 'clientName', desc: 'Nom du client' },
+    { key: 'dueDate', desc: 'Date d\'échéance' },
+    { key: 'paymentTerms', desc: 'Conditions de paiement' },
+    { key: 'companyName', desc: 'Nom de votre société' },
+  ],
+  quote: [
+    { key: 'number', desc: 'Numéro de devis' },
+    { key: 'total', desc: 'Montant total' },
+    { key: 'clientName', desc: 'Nom du client' },
+    { key: 'projectName', desc: 'Nom du projet' },
+    { key: 'companyName', desc: 'Nom de votre société' },
+  ],
+  reminder: [
+    { key: 'number', desc: 'Numéro de document' },
+    { key: 'total', desc: 'Montant dû' },
+    { key: 'clientName', desc: 'Nom du client' },
+    { key: 'dueDate', desc: 'Date d\'échéance' },
+    { key: 'daysPastDue', desc: 'Jours de retard' },
+    { key: 'companyName', desc: 'Nom de votre société' },
+  ],
+  general: [
+    { key: 'clientName', desc: 'Nom du client' },
+    { key: 'companyName', desc: 'Nom de votre société' },
+    { key: 'number', desc: 'Numéro de référence' },
+    { key: 'total', desc: 'Montant' },
+    { key: 'projectName', desc: 'Nom du projet' },
+  ]
+};
+
 export default function EmailTemplatesTab() {
   const { addToast } = useToastStore();
   const [templates, setTemplates] = useState([]);
@@ -44,6 +95,15 @@ export default function EmailTemplatesTab() {
     category: 'general'
   });
   const [creatingDefaults, setCreatingDefaults] = useState(false);
+  const [showLivePreview, setShowLivePreview] = useState(false);
+  const [sendingTest, setSendingTest] = useState(false);
+  const [testEmailAddr, setTestEmailAddr] = useState('');
+
+  // Variables available for the current category
+  const availableVars = useMemo(
+    () => CATEGORY_VARIABLES[formData.category] || CATEGORY_VARIABLES.general,
+    [formData.category]
+  );
 
   useEffect(() => {
     loadTemplates();
@@ -149,6 +209,26 @@ export default function EmailTemplatesTab() {
       setShowPreview(true);
     } catch (error) {
       addToast({ type: 'error', message: 'Erreur lors de la génération de l\'aperçu' });
+    }
+  };
+
+  const handleSendTest = async () => {
+    if (!testEmailAddr || !editingTemplate?._id) return;
+    setSendingTest(true);
+    try {
+      await emailTemplatesApi.sendTest(editingTemplate._id, testEmailAddr, {
+        clientName: 'Jean Dupont',
+        projectName: 'Site Web E-commerce',
+        number: 'FAC-2026-001',
+        total: '1500.00 CHF',
+        companyName: 'Ma Société',
+        paymentTerms: '30'
+      });
+      addToast({ type: 'success', message: `Email de test envoyé à ${testEmailAddr}` });
+    } catch (error) {
+      addToast({ type: 'error', message: 'Erreur lors de l\'envoi du test' });
+    } finally {
+      setSendingTest(false);
     }
   };
 
@@ -277,28 +357,107 @@ export default function EmailTemplatesTab() {
             placeholder="Ex: Votre commande {{number}}"
           />
 
+          {/* Body editor with optional live preview */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Corps du message
-            </label>
-            <Textarea
-              value={formData.body}
-              onChange={(e) => setFormData({ ...formData, body: e.target.value })}
-              rows={12}
-              placeholder="Bonjour {{clientName}},&#10;&#10;Votre commande {{number}} a été créée..."
-            />
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              Variables disponibles: <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">{'{{clientName}}'}</code>{' '}
-              <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">{'{{number}}'}</code>{' '}
-              <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">{'{{projectName}}'}</code>{' '}
-              <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">{'{{total}}'}</code>{' '}
-              <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">{'{{companyName}}'}</code>
-            </p>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                Corps du message
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowLivePreview(!showLivePreview)}
+                className={`flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors ${
+                  showLivePreview
+                    ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
+                    : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700'
+                }`}
+              >
+                <Code className="w-3 h-3" />
+                {showLivePreview ? 'Masquer aperçu' : 'Aperçu live'}
+              </button>
+            </div>
+
+            <div className={showLivePreview ? 'grid grid-cols-2 gap-3' : ''}>
+              <Textarea
+                value={formData.body}
+                onChange={(e) => setFormData({ ...formData, body: e.target.value })}
+                rows={showLivePreview ? 16 : 12}
+                placeholder="Bonjour {{clientName}},&#10;&#10;Votre commande {{number}} a été créée..."
+                className="font-mono text-xs"
+              />
+
+              {showLivePreview && (
+                <div
+                  className="prose dark:prose-invert prose-sm max-w-none bg-white dark:bg-dark-bg rounded-lg p-3 border border-slate-200 dark:border-dark-border overflow-y-auto"
+                  style={{ maxHeight: '380px' }}
+                  dangerouslySetInnerHTML={{
+                    __html: DOMPurify.sanitize(
+                      formData.body
+                        .replace(/\{\{clientName\}\}/g, 'Jean Dupont')
+                        .replace(/\{\{number\}\}/g, 'FAC-2026-001')
+                        .replace(/\{\{projectName\}\}/g, 'Site Web E-commerce')
+                        .replace(/\{\{total\}\}/g, '1500.00 CHF')
+                        .replace(/\{\{companyName\}\}/g, 'Ma Société')
+                        .replace(/\{\{dueDate\}\}/g, '15.03.2026')
+                        .replace(/\{\{paymentTerms\}\}/g, '30')
+                        .replace(/\{\{status\}\}/g, 'En cours')
+                        .replace(/\{\{orderDate\}\}/g, '25.02.2026')
+                        .replace(/\{\{clientEmail\}\}/g, 'jean@example.com')
+                        .replace(/\{\{daysPastDue\}\}/g, '5')
+                        .replace(/\n/g, '<br>')
+                    )
+                  }}
+                />
+              )}
+            </div>
+
+            {/* Variables list per category */}
+            <div className="mt-2 flex flex-wrap gap-1">
+              {availableVars.map(v => (
+                <button
+                  key={v.key}
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, body: prev.body + `{{${v.key}}}` }))}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                  title={v.desc}
+                >
+                  <code>{`{{${v.key}}}`}</code>
+                </button>
+              ))}
+            </div>
           </div>
+
+          {/* Send test email */}
+          {editingTemplate && (
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                  Envoyer un test
+                </label>
+                <input
+                  type="email"
+                  value={testEmailAddr}
+                  onChange={(e) => setTestEmailAddr(e.target.value)}
+                  placeholder="votre@email.com"
+                  className="w-full px-3 py-2 text-sm bg-white dark:bg-dark-bg border border-slate-200 dark:border-dark-border rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={Send}
+                onClick={handleSendTest}
+                loading={sendingTest}
+                disabled={!testEmailAddr}
+              >
+                Envoyer
+              </Button>
+            </div>
+          )}
 
           <div className="flex justify-between pt-4">
             <Button variant="secondary" icon={Eye} onClick={handlePreview}>
-              Aperçu
+              Aperçu complet
             </Button>
             <div className="flex gap-2">
               <Button variant="secondary" onClick={() => setShowModal(false)}>
