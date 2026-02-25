@@ -4,7 +4,8 @@ import {
   Plus, Play, Pause, Settings, Trash2, ChevronRight,
   Zap, Mail, Clock, GitBranch, MoreVertical, Activity,
   ShoppingCart, CreditCard, Package, CheckCircle, UserPlus,
-  FileText, Receipt, PenTool, Hand, Copy, TrendingUp, BarChart3
+  FileText, Receipt, PenTool, Hand, Copy, TrendingUp, BarChart3,
+  Send, Archive, FolderPlus, User, Bell, CalendarPlus
 } from 'lucide-react';
 import Button from '../components/ui/Button';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
@@ -19,12 +20,21 @@ const TRIGGER_LABELS = {
   'order.paid': 'Commande payée',
   'order.shipped': 'Commande expédiée',
   'order.delivered': 'Commande livrée',
-  'customer.created': 'Nouveau client',
-  'customer.updated': 'Client modifié',
+  'customer.created': 'Nouveau client (CMS)',
+  'customer.updated': 'Client modifié (CMS)',
+  'project.created': 'Nouveau projet',
   'project.status_changed': 'Statut projet changé',
+  'project.archived': 'Projet archivé',
   'invoice.created': 'Facture créée',
   'invoice.paid': 'Facture payée',
+  'invoice.sent': 'Facture envoyée',
+  'quote.created': 'Devis créé',
   'quote.signed': 'Devis signé',
+  'quote.sent': 'Devis envoyé',
+  'client.created': 'Nouveau client',
+  'client.updated': 'Client modifié',
+  'event.created': 'Heure/dépense ajoutée',
+  'reminder.sent': 'Rappel envoyé',
   'time.schedule': 'Planifié',
   'manual': 'Manuel'
 };
@@ -36,10 +46,19 @@ const TRIGGER_ICONS = {
   'order.delivered': CheckCircle,
   'customer.created': UserPlus,
   'customer.updated': UserPlus,
+  'project.created': FolderPlus,
   'project.status_changed': Activity,
+  'project.archived': Archive,
   'invoice.created': FileText,
   'invoice.paid': Receipt,
+  'invoice.sent': Send,
+  'quote.created': FileText,
   'quote.signed': PenTool,
+  'quote.sent': Send,
+  'client.created': User,
+  'client.updated': User,
+  'event.created': CalendarPlus,
+  'reminder.sent': Bell,
   'time.schedule': Clock,
   'manual': Hand
 };

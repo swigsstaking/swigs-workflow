@@ -1,4 +1,5 @@
 import Client from '../models/Client.js';
+import { fireInternalTrigger } from '../services/automation/triggerService.js';
 
 // @desc    Get all clients
 // @route   GET /api/clients
@@ -67,6 +68,14 @@ export const createClient = async (req, res, next) => {
       notes
     });
 
+    // Fire automation trigger (non-blocking)
+    fireInternalTrigger('client.created', {
+      clientId: client._id.toString(),
+      clientName: client.name,
+      email: client.email,
+      company: client.company || client.name
+    }, req.user?._id).catch(() => {});
+
     res.status(201).json({ success: true, data: client });
   } catch (error) {
     next(error);
@@ -93,6 +102,14 @@ export const updateClient = async (req, res, next) => {
     if (!client) {
       return res.status(404).json({ success: false, error: 'Client non trouvé' });
     }
+
+    // Fire automation trigger (non-blocking)
+    fireInternalTrigger('client.updated', {
+      clientId: client._id.toString(),
+      clientName: client.name,
+      email: client.email,
+      changedFields: Object.keys(req.body)
+    }, req.user?._id).catch(() => {});
 
     res.json({ success: true, data: client });
   } catch (error) {

@@ -7,6 +7,7 @@ import { historyService } from '../services/historyService.js';
 import { generateInvoicePDF } from '../services/pdf.service.js';
 import { sendInvoiceEmail } from '../services/email.service.js';
 import { decrypt } from '../utils/crypto.js';
+import { fireInternalTrigger } from '../services/automation/triggerService.js';
 
 // Helper: Verify project ownership
 const verifyProjectOwnership = async (projectId, userId) => {
@@ -161,7 +162,7 @@ export const createInvoice = async (req, res, next) => {
     );
 
     // Generate invoice number (atomic via Counter — race-condition safe)
-    const number = await Invoice.generateNumber(req.user?._id);
+    const number = await Invoice.generateNumber();
 
     // Handle CUSTOM invoice type
     if (invoiceType === 'custom') {
@@ -218,6 +219,16 @@ export const createInvoice = async (req, res, next) => {
 
       // Log history
       await historyService.invoiceCreated(project._id, number, total);
+
+      // Fire automation trigger (non-blocking)
+      fireInternalTrigger('invoice.created', {
+        invoiceId: invoice._id.toString(),
+        invoiceNumber: invoice.number,
+        projectId: project._id.toString(),
+        projectName: project.name,
+        total: invoice.total,
+        client: project.client
+      }, req.user?._id).catch(() => {});
 
       return res.status(201).json({ success: true, data: invoice });
     }
@@ -368,6 +379,16 @@ export const createInvoice = async (req, res, next) => {
 
     // Log history
     await historyService.invoiceCreated(project._id, number, total);
+
+    // Fire automation trigger (non-blocking)
+    fireInternalTrigger('invoice.created', {
+      invoiceId: invoice._id.toString(),
+      invoiceNumber: invoice.number,
+      projectId: project._id.toString(),
+      projectName: project.name,
+      total: invoice.total,
+      client: project.client
+    }, req.user?._id).catch(() => {});
 
     res.status(201).json({ success: true, data: invoice });
   } catch (error) {
@@ -611,6 +632,28 @@ export const changeInvoiceStatus = async (req, res, next) => {
 
     await invoice.save();
 
+    // Fire automation triggers (non-blocking)
+    if (status === 'paid') {
+      fireInternalTrigger('invoice.paid', {
+        invoiceId: invoice._id.toString(),
+        invoiceNumber: invoice.number,
+        projectId: invoice.project._id.toString(),
+        projectName: invoice.project.name,
+        total: invoice.total,
+        paidAt: invoice.paidAt,
+        client: invoice.project.client
+      }, req.user?._id).catch(() => {});
+    } else if (status === 'sent') {
+      fireInternalTrigger('invoice.sent', {
+        invoiceId: invoice._id.toString(),
+        invoiceNumber: invoice.number,
+        projectId: invoice.project._id.toString(),
+        projectName: invoice.project.name,
+        total: invoice.total,
+        client: invoice.project.client
+      }, req.user?._id).catch(() => {});
+    }
+
     // Auto-sync AbaNinja (non-blocking)
     if (status === 'sent' || status === 'paid') {
       try {
@@ -721,6 +764,19 @@ export const recordPayment = async (req, res, next) => {
 
     if (invoice.status === 'paid') {
       await historyService.invoicePaid(invoice.project._id, invoice.number);
+    }
+
+    // Fire automation trigger if fully paid (non-blocking)
+    if (invoice.status === 'paid') {
+      fireInternalTrigger('invoice.paid', {
+        invoiceId: invoice._id.toString(),
+        invoiceNumber: invoice.number,
+        projectId: invoice.project._id.toString(),
+        projectName: invoice.project.name,
+        total: invoice.total,
+        paidAt: invoice.paidAt,
+        client: invoice.project.client
+      }, req.user?._id).catch(() => {});
     }
 
     res.json({ success: true, data: invoice });
@@ -915,7 +971,18 @@ export const sendInvoice = async (req, res, next) => {
     const pdfBuffer = await generateInvoicePDF(invoice, invoice.project, settings);
 
     // Send email
-    await sendInvoiceEmail(invoice, invoice.project, settings, pdfBuffer);
+    try {
+      await sendInvoiceEmail(invoice, invoice.project, settings, pdfBuffer);
+    } catch (emailError) {
+      // Return SMTP errors as 400 with the actual message
+      const msg = emailError.message || 'Erreur d\'envoi';
+      const userMsg = msg.includes('authentication failed')
+        ? 'Échec d\'authentification SMTP. Vérifiez votre mot de passe dans les paramètres.'
+        : msg.includes('ECONNREFUSED') || msg.includes('ETIMEDOUT')
+          ? 'Impossible de contacter le serveur SMTP. Vérifiez l\'hôte et le port.'
+          : `Erreur d'envoi email : ${msg}`;
+      return res.status(400).json({ success: false, error: userMsg });
+    }
 
     // Update invoice status to 'sent' if it was draft
     if (invoice.status === 'draft') {
@@ -923,6 +990,16 @@ export const sendInvoice = async (req, res, next) => {
       await invoice.save();
       await historyService.invoiceSent(invoice.project._id, invoice.number);
     }
+
+    // Fire automation trigger (non-blocking)
+    fireInternalTrigger('invoice.sent', {
+      invoiceId: invoice._id.toString(),
+      invoiceNumber: invoice.number,
+      projectId: invoice.project._id.toString(),
+      projectName: invoice.project.name,
+      total: invoice.total,
+      client: invoice.project.client
+    }, req.user?._id).catch(() => {});
 
     res.json({
       success: true,

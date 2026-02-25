@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import {
   ShoppingCart, CreditCard, Package, CheckCircle,
-  UserPlus, FileText, Receipt, PenTool, Clock, Hand, AlertCircle
+  UserPlus, FileText, Receipt, PenTool, Clock, Hand, AlertCircle,
+  Send, Archive, FolderPlus, User, Bell, CalendarPlus, Activity
 } from 'lucide-react';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
@@ -15,28 +16,69 @@ const CMS_TRIGGERS = ['order.created', 'order.paid', 'order.shipped', 'order.del
 
 const TRIGGER_OPTIONS = [
   {
-    category: 'E-commerce (CMS)',
+    category: 'E-Commerce',
     requiresCms: true,
     triggers: [
       { type: 'order.created', label: 'Nouvelle commande', icon: ShoppingCart, description: 'Quand une commande est créée' },
       { type: 'order.paid', label: 'Commande payée', icon: CreditCard, description: 'Quand le paiement est confirmé' },
       { type: 'order.shipped', label: 'Commande expédiée', icon: Package, description: 'Quand la commande est envoyée' },
       { type: 'order.delivered', label: 'Commande livrée', icon: CheckCircle, description: 'Quand la commande est livrée' },
-      { type: 'customer.created', label: 'Nouveau client', icon: UserPlus, description: 'Quand un client s\'inscrit' }
+      { type: 'customer.created', label: 'Nouveau client (CMS)', icon: UserPlus, description: 'Quand un client s\'inscrit sur le CMS' },
+      { type: 'customer.updated', label: 'Client modifié (CMS)', icon: UserPlus, description: 'Quand un client CMS est modifié' }
     ]
   },
   {
-    category: 'Workflow',
+    category: 'Projets',
+    triggers: [
+      { type: 'project.created', label: 'Nouveau projet', icon: FolderPlus, description: 'Quand un projet est créé' },
+      { type: 'project.status_changed', label: 'Statut projet changé', icon: Activity, description: 'Quand le statut d\'un projet change' },
+      { type: 'project.archived', label: 'Projet archivé', icon: Archive, description: 'Quand un projet est archivé' }
+    ]
+  },
+  {
+    category: 'Facturation',
     triggers: [
       { type: 'invoice.created', label: 'Facture créée', icon: FileText, description: 'Quand une facture est créée' },
       { type: 'invoice.paid', label: 'Facture payée', icon: Receipt, description: 'Quand une facture est payée' },
-      { type: 'quote.signed', label: 'Devis signé', icon: PenTool, description: 'Quand un devis est signé' }
+      { type: 'invoice.sent', label: 'Facture envoyée', icon: Send, description: 'Quand une facture est envoyée' }
     ]
   },
   {
-    category: 'Autres',
+    category: 'Devis',
     triggers: [
-      { type: 'time.schedule', label: 'Planifié', icon: Clock, description: 'Exécuter à une heure précise (cron)' },
+      { type: 'quote.created', label: 'Devis créé', icon: FileText, description: 'Quand un devis est créé' },
+      { type: 'quote.signed', label: 'Devis signé', icon: PenTool, description: 'Quand un devis est signé' },
+      { type: 'quote.sent', label: 'Devis envoyé', icon: Send, description: 'Quand un devis est envoyé' }
+    ]
+  },
+  {
+    category: 'Clients',
+    triggers: [
+      { type: 'client.created', label: 'Nouveau client', icon: User, description: 'Quand un client est créé dans Workflow' },
+      { type: 'client.updated', label: 'Client modifié', icon: User, description: 'Quand un client est modifié dans Workflow' }
+    ]
+  },
+  {
+    category: 'Événements',
+    triggers: [
+      { type: 'event.created', label: 'Heure/dépense ajoutée', icon: CalendarPlus, description: 'Quand une heure ou dépense est enregistrée' }
+    ]
+  },
+  {
+    category: 'Rappels',
+    triggers: [
+      { type: 'reminder.sent', label: 'Rappel envoyé', icon: Bell, description: 'Quand un rappel de facture est envoyé' }
+    ]
+  },
+  {
+    category: 'Planification',
+    triggers: [
+      { type: 'time.schedule', label: 'Planifié', icon: Clock, description: 'Exécuter à une heure précise (cron)' }
+    ]
+  },
+  {
+    category: 'Manuel',
+    triggers: [
       { type: 'manual', label: 'Manuel', icon: Hand, description: 'Déclencher manuellement' }
     ]
   }

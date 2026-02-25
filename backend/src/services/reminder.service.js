@@ -5,6 +5,7 @@ import Settings from '../models/Settings.js';
 import { createTransporter, textToHtml } from './email.service.js';
 import { generateReminderPDF } from './pdf.service.js';
 import { historyService } from './historyService.js';
+import { fireInternalTrigger } from './automation/triggerService.js';
 
 /**
  * Reminder Service for automatic invoice reminders
@@ -172,6 +173,18 @@ export const sendReminder = async (invoice, project, settings, scheduleItem) => 
     );
 
     console.log(`Reminder sent for invoice ${invoice.number} (${scheduleItem.type})`);
+
+    // Fire automation trigger (non-blocking)
+    fireInternalTrigger('reminder.sent', {
+      invoiceId: invoice._id.toString(),
+      invoiceNumber: invoice.number,
+      projectId: project._id.toString(),
+      projectName: project.name,
+      reminderType: scheduleItem.type,
+      daysOverdue,
+      total: invoice.total,
+      client: project.client
+    }, project.userId).catch(() => {});
 
     return { success: true };
   } catch (error) {

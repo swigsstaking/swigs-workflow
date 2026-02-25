@@ -57,14 +57,31 @@ const executeAutomation = async (automation, triggerType, data, options) => {
     // Filter by siteId if specified
     if (automation.triggerConfig.siteId && options.siteId) {
       if (automation.triggerConfig.siteId.toString() !== options.siteId.toString()) {
-        return null;  // Skip - different site
+        return null;
       }
     }
 
-    // Filter by status if specified
+    // Filter by single status
     if (automation.triggerConfig.statusFilter && data.status) {
       if (automation.triggerConfig.statusFilter !== data.status) {
-        return null;  // Skip - different status
+        return null;
+      }
+    }
+
+    // Filter by multiple statuses (for project.status_changed)
+    if (automation.triggerConfig.statusFilters?.length > 0 && data.newStatus) {
+      if (!automation.triggerConfig.statusFilters.includes(data.newStatus)) {
+        return null;
+      }
+    }
+
+    // Filter by amount range (for invoice/quote triggers)
+    if (data.total !== undefined) {
+      if (automation.triggerConfig.amountMin && data.total < automation.triggerConfig.amountMin) {
+        return null;
+      }
+      if (automation.triggerConfig.amountMax && data.total > automation.triggerConfig.amountMax) {
+        return null;
       }
     }
   }
@@ -122,30 +139,76 @@ export const TRIGGER_TYPES = {
     expectedData: ['orderId', 'orderNumber', 'customer', 'siteId']
   },
   'customer.created': {
-    description: 'Nouveau client',
+    description: 'Nouveau client (CMS)',
     expectedData: ['customerId', 'email', 'firstName', 'lastName', 'siteId']
   },
   'customer.updated': {
-    description: 'Client mis à jour',
+    description: 'Client mis à jour (CMS)',
     expectedData: ['customerId', 'email', 'changedFields', 'siteId']
   },
 
-  // Internal workflow triggers
+  // Project triggers
+  'project.created': {
+    description: 'Nouveau projet créé',
+    expectedData: ['projectId', 'projectName', 'client']
+  },
   'project.status_changed': {
     description: 'Statut projet changé',
     expectedData: ['projectId', 'projectName', 'oldStatus', 'newStatus', 'client']
   },
+  'project.archived': {
+    description: 'Projet archivé',
+    expectedData: ['projectId', 'projectName', 'client']
+  },
+
+  // Invoice triggers
   'invoice.created': {
     description: 'Facture créée',
     expectedData: ['invoiceId', 'invoiceNumber', 'projectId', 'total', 'client']
   },
   'invoice.paid': {
     description: 'Facture payée',
-    expectedData: ['invoiceId', 'invoiceNumber', 'projectId', 'total', 'paidAt']
+    expectedData: ['invoiceId', 'invoiceNumber', 'projectId', 'total', 'paidAt', 'client']
+  },
+  'invoice.sent': {
+    description: 'Facture envoyée',
+    expectedData: ['invoiceId', 'invoiceNumber', 'projectId', 'total', 'client']
+  },
+
+  // Quote triggers
+  'quote.created': {
+    description: 'Devis créé',
+    expectedData: ['quoteId', 'quoteNumber', 'projectId', 'total', 'client']
   },
   'quote.signed': {
     description: 'Devis signé',
     expectedData: ['quoteId', 'quoteNumber', 'projectId', 'total', 'client']
+  },
+  'quote.sent': {
+    description: 'Devis envoyé',
+    expectedData: ['quoteId', 'quoteNumber', 'projectId', 'total', 'client']
+  },
+
+  // Client triggers
+  'client.created': {
+    description: 'Nouveau client ajouté',
+    expectedData: ['clientId', 'clientName', 'email', 'company']
+  },
+  'client.updated': {
+    description: 'Client modifié',
+    expectedData: ['clientId', 'clientName', 'email', 'changedFields']
+  },
+
+  // Event triggers
+  'event.created': {
+    description: 'Heure/dépense ajoutée',
+    expectedData: ['eventId', 'projectId', 'projectName', 'eventType', 'description', 'amount']
+  },
+
+  // Reminder triggers
+  'reminder.sent': {
+    description: 'Rappel de paiement envoyé',
+    expectedData: ['invoiceId', 'invoiceNumber', 'projectId', 'reminderType', 'daysOverdue', 'total', 'client']
   },
 
   // Time-based triggers

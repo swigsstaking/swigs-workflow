@@ -4,6 +4,7 @@ import Settings from '../models/Settings.js';
 import { historyService } from '../services/historyService.js';
 import { generateQuotePDF } from '../services/pdf.service.js';
 import { sendQuoteEmail } from '../services/email.service.js';
+import { fireInternalTrigger } from '../services/automation/triggerService.js';
 
 // Helper: Verify project ownership
 const verifyProjectOwnership = async (projectId, userId) => {
@@ -220,6 +221,16 @@ export const createQuote = async (req, res, next) => {
     // Log history
     await historyService.quoteCreated(project._id, number, total);
 
+    // Fire automation trigger (non-blocking)
+    fireInternalTrigger('quote.created', {
+      quoteId: quote._id.toString(),
+      quoteNumber: quote.number,
+      projectId: project._id.toString(),
+      projectName: project.name,
+      total: quote.total,
+      client: project.client
+    }, req.user?._id).catch(() => {});
+
     res.status(201).json({ success: true, data: quote });
   } catch (error) {
     next(error);
@@ -392,6 +403,18 @@ export const changeQuoteStatus = async (req, res, next) => {
 
     await quote.save();
 
+    // Fire automation trigger (non-blocking)
+    if (status === 'signed') {
+      fireInternalTrigger('quote.signed', {
+        quoteId: quote._id.toString(),
+        quoteNumber: quote.number,
+        projectId: quote.project._id.toString(),
+        projectName: quote.project.name,
+        total: quote.total,
+        client: quote.project.client
+      }, req.user?._id).catch(() => {});
+    }
+
     res.json({ success: true, data: quote });
   } catch (error) {
     next(error);
@@ -547,6 +570,16 @@ export const sendQuote = async (req, res, next) => {
       await quote.save();
       await historyService.quoteSent(quote.project._id, quote.number);
     }
+
+    // Fire automation trigger (non-blocking)
+    fireInternalTrigger('quote.sent', {
+      quoteId: quote._id.toString(),
+      quoteNumber: quote.number,
+      projectId: quote.project._id.toString(),
+      projectName: quote.project.name,
+      total: quote.total,
+      client: quote.project.client
+    }, req.user?._id).catch(() => {});
 
     res.json({
       success: true,

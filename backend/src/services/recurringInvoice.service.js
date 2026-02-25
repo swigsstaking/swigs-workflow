@@ -5,6 +5,7 @@ import Project from '../models/Project.js';
 import Settings from '../models/Settings.js';
 import { generateInvoicePDF } from './pdf.service.js';
 import { sendInvoiceEmail } from './email.service.js';
+import { fireInternalTrigger } from './automation/triggerService.js';
 
 /**
  * Calculate the next generation date based on frequency and dayOfMonth
@@ -79,7 +80,7 @@ export const generateInvoiceFromRecurring = async (recurring) => {
   );
 
   // Generate invoice number atomically
-  const number = await Invoice.generateNumber(recurring.userId);
+  const number = await Invoice.generateNumber();
 
   const invoice = await Invoice.create({
     project: project._id,
@@ -130,6 +131,29 @@ export const generateInvoiceFromRecurring = async (recurring) => {
       console.error(`Auto-send failed for recurring invoice ${recurring._id}:`, emailErr.message);
       // Non-blocking — invoice is still created
     }
+  }
+
+  // Fire automation trigger (non-blocking)
+  fireInternalTrigger('invoice.created', {
+    invoiceId: invoice._id.toString(),
+    invoiceNumber: invoice.number,
+    projectId: project._id.toString(),
+    projectName: project.name,
+    total: invoice.total,
+    client: project.client,
+    isRecurring: true
+  }, recurring.userId).catch(() => {});
+
+  if (recurring.autoSend && invoice.status === 'sent') {
+    fireInternalTrigger('invoice.sent', {
+      invoiceId: invoice._id.toString(),
+      invoiceNumber: invoice.number,
+      projectId: project._id.toString(),
+      projectName: project.name,
+      total: invoice.total,
+      client: project.client,
+      isAutoSent: true
+    }, recurring.userId).catch(() => {});
   }
 
   return invoice;
