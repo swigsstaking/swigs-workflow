@@ -3,6 +3,7 @@ import Automation from '../../models/Automation.js';
 import AutomationRun from '../../models/AutomationRun.js';
 import { resumeRun, executeRun } from './executorService.js';
 import { fireTrigger } from './triggerService.js';
+import { checkDateTriggers } from './dateTriggerService.js';
 
 let scheduledJobs = new Map();
 let resumeCheckJob = null;
@@ -21,6 +22,11 @@ export const initialize = () => {
   // Schedule job to refresh cron-based automations (every 5 minutes)
   cron.schedule('*/5 * * * *', async () => {
     await refreshScheduledAutomations();
+  });
+
+  // Schedule job to check date.relative triggers (every 5 minutes)
+  cron.schedule('*/5 * * * *', async () => {
+    await checkDateTriggers();
   });
 
   // Initial load of scheduled automations

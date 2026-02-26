@@ -375,10 +375,12 @@ export const createProject = async (req, res, next) => {
   try {
     const { name, description, client, status, tags, notes } = req.body;
 
-    // Get default status if not provided (shared statuses)
+    // Get default status if not provided (scoped to current user)
     let statusId = status;
     if (!statusId) {
-      const defaultStatus = await Status.findOne({ isDefault: true });
+      const statusFilter = { isDefault: true };
+      if (req.user) statusFilter.userId = req.user._id;
+      const defaultStatus = await Status.findOne(statusFilter);
       if (!defaultStatus) {
         return res.status(400).json({
           success: false,

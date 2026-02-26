@@ -25,7 +25,7 @@ export const useTimerStore = create((set, get) => ({
     try {
       const { data } = await timerApi.start(payload);
       set({ activeTimer: data.data, loading: false });
-      trackEvent('timer_started', { project_id: payload?.projectId });
+      trackEvent('timer_started', { project_id: payload?.projectId, project_name: data.data?.projectId?.name });
       get()._startTick();
     } catch (err) {
       set({ loading: false });
@@ -55,10 +55,15 @@ export const useTimerStore = create((set, get) => ({
 
   stop: async (payload) => {
     try {
+      const activeTimer = get().activeTimer;
       const { data } = await timerApi.stop(payload);
       get()._stopTick();
       const elapsed = get().elapsed;
-      trackEvent('timer_stopped', { duration_seconds: Math.round(elapsed / 1000) });
+      trackEvent('timer_stopped', {
+        project_name: activeTimer?.projectId?.name,
+        duration_minutes: Math.round(elapsed / 1000 / 60),
+        duration_seconds: Math.round(elapsed / 1000),
+      });
       set({ activeTimer: null, elapsed: 0 });
       return data.data; // returns created event
     } catch (err) {

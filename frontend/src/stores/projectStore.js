@@ -95,6 +95,7 @@ export const useProjectStore = create((set, get) => ({
         projects: state.projects.filter(p => p._id !== id),
         selectedProject: state.selectedProject?._id === id ? null : state.selectedProject
       }));
+      trackEvent('project_archived');
     } catch (error) {
       set({ error: error.message });
       throw error;
@@ -107,6 +108,7 @@ export const useProjectStore = create((set, get) => ({
       set(state => ({
         projects: state.projects.map(p => p._id === id ? data.data : p)
       }));
+      trackEvent('project_restored');
       return data.data;
     } catch (error) {
       set({ error: error.message });
@@ -314,6 +316,9 @@ export const useProjectStore = create((set, get) => ({
         projectInvoices: state.projectInvoices.map(i => i._id === id ? data.data : i)
       }));
       trackEvent('invoice_status_changed', { status, invoice_number: data.data.number });
+      if (status === 'paid') {
+        trackEvent('invoice_paid', { invoice_number: data.data.number, amount: data.data.total });
+      }
       return data.data;
     } catch (error) {
       set({ error: error.message });
@@ -340,6 +345,7 @@ export const useProjectStore = create((set, get) => ({
       set(state => ({
         projectInvoices: state.projectInvoices.map(i => i._id === id ? data.data : i)
       }));
+      trackEvent('invoice_payment_recorded', { amount: paymentData.amount, invoice_number: data.data.number });
       return data.data;
     } catch (error) {
       set({ error: error.message });

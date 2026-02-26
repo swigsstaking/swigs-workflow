@@ -5,7 +5,7 @@ import {
   Zap, Mail, Clock, GitBranch, MoreVertical, Activity,
   ShoppingCart, CreditCard, Package, CheckCircle, UserPlus,
   FileText, Receipt, PenTool, Hand, Copy, TrendingUp, BarChart3,
-  Send, Archive, FolderPlus, User, Bell, CalendarPlus
+  Send, Archive, FolderPlus, User, Bell, CalendarPlus, CalendarClock
 } from 'lucide-react';
 import Button from '../components/ui/Button';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
@@ -35,6 +35,7 @@ const TRIGGER_LABELS = {
   'client.updated': 'Client modifié',
   'event.created': 'Heure/dépense ajoutée',
   'reminder.sent': 'Rappel envoyé',
+  'date.relative': 'Date relative',
   'time.schedule': 'Planifié',
   'manual': 'Manuel'
 };
@@ -59,6 +60,7 @@ const TRIGGER_ICONS = {
   'client.updated': User,
   'event.created': CalendarPlus,
   'reminder.sent': Bell,
+  'date.relative': CalendarClock,
   'time.schedule': Clock,
   'manual': Hand
 };

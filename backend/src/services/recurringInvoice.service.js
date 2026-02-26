@@ -72,7 +72,8 @@ export const generateInvoiceFromRecurring = async (recurring) => {
 
   const subtotal = processedLines.reduce((sum, line) => sum + line.total, 0);
   const vatAmount = subtotal * (recurring.vatRate / 100);
-  const total = subtotal + vatAmount;
+  const roundTo5ct = (amount) => Math.round(amount / 0.05) * 0.05;
+  const total = roundTo5ct(subtotal + vatAmount);
 
   const issueDate = new Date();
   const dueDate = new Date(

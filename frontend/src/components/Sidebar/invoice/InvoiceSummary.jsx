@@ -1,6 +1,9 @@
 import { Settings2, ChevronDown, ChevronUp, Calendar, Send, Bell } from 'lucide-react';
 import { formatCurrency } from '../../../utils/format';
 
+/** Swiss rounding: round to nearest 5 centimes (0.05 CHF) */
+const roundTo5ct = (amount) => Math.round(amount / 0.05) * 0.05;
+
 const FREQUENCY_LABELS = {
   weekly: 'Hebdomadaire',
   monthly: 'Mensuelle',
@@ -44,6 +47,7 @@ export default function InvoiceSummary({
   quotePartials,
   getEventsTotal,
   getQuotesTotal,
+  getQuotesDiscount,
   getCustomTotal,
   getSelectedTotal,
   getDiscountAmount,
@@ -174,22 +178,40 @@ export default function InvoiceSummary({
                   </div>
                 </>
               )}
+              {mode === 'standard' && getQuotesDiscount && getQuotesDiscount() > 0 && (
+                <>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-600 dark:text-slate-400">Sous-total</span>
+                    <span className="font-medium text-slate-800 dark:text-slate-200">
+                      {formatCurrency(getSelectedTotal() + getQuotesDiscount())}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-emerald-600 dark:text-emerald-400">Rabais devis</span>
+                    <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                      -{formatCurrency(getQuotesDiscount())}
+                    </span>
+                  </div>
+                </>
+              )}
               <div className="flex justify-between text-sm">
-                <span className="text-slate-600 dark:text-slate-400">Total HT</span>
+                <span className="text-slate-600 dark:text-slate-400">{vatRate ? 'Total HT' : 'Sous-total'}</span>
                 <span className="font-medium text-slate-800 dark:text-slate-200">
                   {formatCurrency(getSelectedTotal())}
                 </span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500">TVA {(vatRate * 100).toFixed(1)}%</span>
-                <span className="text-slate-600 dark:text-slate-400">
-                  {formatCurrency(getSelectedTotal() * vatRate)}
-                </span>
-              </div>
+              {vatRate > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">TVA {(vatRate * 100).toFixed(1)}%</span>
+                  <span className="text-slate-600 dark:text-slate-400">
+                    {formatCurrency(getSelectedTotal() * vatRate)}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between pt-2 border-t border-slate-200/50 dark:border-slate-700/30">
-                <span className="text-slate-700 dark:text-slate-300 font-medium">Total TTC</span>
+                <span className="text-slate-700 dark:text-slate-300 font-medium">{vatRate ? 'Total TTC' : 'Total'}</span>
                 <span className="text-xl font-bold text-primary-600 dark:text-primary-400">
-                  {formatCurrency(getSelectedTotal() * (1 + vatRate))}
+                  {formatCurrency(roundTo5ct(getSelectedTotal() * (1 + vatRate)))}
                 </span>
               </div>
             </div>
@@ -282,7 +304,7 @@ function RecurringSummary({ recurringForm, vatRate }) {
   }, 0);
 
   const vatAmount = subtotal * vatRate;
-  const total = subtotal + vatAmount;
+  const total = roundTo5ct(subtotal + vatAmount);
   const nextDate = computeNextDate(recurringForm.startDate, recurringForm.frequency, recurringForm.dayOfMonth);
 
   const hasLines = recurringForm.lines.some(l => l.description.trim() && parseFloat(l.unitPrice) > 0);
@@ -310,17 +332,19 @@ function RecurringSummary({ recurringForm, vatRate }) {
 
       <div className="pt-4 border-t border-slate-200/80 dark:border-slate-700/50 space-y-2">
         <div className="flex justify-between text-sm">
-          <span className="text-slate-600 dark:text-slate-400">Total HT</span>
+          <span className="text-slate-600 dark:text-slate-400">{vatRate ? 'Total HT' : 'Sous-total'}</span>
           <span className="font-medium text-slate-800 dark:text-slate-200">
             {formatCurrency(subtotal)}
           </span>
         </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-slate-500">TVA {(vatRate * 100).toFixed(1)}%</span>
-          <span className="text-slate-600 dark:text-slate-400">
-            {formatCurrency(vatAmount)}
-          </span>
-        </div>
+        {vatRate > 0 && (
+          <div className="flex justify-between text-sm">
+            <span className="text-slate-500">TVA {(vatRate * 100).toFixed(1)}%</span>
+            <span className="text-slate-600 dark:text-slate-400">
+              {formatCurrency(vatAmount)}
+            </span>
+          </div>
+        )}
         <div className="flex justify-between pt-2 border-t border-slate-200/50 dark:border-slate-700/30">
           <span className="text-slate-700 dark:text-slate-300 font-medium">
             Total / {FREQUENCY_LABELS[recurringForm.frequency] || recurringForm.frequency}

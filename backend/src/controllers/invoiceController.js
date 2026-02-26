@@ -605,9 +605,12 @@ export const updateInvoice = async (req, res, next) => {
       });
     }
 
-    const { notes, dueDate, vatRate, customLines, discountType, discountValue, eventIds, quoteIds, quotePartials } = req.body;
+    const { notes, issueDate, dueDate, vatRate, customLines, discountType, discountValue, eventIds, quoteIds, quotePartials } = req.body;
 
     if (notes !== undefined) invoice.notes = notes;
+    if (issueDate) {
+      invoice.issueDate = new Date(issueDate.length === 10 ? issueDate + 'T12:00:00' : issueDate);
+    }
     if (dueDate) invoice.dueDate = dueDate;
 
     // ─── Standard invoice edit (events/quotes) ───
@@ -925,7 +928,7 @@ export const updateInvoice = async (req, res, next) => {
     invoice.discountAmount = discountAmt;
     const netTotal = invoice.subtotal - discountAmt;
     invoice.vatAmount = netTotal * (invoice.vatRate / 100);
-    invoice.total = netTotal + invoice.vatAmount;
+    invoice.total = roundTo5ct(netTotal + invoice.vatAmount);
 
     await invoice.save();
 

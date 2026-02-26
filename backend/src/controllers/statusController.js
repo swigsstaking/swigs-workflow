@@ -1,12 +1,29 @@
 import Status from '../models/Status.js';
 
+// Default statuses template (reused in getStatuses auto-seed and seedStatuses)
+const DEFAULT_STATUSES = [
+  { name: 'Nouveau', color: '#6B7280', order: 0, isDefault: true },
+  { name: 'Devis', color: '#F59E0B', order: 1 },
+  { name: 'En cours', color: '#3B82F6', order: 2 },
+  { name: 'Facturé', color: '#8B5CF6', order: 3 },
+  { name: 'Payé', color: '#10B981', order: 4 },
+  { name: 'Maintenance', color: '#EC4899', order: 5 }
+];
+
 // @desc    Get all statuses
 // @route   GET /api/statuses
 export const getStatuses = async (req, res, next) => {
   try {
     const filter = {};
     if (req.user) filter.userId = req.user._id;
-    const statuses = await Status.find(filter).sort('order');
+    let statuses = await Status.find(filter).sort('order');
+
+    // Auto-seed default statuses for users who have none
+    if (statuses.length === 0 && req.user) {
+      const defaults = DEFAULT_STATUSES.map(s => ({ ...s, userId: req.user._id }));
+      statuses = await Status.insertMany(defaults);
+    }
+
     res.json({ success: true, data: statuses });
   } catch (error) {
     next(error);
@@ -142,16 +159,8 @@ export const seedStatuses = async (req, res, next) => {
       });
     }
 
-    const defaultStatuses = [
-      { userId: req.user?._id, name: 'Nouveau', color: '#6B7280', order: 0, isDefault: true },
-      { userId: req.user?._id, name: 'Devis', color: '#F59E0B', order: 1 },
-      { userId: req.user?._id, name: 'En cours', color: '#3B82F6', order: 2 },
-      { userId: req.user?._id, name: 'Facturé', color: '#8B5CF6', order: 3 },
-      { userId: req.user?._id, name: 'Payé', color: '#10B981', order: 4 },
-      { userId: req.user?._id, name: 'Maintenance', color: '#EC4899', order: 5 }
-    ];
-
-    const statuses = await Status.insertMany(defaultStatuses);
+    const defaults = DEFAULT_STATUSES.map(s => ({ ...s, userId: req.user?._id }));
+    const statuses = await Status.insertMany(defaults);
     res.status(201).json({ success: true, data: statuses });
   } catch (error) {
     next(error);

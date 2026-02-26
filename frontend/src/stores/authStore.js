@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import api from '../services/api';
+import { trackLogin, trackLogout } from '../lib/posthog';
 
 export const useAuthStore = create(
   persist(
@@ -12,7 +13,7 @@ export const useAuthStore = create(
       isLoading: false,
       sessionVersion: 0, // Increments on each new session to trigger data reload
 
-      // Verifier un token SSO (venant du Hub)
+      // Vérifier un token SSO (venant du Hub)
       verifySsoToken: async (ssoToken) => {
         set({ isLoading: true });
         try {
@@ -34,7 +35,7 @@ export const useAuthStore = create(
           set({ isLoading: false });
           return {
             success: false,
-            error: error.response?.data?.error || 'Verification SSO echouee'
+            error: error.response?.data?.error || 'Vérification SSO échouée'
           };
         }
       },
@@ -55,18 +56,19 @@ export const useAuthStore = create(
             sessionVersion: state.sessionVersion + 1
           }));
 
+          trackLogin('sso_pkce');
           return { success: true, user };
         } catch (error) {
           console.error('Auth code exchange failed:', error);
           set({ isLoading: false });
           return {
             success: false,
-            error: error.response?.data?.error || 'Echange du code echoue'
+            error: error.response?.data?.error || 'Échange du code échoué'
           };
         }
       },
 
-      // Rafraichir le token
+      // Rafraîchir le token
       refreshAccessToken: async () => {
         const { refreshToken } = get();
         if (!refreshToken) return false;
@@ -89,7 +91,7 @@ export const useAuthStore = create(
         }
       },
 
-      // Recuperer le profil utilisateur
+      // Récupérer le profil utilisateur
       fetchUser: async () => {
         try {
           const response = await api.get('/auth/me');
@@ -101,9 +103,10 @@ export const useAuthStore = create(
         }
       },
 
-      // Deconnexion
+      // Déconnexion
       logout: async () => {
         const { refreshToken } = get();
+        trackLogout();
 
         try {
           if (refreshToken) {

@@ -22,6 +22,14 @@ const plannedBlockSchema = new mongoose.Schema({
   notes: {
     type: String,
     maxlength: [500, 'Les notes ne peuvent pas dépasser 500 caractères']
+  },
+  tasks: {
+    type: [{
+      id: Number,
+      text: String,
+      completed: { type: Boolean, default: false }
+    }],
+    default: []
   }
 }, {
   timestamps: true

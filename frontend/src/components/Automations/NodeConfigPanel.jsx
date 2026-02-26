@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { X, Trash2, Mail, Clock, GitBranch, Zap, ClipboardList, Globe } from 'lucide-react';
+import { X, Trash2, Mail, Clock, GitBranch, Zap, ClipboardList, Globe, User, UserPlus, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
+import Modal from '../ui/Modal';
 import { useAutomationStore } from '../../stores/automationStore';
+import { useAuthStore } from '../../stores/authStore';
 
 const NODE_ICONS = {
   trigger: Zap,
@@ -33,7 +35,10 @@ const NODE_COLOR_CLASSES = {
 
 export default function NodeConfigPanel({ node, onClose, onUpdateConfig, onDelete, automationTriggerType }) {
   const { emailTemplates, fetchEmailTemplates } = useAutomationStore();
+  const { user } = useAuthStore();
   const [config, setConfig] = useState(node.data.config || {});
+  const [showAssignConfirm, setShowAssignConfirm] = useState(false);
+  const [pendingAssignEmail, setPendingAssignEmail] = useState('');
 
   useEffect(() => {
     setConfig(node.data.config || {});
@@ -313,6 +318,38 @@ export default function NodeConfigPanel({ node, onClose, onUpdateConfig, onDelet
     }
 
     if (node.data.subType === 'create_task') {
+      // Determine assignee mode from config
+      const assignMode = config.assignMode || (config.assignTo ? 'other' : 'self');
+      const currentUserEmail = user?.email || '';
+
+      const handleAssignModeChange = (mode) => {
+        if (mode === 'self') {
+          // Assign to current user — apply immediately
+          const updated = { ...config, assignMode: 'self', assignTo: currentUserEmail };
+          setConfig(updated);
+          onUpdateConfig(updated);
+        } else if (mode === 'none') {
+          // No assignee
+          const updated = { ...config, assignMode: 'none', assignTo: '' };
+          setConfig(updated);
+          onUpdateConfig(updated);
+        } else {
+          // Switch to "other" mode — clear email, user will type it
+          const updated = { ...config, assignMode: 'other', assignTo: '' };
+          setConfig(updated);
+          onUpdateConfig(updated);
+        }
+      };
+
+      const handleOtherEmailConfirm = () => {
+        // Apply the pending email after confirmation
+        const updated = { ...config, assignMode: 'other', assignTo: pendingAssignEmail };
+        setConfig(updated);
+        onUpdateConfig(updated);
+        setShowAssignConfirm(false);
+        setPendingAssignEmail('');
+      };
+
       return (
         <div className="space-y-4">
           <Input
@@ -333,17 +370,270 @@ export default function NodeConfigPanel({ node, onClose, onUpdateConfig, onDelet
               placeholder="Description de la tâche..."
             />
           </div>
-          <Input
-            label="Assigner à"
-            value={config.assignTo || ''}
-            onChange={(e) => handleConfigChange('assignTo', e.target.value)}
-            placeholder="Email ou nom de l'assigné"
-          />
+
+          {/* Assignee selector */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+              Assigner à
+            </label>
+            <div className="space-y-2">
+              {/* Option: myself */}
+              <button
+                type="button"
+                onClick={() => handleAssignModeChange('self')}
+                className={`w-full flex items-center gap-3 p-3 rounded-lg border text-left transition-all ${
+                  assignMode === 'self'
+                    ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 ring-1 ring-primary-500'
+                    : 'border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500'
+                }`}
+              >
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                  assignMode === 'self'
+                    ? 'bg-primary-100 dark:bg-primary-900/40'
+                    : 'bg-slate-100 dark:bg-slate-700'
+                }`}>
+                  <User className={`w-4 h-4 ${
+                    assignMode === 'self'
+                      ? 'text-primary-600 dark:text-primary-400'
+                      : 'text-slate-500 dark:text-slate-400'
+                  }`} />
+                </div>
+                <div className="min-w-0">
+                  <p className={`text-sm font-medium ${
+                    assignMode === 'self'
+                      ? 'text-primary-700 dark:text-primary-300'
+                      : 'text-slate-700 dark:text-slate-300'
+                  }`}>
+                    Moi-même
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                    {currentUserEmail || 'Email non disponible'}
+                  </p>
+                </div>
+                {assignMode === 'self' && (
+                  <CheckCircle className="w-4 h-4 text-primary-600 dark:text-primary-400 ml-auto shrink-0" />
+                )}
+              </button>
+
+              {/* Option: other person */}
+              <button
+                type="button"
+                onClick={() => handleAssignModeChange('other')}
+                className={`w-full flex items-center gap-3 p-3 rounded-lg border text-left transition-all ${
+                  assignMode === 'other'
+                    ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 ring-1 ring-primary-500'
+                    : 'border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500'
+                }`}
+              >
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                  assignMode === 'other'
+                    ? 'bg-primary-100 dark:bg-primary-900/40'
+                    : 'bg-slate-100 dark:bg-slate-700'
+                }`}>
+                  <UserPlus className={`w-4 h-4 ${
+                    assignMode === 'other'
+                      ? 'text-primary-600 dark:text-primary-400'
+                      : 'text-slate-500 dark:text-slate-400'
+                  }`} />
+                </div>
+                <div className="min-w-0">
+                  <p className={`text-sm font-medium ${
+                    assignMode === 'other'
+                      ? 'text-primary-700 dark:text-primary-300'
+                      : 'text-slate-700 dark:text-slate-300'
+                  }`}>
+                    Autre personne
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Saisir un email
+                  </p>
+                </div>
+                {assignMode === 'other' && config.assignTo && (
+                  <CheckCircle className="w-4 h-4 text-primary-600 dark:text-primary-400 ml-auto shrink-0" />
+                )}
+              </button>
+
+              {/* Option: no assignee */}
+              <button
+                type="button"
+                onClick={() => handleAssignModeChange('none')}
+                className={`w-full flex items-center gap-3 p-3 rounded-lg border text-left transition-all ${
+                  assignMode === 'none'
+                    ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 ring-1 ring-primary-500'
+                    : 'border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500'
+                }`}
+              >
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                  assignMode === 'none'
+                    ? 'bg-primary-100 dark:bg-primary-900/40'
+                    : 'bg-slate-100 dark:bg-slate-700'
+                }`}>
+                  <X className={`w-4 h-4 ${
+                    assignMode === 'none'
+                      ? 'text-primary-600 dark:text-primary-400'
+                      : 'text-slate-500 dark:text-slate-400'
+                  }`} />
+                </div>
+                <div className="min-w-0">
+                  <p className={`text-sm font-medium ${
+                    assignMode === 'none'
+                      ? 'text-primary-700 dark:text-primary-300'
+                      : 'text-slate-700 dark:text-slate-300'
+                  }`}>
+                    Non assignée
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    La tâche restera sans responsable
+                  </p>
+                </div>
+                {assignMode === 'none' && (
+                  <CheckCircle className="w-4 h-4 text-primary-600 dark:text-primary-400 ml-auto shrink-0" />
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Email input for "other" mode */}
+          {assignMode === 'other' && (
+            <div className="space-y-3">
+              <Input
+                label="Email du destinataire"
+                type="email"
+                value={config.assignTo || ''}
+                onChange={(e) => {
+                  // Update config live for display, but require confirmation to finalize
+                  const updated = { ...config, assignTo: e.target.value };
+                  setConfig(updated);
+                  onUpdateConfig(updated);
+                }}
+                placeholder="collaborateur@example.com"
+              />
+
+              {/* Confirmation prompt when email is entered */}
+              {config.assignTo && config.assignTo.includes('@') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPendingAssignEmail(config.assignTo);
+                    setShowAssignConfirm(true);
+                  }}
+                  className="w-full p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-left hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+                >
+                  <div className="flex items-start gap-2">
+                    <Info className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                        Voir ce qui va se passer
+                      </p>
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                        Cliquez pour voir les actions automatiques pour <strong>{config.assignTo}</strong>
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Summary badge */}
           <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
             <p className="text-xs text-blue-700 dark:text-blue-300">
-              La tâche sera créée dans swigs-task via l'Event Bus.
+              {assignMode === 'self' && (
+                <>La tâche sera créée dans Swigs Task et assignée à <strong>{currentUserEmail}</strong>.</>
+              )}
+              {assignMode === 'other' && config.assignTo && (
+                <>La tâche sera créée et assignée à <strong>{config.assignTo}</strong>. Si ce compte n'existe pas, il sera créé automatiquement.</>
+              )}
+              {assignMode === 'other' && !config.assignTo && (
+                <>Saisissez l'email de la personne à qui assigner la tâche.</>
+              )}
+              {assignMode === 'none' && (
+                <>La tâche sera créée sans assignation dans le workspace Automations.</>
+              )}
             </p>
           </div>
+
+          {/* Confirmation modal for external email */}
+          <Modal
+            isOpen={showAssignConfirm}
+            onClose={() => setShowAssignConfirm(false)}
+            title="Confirmation d'assignation"
+            size="sm"
+          >
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                <UserPlus className="w-5 h-5 text-primary-600 dark:text-primary-400 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-slate-900 dark:text-white">
+                    {pendingAssignEmail}
+                  </p>
+                  <p className="text-xs text-slate-500">Sera le responsable de la tâche</p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Voici ce qui se passera quand l'automation se déclenchera :
+                </p>
+
+                <div className="space-y-2">
+                  <div className="flex items-start gap-2.5">
+                    <div className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shrink-0 mt-0.5">
+                      <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">1</span>
+                    </div>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      Une tâche sera créée dans le workspace <strong>Automations</strong> de Swigs Task
+                    </p>
+                  </div>
+
+                  <div className="flex items-start gap-2.5">
+                    <div className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shrink-0 mt-0.5">
+                      <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">2</span>
+                    </div>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      Si <strong>{pendingAssignEmail}</strong> n'a pas de compte Swigs Task, un compte sera <strong>créé automatiquement</strong>
+                    </p>
+                  </div>
+
+                  <div className="flex items-start gap-2.5">
+                    <div className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shrink-0 mt-0.5">
+                      <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">3</span>
+                    </div>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      La personne sera ajoutée au workspace et la tâche lui sera assignée
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                    Vérifiez que l'adresse email est correcte. Un compte sera créé à chaque déclenchement si l'utilisateur n'existe pas encore.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => setShowAssignConfirm(false)}
+                  className="flex-1"
+                >
+                  Annuler
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={handleOtherEmailConfirm}
+                  className="flex-1"
+                  icon={CheckCircle}
+                >
+                  Confirmer
+                </Button>
+              </div>
+            </div>
+          </Modal>
         </div>
       );
     }

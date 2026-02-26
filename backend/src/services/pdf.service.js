@@ -379,9 +379,10 @@ export const generateQuotePDF = async (quote, project, settings) => {
 export const generatePreviewHTML = (settings) => {
   const design = getDesign(settings);
   const vatRate = settings.invoicing?.defaultVatRate ?? 8.1;
+  const roundTo5ct = (amount) => Math.round(amount / 0.05) * 0.05;
   const subtotal = 3750;
-  const vatAmount = Math.round(subtotal * vatRate) / 100;
-  const total = Math.round((subtotal + vatAmount) * 100) / 100;
+  const vatAmount = subtotal * (vatRate / 100);
+  const total = roundTo5ct(subtotal + vatAmount);
 
   const data = {
     company: buildCompany(settings),

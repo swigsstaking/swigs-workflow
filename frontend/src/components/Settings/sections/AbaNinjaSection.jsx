@@ -282,7 +282,7 @@ export default function AbaNinjaSection({ settings, onSettingsUpdate }) {
           À propos de l'intégration
         </h3>
         <ul className="space-y-1 text-sm text-blue-800 dark:text-blue-200">
-          <li>• Les données sont synchronisées de SWIGS Workflow vers AbaNinja</li>
+          <li>• Les données sont synchronisées de Swigs Pro vers AbaNinja</li>
           <li>• La synchronisation automatique s'effectue toutes les heures</li>
           <li>• Vous pouvez aussi lancer une synchronisation manuelle à tout moment</li>
         </ul>

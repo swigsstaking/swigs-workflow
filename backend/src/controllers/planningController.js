@@ -1,4 +1,5 @@
 import PlannedBlock from '../models/PlannedBlock.js';
+import eventBus from '../services/eventBus.service.js';
 
 // @desc    Get planned blocks for a date range
 // @route   GET /api/planning
@@ -97,10 +98,28 @@ export const updatePlannedBlock = async (req, res, next) => {
       query.userId = req.user._id;
     }
 
+    // Load current block to detect new tasks
+    const currentBlock = await PlannedBlock.findOne(query).populate({
+      path: 'project',
+      select: 'name client status',
+      populate: [
+        { path: 'client', select: 'name' },
+        { path: 'status', select: 'name color' }
+      ]
+    });
+
+    if (!currentBlock) {
+      return res.status(404).json({
+        success: false,
+        error: 'Bloc planifié non trouvé'
+      });
+    }
+
     const updateData = {};
     if (start) updateData.start = new Date(start);
     if (end) updateData.end = new Date(end);
     if (notes !== undefined) updateData.notes = notes;
+    if (req.body.tasks !== undefined) updateData.tasks = req.body.tasks;
 
     const block = await PlannedBlock.findOneAndUpdate(
       query,
@@ -115,11 +134,26 @@ export const updatePlannedBlock = async (req, res, next) => {
       ]
     });
 
-    if (!block) {
-      return res.status(404).json({
-        success: false,
-        error: 'Bloc planifié non trouvé'
-      });
+    // Publish new tasks to Event Bus → swigs-task
+    if (req.body.tasks && eventBus.isConnected) {
+      const oldTaskIds = new Set((currentBlock.tasks || []).map(t => t.id));
+      const newTasks = req.body.tasks.filter(t => !oldTaskIds.has(t.id));
+
+      for (const task of newTasks) {
+        eventBus.publish('task.create', {
+          title: task.text,
+          description: `Planning: ${block.project?.name || 'Projet'} — ${block.project?.client?.name || ''}`,
+          assignTo: req.user?.email || null,
+          source: 'planning',
+          automationId: null,
+          context: {
+            projectName: block.project?.name,
+            clientName: block.project?.client?.name,
+            blockDate: block.start?.toISOString(),
+            planningBlockId: block._id.toString()
+          }
+        });
+      }
     }
 
     res.json({ success: true, data: block });

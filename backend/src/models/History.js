@@ -28,7 +28,9 @@ const historySchema = new mongoose.Schema({
       'invoice_cancelled',
       'invoice_deleted',
       'bank_import',
-      'bank_reconciled'
+      'bank_reconciled',
+      'reminder_sent',
+      'reminder_failed'
     ]
   },
   description: {

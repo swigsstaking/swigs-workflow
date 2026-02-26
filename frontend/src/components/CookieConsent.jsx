@@ -34,7 +34,7 @@ export default function CookieConsent() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-              Nous utilisons des cookies analytiques pour comprendre comment vous utilisez SWIGS Workflow et améliorer votre expérience.
+              Nous utilisons des cookies analytiques pour comprendre comment vous utilisez Swigs Pro et améliorer votre expérience.
               Aucune donnée personnelle n'est partagée avec des tiers.
             </p>
             <div className="flex items-center gap-3 mt-4">

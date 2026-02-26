@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { settingsApi } from '../services/api';
+import { trackSettingsChanged } from '../lib/posthog';
 
 export const useSettingsStore = create(
   (set, get) => ({
@@ -25,6 +26,8 @@ export const useSettingsStore = create(
       try {
         const { data } = await settingsApi.update(updates);
         set({ settings: data.data });
+        const sections = Object.keys(updates);
+        trackSettingsChanged(sections.join(','), { sections });
         return data.data;
       } catch (err) {
         throw err;

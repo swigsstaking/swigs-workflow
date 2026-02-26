@@ -84,22 +84,22 @@ export const updateSettings = async (req, res, next) => {
 
     if (smtp) {
       const smtpData = { ...(settings.smtp?.toObject ? settings.smtp.toObject() : {}), ...smtp };
-      // If pass is empty/absent, keep existing encrypted value
-      if (!smtpData.pass || smtpData.pass === '') {
-        smtpData.pass = settings.smtp?.pass || '';
+      // Only encrypt if a NEW password was provided in the request body
+      if (smtp.pass && smtp.pass !== '') {
+        smtpData.pass = encrypt(smtp.pass);
       } else {
-        smtpData.pass = encrypt(smtpData.pass);
+        smtpData.pass = settings.smtp?.pass || '';
       }
       settings.smtp = smtpData;
     }
 
     if (abaninja) {
       const abData = { ...(settings.abaninja?.toObject ? settings.abaninja.toObject() : {}), ...abaninja };
-      // If apiKey is empty/absent, keep existing encrypted value
-      if (!abData.apiKey || abData.apiKey === '') {
-        abData.apiKey = settings.abaninja?.apiKey || '';
+      // Only encrypt if a NEW apiKey was provided in the request body
+      if (abaninja.apiKey && abaninja.apiKey !== '') {
+        abData.apiKey = encrypt(abaninja.apiKey);
       } else {
-        abData.apiKey = encrypt(abData.apiKey);
+        abData.apiKey = settings.abaninja?.apiKey || '';
       }
       settings.abaninja = abData;
     }
@@ -117,11 +117,11 @@ export const updateSettings = async (req, res, next) => {
       }
 
       const cmsData = { ...(settings.cmsIntegration?.toObject ? settings.cmsIntegration.toObject() : {}), ...cmsPayload };
-      // If serviceToken is empty/absent, keep existing value
-      if (!cmsData.serviceToken || cmsData.serviceToken === '') {
-        cmsData.serviceToken = settings.cmsIntegration?.serviceToken || '';
+      // Only encrypt if a NEW serviceToken was provided in the request body
+      if (cmsPayload.serviceToken && cmsPayload.serviceToken !== '') {
+        cmsData.serviceToken = encrypt(cmsPayload.serviceToken);
       } else {
-        cmsData.serviceToken = encrypt(cmsData.serviceToken);
+        cmsData.serviceToken = settings.cmsIntegration?.serviceToken || '';
       }
       settings.cmsIntegration = cmsData;
     }
@@ -132,10 +132,11 @@ export const updateSettings = async (req, res, next) => {
 
     if (bankImap) {
       const imapData = { ...(settings.bankImap?.toObject ? settings.bankImap.toObject() : {}), ...bankImap };
-      if (!imapData.pass || imapData.pass === '') {
-        imapData.pass = settings.bankImap?.pass || '';
+      // Only encrypt if a NEW password was provided in the request body
+      if (bankImap.pass && bankImap.pass !== '') {
+        imapData.pass = encrypt(bankImap.pass);
       } else {
-        imapData.pass = encrypt(imapData.pass);
+        imapData.pass = settings.bankImap?.pass || '';
       }
       settings.bankImap = imapData;
     }

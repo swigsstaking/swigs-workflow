@@ -32,6 +32,7 @@ import abaninjaRoutes from './src/routes/abaninja.js';
 import bankRoutes from './src/routes/bank.js';
 import timerRoutes from './src/routes/timer.js';
 import recurringInvoiceRoutes from './src/routes/recurringInvoices.js';
+import Invoice from './src/models/Invoice.js';
 import { errorHandler } from './src/middleware/errorHandler.js';
 import { requireAuth } from './src/middleware/auth.js';
 import { initializeAutomationServices } from './src/services/automation/index.js';
@@ -106,7 +107,7 @@ const globalLimiter = rateLimit({
   max: 100,
   message: {
     success: false,
-    error: 'Trop de requetes, veuillez reessayer dans une minute'
+    error: 'Trop de requêtes, veuillez réessayer dans une minute'
   },
   standardHeaders: true,
   legacyHeaders: false,
@@ -120,7 +121,7 @@ const authLimiter = rateLimit({
   max: 10,
   message: {
     success: false,
-    error: 'Trop de tentatives de connexion, veuillez reessayer dans une minute'
+    error: 'Trop de tentatives de connexion, veuillez réessayer dans une minute'
   },
   standardHeaders: true,
   legacyHeaders: false
@@ -241,7 +242,7 @@ app.use('/api/recurring-invoices', requireAuth, recurringInvoiceRoutes);
 app.use((req, res, next) => {
   res.status(404).json({
     success: false,
-    error: `Route ${req.method} ${req.path} non trouvee`
+    error: `Route ${req.method} ${req.path} non trouvée`
   });
 });
 
@@ -263,6 +264,9 @@ const mongoOptions = {
 mongoose.connect(process.env.MONGODB_URI, mongoOptions)
   .then(async () => {
     console.log('MongoDB connected');
+
+    // Sync invoice counter (migrates per-user counters to global)
+    await Invoice.syncCounter();
 
     // Initialize automation services after DB connection
     initializeAutomationServices();

@@ -72,6 +72,11 @@ export default function BriefingItem({ item, accent = 'red', onSendReminder, onC
               {item.badge}
             </span>
           )}
+          {item.hasPreviousFailure && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300">
+              Échec précédent
+            </span>
+          )}
         </div>
         {item.detail && (
           <p className="text-xs text-slate-500 dark:text-white/50 mt-0.5 truncate">{item.detail}</p>

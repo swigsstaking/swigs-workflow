@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { startOfWeek, endOfWeek, addWeeks, subWeeks, startOfDay, addDays } from 'date-fns';
 import { planningApi } from '../services/api';
+import { trackFeatureUsed } from '../lib/posthog';
 
 export const usePlanningStore = create(
   persist(
@@ -103,6 +104,7 @@ export const usePlanningStore = create(
           set(state => ({
             blocks: [...state.blocks, data.data]
           }));
+          trackFeatureUsed('planning', { action: 'block_created' });
           return data.data;
         } catch (error) {
           // Fallback to localStorage

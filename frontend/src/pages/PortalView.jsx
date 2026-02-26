@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { FileText, Receipt, Download, CheckCircle, AlertCircle, XCircle } from 'lucide-react';
 import { portalApi } from '../services/api';
 import { formatCurrency } from '../utils/format';
+import { trackPortalEvent } from '../lib/posthog';
 
 export default function PortalView() {
   const { token } = useParams();
@@ -39,6 +40,7 @@ export default function PortalView() {
       setError(null);
       const { data } = await portalApi.getDocument(token);
       setPortalData(data.data);
+      trackPortalEvent('viewed', { type: data.data?.type });
     } catch (err) {
       setError(err.response?.data?.error || 'Ce lien est invalide ou a expiré');
     } finally {
@@ -59,6 +61,7 @@ export default function PortalView() {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(blobUrl);
+      trackPortalEvent('pdf_downloaded', { type: portalData?.type, number: portalData?.document?.number });
     } catch (err) {
       setDownloadError('Erreur lors du téléchargement du PDF. Veuillez réessayer.');
     }
@@ -74,6 +77,7 @@ export default function PortalView() {
       setSignedBy(signature.trim());
       setShowSignModal(false);
       setSigned(true);
+      trackPortalEvent('quote_signed', { number: portalData?.document?.number });
     } catch (err) {
       setSignError(err.response?.data?.error || 'Erreur lors de la signature. Veuillez réessayer.');
     } finally {
@@ -170,10 +174,11 @@ export default function PortalView() {
     lines = doc.lines || [];
   }
 
-  const subtotal = lines.reduce((sum, l) => sum + ((l.quantity || 0) * (l.unitPrice || 0)), 0);
+  const roundTo5ct = (amount) => Math.round(amount / 0.05) * 0.05;
+  const subtotal = doc.subtotal || lines.reduce((sum, l) => sum + ((l.quantity || 0) * (l.unitPrice || 0)), 0);
   const vatRate = doc.vatRate || 8.1;
-  const vatAmount = subtotal * vatRate / 100;
-  const total = subtotal + vatAmount;
+  const vatAmount = doc.vatAmount || subtotal * vatRate / 100;
+  const total = doc.total || roundTo5ct(subtotal + vatAmount);
 
   return (
     <div className={`min-h-screen ${isDark ? 'bg-slate-900' : 'bg-slate-50'} py-12 px-4`}>
@@ -284,15 +289,17 @@ export default function PortalView() {
             <div className="mt-8 flex justify-end">
               <div className="w-80 space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className={isDark ? 'text-slate-400' : 'text-slate-600'}>Sous-total HT</span>
+                  <span className={isDark ? 'text-slate-400' : 'text-slate-600'}>{vatRate > 0 ? 'Sous-total HT' : 'Sous-total'}</span>
                   <span className={isDark ? 'text-white' : 'text-slate-900'}>{formatCurrency(subtotal)}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className={isDark ? 'text-slate-400' : 'text-slate-600'}>TVA ({vatRate}%)</span>
-                  <span className={isDark ? 'text-white' : 'text-slate-900'}>{formatCurrency(vatAmount)}</span>
-                </div>
+                {vatRate > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className={isDark ? 'text-slate-400' : 'text-slate-600'}>TVA ({vatRate}%)</span>
+                    <span className={isDark ? 'text-white' : 'text-slate-900'}>{formatCurrency(vatAmount)}</span>
+                  </div>
+                )}
                 <div className={`flex justify-between text-lg font-bold pt-2 border-t ${isDark ? 'border-slate-700 text-white' : 'border-slate-200 text-slate-900'}`}>
-                  <span>Total TTC</span>
+                  <span>{vatRate > 0 ? 'Total TTC' : 'Total'}</span>
                   <span>{formatCurrency(total)}</span>
                 </div>
               </div>
@@ -344,7 +351,7 @@ export default function PortalView() {
 
         {/* Footer */}
         <p className={`text-center text-sm mt-8 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-          Document généré par SWIGS Workflow
+          Document généré par Swigs Pro
         </p>
       </div>
 

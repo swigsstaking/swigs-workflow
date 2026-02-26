@@ -1,8 +1,9 @@
 import posthog from 'posthog-js';
 
-const POSTHOG_KEY = 'phc_VUxzTEM5D9D93yvhkjbok6kTL3BbnQM1AnqdTLgRbrF';
-const POSTHOG_HOST = 'https://eu.posthog.com';
+const POSTHOG_KEY = import.meta.env.VITE_POSTHOG_KEY || 'phc_VUxzTEM5D9D93yvhkjbok6kTL3BbnQM1AnqdTLgRbrF';
+const POSTHOG_HOST = import.meta.env.VITE_POSTHOG_HOST || 'https://eu.posthog.com';
 const CONSENT_KEY = 'swigs-cookie-consent';
+const APP_NAME = 'swigs-pro';
 
 let initialized = false;
 
@@ -13,7 +14,6 @@ export function getConsent() {
 export function acceptConsent() {
   localStorage.setItem(CONSENT_KEY, 'accepted');
   initPostHog();
-  // Fire the first pageview immediately after consent
   trackPageView(window.location.pathname);
 }
 
@@ -37,7 +37,7 @@ export function initPostHog() {
   posthog.init(POSTHOG_KEY, {
     api_host: POSTHOG_HOST,
     autocapture: true,
-    capture_pageview: false, // Manual via router hook
+    capture_pageview: false,
     capture_pageleave: true,
     persistence: 'localStorage+cookie',
     cross_subdomain_cookie: true,
@@ -47,7 +47,7 @@ export function initPostHog() {
       maskTextSelector: '[data-sensitive]',
     },
     loaded: (ph) => {
-      ph.register({ app: 'swigs-workflow' });
+      ph.register({ app: APP_NAME });
     },
   });
 
@@ -62,7 +62,7 @@ export function identifyUser(user) {
   posthog.identify(distinctId, {
     email: user.email,
     name: user.name,
-    app: 'swigs-workflow',
+    app: APP_NAME,
     hub_user_id: user.hubUserId,
   });
 }
@@ -74,12 +74,51 @@ export function resetUser() {
 
 export function trackEvent(eventName, properties = {}) {
   if (!initialized) return;
-  posthog.capture(eventName, properties);
+  posthog.capture(eventName, { ...properties, app: APP_NAME });
 }
 
 export function trackPageView(path) {
   if (!initialized) return;
   posthog.capture('$pageview', { $current_url: window.location.href, path });
+}
+
+// ── Auth tracking ──────────────────────────────────────────────
+export function trackLogin(method = 'sso') {
+  trackEvent('user_logged_in', { method });
+}
+
+export function trackLogout() {
+  trackEvent('user_logged_out');
+}
+
+// ── Onboarding tracking ───────────────────────────────────────
+export function trackOnboardingStep(step, completed) {
+  trackEvent('onboarding_step', { step, completed });
+}
+
+// ── Feature usage tracking ────────────────────────────────────
+export function trackFeatureUsed(feature, properties = {}) {
+  trackEvent('feature_used', { feature, ...properties });
+}
+
+// ── Business funnel tracking ──────────────────────────────────
+export function trackBusinessEvent(action, properties = {}) {
+  trackEvent(`business_${action}`, properties);
+}
+
+// ── Automation tracking ───────────────────────────────────────
+export function trackAutomation(action, properties = {}) {
+  trackEvent(`automation_${action}`, properties);
+}
+
+// ── Portal tracking (public, no auth) ─────────────────────────
+export function trackPortalEvent(action, properties = {}) {
+  trackEvent(`portal_${action}`, properties);
+}
+
+// ── Settings tracking ─────────────────────────────────────────
+export function trackSettingsChanged(section, properties = {}) {
+  trackEvent('settings_changed', { section, ...properties });
 }
 
 export { posthog };

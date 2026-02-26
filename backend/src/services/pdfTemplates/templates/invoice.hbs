@@ -138,7 +138,7 @@
   <div class="totals-section">
     <div class="totals-box">
       <div class="totals-row">
-        <span class="label">Sous-total HT</span>
+        <span class="label">{{#if totals.vatRate}}Sous-total HT{{else}}Sous-total{{/if}}</span>
         <span class="value">{{formatCurrency totals.subtotal}}</span>
       </div>
       {{#if totals.discountAmount}}
@@ -147,12 +147,14 @@
         <span class="value" style="color: var(--success-color);">-{{formatCurrency totals.discountAmount}}</span>
       </div>
       {{/if}}
+      {{#if totals.vatRate}}
       <div class="totals-row">
         <span class="label">TVA ({{totals.vatRate}}%)</span>
         <span class="value">{{formatCurrency totals.vatAmount}}</span>
       </div>
+      {{/if}}
       <div class="totals-row total-final">
-        <span class="label">Total TTC</span>
+        <span class="label">{{#if totals.vatRate}}Total TTC{{else}}Total{{/if}}</span>
         <span class="value">{{formatCurrency totals.total}}</span>
       </div>
     </div>

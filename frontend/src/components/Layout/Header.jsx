@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Settings, Plus, Search, Archive, Sun, Moon, Calendar, BarChart3, Zap, LogIn, LogOut, Menu, X, FileText } from 'lucide-react';
+import { Settings, Plus, Search, Archive, Sun, Moon, Calendar, BarChart3, Zap, LogIn, LogOut, Menu, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -40,7 +40,6 @@ export default function Header() {
     { to: '/planning', label: 'Planning', icon: Calendar },
     { to: '/analytics', label: 'Analytics', icon: BarChart3 },
     { to: '/automations', label: 'Automations', icon: Zap },
-    { to: '/secretary', label: 'Secretary', icon: FileText },
   ];
 
   // Close mobile menu on navigation
@@ -71,7 +70,7 @@ export default function Header() {
           <Link to="/" className="flex items-center gap-2 mr-3 group">
             <Logo size={24} />
             <span className="text-sm font-semibold font-display tracking-tight text-slate-900 dark:text-white hidden sm:inline">
-              Swigs
+              Swigs Pro
             </span>
           </Link>
 

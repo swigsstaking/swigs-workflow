@@ -6,7 +6,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { remindersApi } from '../services/api';
 import { useToastStore } from '../stores/toastStore';
-import { trackEvent } from '../lib/posthog';
+import { trackEvent, trackOnboardingStep, trackBusinessEvent } from '../lib/posthog';
 import { computeBriefing } from '../components/Briefing/utils/briefingLogic';
 import BriefingHeader from '../components/Briefing/BriefingHeader';
 import BriefingFeed from '../components/Briefing/BriefingFeed';
@@ -62,7 +62,7 @@ export default function Secretary() {
   // Track onboarding completion
   useEffect(() => {
     if (settings && allStepsDone && !localStorage.getItem('onboarding_completed_tracked')) {
-      trackEvent('onboarding_completed', { app: 'swigs-workflow' });
+      trackEvent('onboarding_completed', { app: 'swigs-pro' });
       localStorage.setItem('onboarding_completed_tracked', 'true');
     }
   }, [settings, allStepsDone]);
@@ -79,6 +79,7 @@ export default function Secretary() {
     try {
       await remindersApi.send(invoiceId);
       addToast({ type: 'success', message: 'Rappel envoyé avec succès' });
+      trackBusinessEvent('reminder_sent', { invoice_id: invoiceId });
       fetchDashboard(true);
     } catch {
       addToast({ type: 'error', message: "Erreur lors de l'envoi du rappel" });
@@ -94,6 +95,7 @@ export default function Secretary() {
         sent++;
       } catch { /* continue */ }
     }
+    trackBusinessEvent('reminders_bulk_sent', { count: sent });
     addToast({ type: 'success', message: `${sent} rappel(s) envoyé(s)` });
     fetchDashboard(true);
   };

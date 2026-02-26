@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
   ShoppingCart, CreditCard, Package, CheckCircle,
   UserPlus, FileText, Receipt, PenTool, Clock, Hand, AlertCircle,
-  Send, Archive, FolderPlus, User, Bell, CalendarPlus, Activity
+  Send, Archive, FolderPlus, User, Bell, CalendarPlus, CalendarClock, Activity
 } from 'lucide-react';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
@@ -68,6 +68,12 @@ const TRIGGER_OPTIONS = [
     category: 'Rappels',
     triggers: [
       { type: 'reminder.sent', label: 'Rappel envoyé', icon: Bell, description: 'Quand un rappel de facture est envoyé' }
+    ]
+  },
+  {
+    category: 'Date relative',
+    triggers: [
+      { type: 'date.relative', label: 'Avant/après une date', icon: CalendarClock, description: 'Déclencher X temps avant ou après une échéance (planning, facture, devis)' }
     ]
   },
   {

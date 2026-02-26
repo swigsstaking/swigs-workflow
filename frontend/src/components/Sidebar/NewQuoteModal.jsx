@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Plus, Trash2, AlertCircle } from 'lucide-react';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
@@ -8,6 +8,46 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useToastStore } from '../../stores/toastStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { formatCurrency } from '../../utils/format';
+
+/** Split stored "title\ndescription" into separate parts */
+function splitDescription(desc) {
+  if (!desc) return { title: '', detail: '' };
+  const idx = desc.indexOf('\n');
+  if (idx < 0) return { title: desc, detail: '' };
+  return { title: desc.substring(0, idx), detail: desc.substring(idx + 1) };
+}
+
+/** Join title + detail back into stored format */
+function joinDescription(title, detail) {
+  const t = title || '';
+  const d = detail || '';
+  return d ? `${t}\n${d}` : t;
+}
+
+/** Auto-growing textarea */
+function AutoTextarea({ value, onChange, placeholder, className, ariaLabel }) {
+  const resize = useCallback((el) => {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
+  }, []);
+
+  const setRef = useCallback((el) => {
+    if (el) resize(el);
+  }, [resize]);
+
+  return (
+    <textarea
+      ref={setRef}
+      value={value}
+      onChange={(e) => { onChange(e); resize(e.target); }}
+      placeholder={placeholder}
+      aria-label={ariaLabel}
+      rows={1}
+      className={`w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-dark-card text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none overflow-hidden ${className || ''}`}
+    />
+  );
+}
 
 // Statuses that allow full editing
 const FULL_EDIT_STATUSES = ['draft', 'sent', 'refused', 'expired'];
@@ -218,54 +258,77 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
         {/* Lines - only show for full edit */}
         {canFullEdit && (
           <div className="space-y-3">
-            <div className="grid grid-cols-12 gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
+            <div className="grid grid-cols-12 gap-2 px-1 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
               <div className="col-span-6">Description</div>
-              <div className="col-span-2">Qté</div>
-              <div className="col-span-3">Prix unit.</div>
-              <div className="col-span-1"></div>
+              <div className="col-span-2 text-center">Qté</div>
+              <div className="col-span-2 text-center">Prix</div>
+              <div className="col-span-2 text-right">Total</div>
             </div>
 
-            {lines.map((line, index) => (
-              <div key={index} className="grid grid-cols-12 gap-2 items-start">
-                <div className="col-span-6">
-                  <textarea
-                    value={line.description}
-                    onChange={(e) => updateLine(index, 'description', e.target.value)}
-                    placeholder="Description..."
-                    rows={line.description?.includes('\n') ? 2 : 1}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-dark-card text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+            {lines.map((line, index) => {
+              const { title, detail } = splitDescription(line.description);
+              const lineTotal = (parseFloat(line.quantity) || 0) * (parseFloat(line.unitPrice) || 0);
+              return (
+              <div key={index} className="grid grid-cols-12 gap-2 items-start p-2 rounded-lg bg-slate-50/80 dark:bg-slate-800/30">
+                <div className="col-span-6 space-y-1">
+                  <input
+                    value={title}
+                    onChange={(e) => {
+                      updateLine(index, 'description', joinDescription(e.target.value, detail));
+                    }}
+                    placeholder="Titre..."
+                    aria-label={`Titre ligne ${index + 1}`}
+                    className="w-full px-2 py-1.5 text-sm font-medium rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400"
+                  />
+                  <AutoTextarea
+                    value={detail}
+                    onChange={(e) => {
+                      updateLine(index, 'description', joinDescription(title, e.target.value));
+                    }}
+                    placeholder="Description (optionnel)..."
+                    ariaLabel={`Description ligne ${index + 1}`}
+                    className="text-slate-600 dark:text-slate-300"
                   />
                 </div>
-                <div className="col-span-2">
-                  <Input
+                <div className="col-span-2 pt-1">
+                  <input
                     type="number"
-                    min="1"
-                    value={line.quantity || ''}
+                    min="0"
+                    step="0.5"
+                    value={line.quantity === '' ? '' : (line.quantity || '')}
                     onChange={(e) => updateLine(index, 'quantity', e.target.value === '' ? '' : parseFloat(e.target.value))}
                     onBlur={(e) => updateLine(index, 'quantity', parseFloat(e.target.value) || 1)}
+                    aria-label={`Quantité ligne ${index + 1}`}
+                    className="w-full px-2 py-1.5 text-sm text-center rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
                   />
                 </div>
-                <div className="col-span-3">
-                  <Input
+                <div className="col-span-2 pt-1">
+                  <input
                     type="number"
                     min="0"
                     step="0.01"
-                    value={line.unitPrice || ''}
+                    value={line.unitPrice === '' ? '' : (line.unitPrice || '')}
                     onChange={(e) => updateLine(index, 'unitPrice', e.target.value === '' ? '' : parseFloat(e.target.value))}
                     onBlur={(e) => updateLine(index, 'unitPrice', parseFloat(e.target.value) || 0)}
+                    aria-label={`Prix ligne ${index + 1}`}
+                    className="w-full px-2 py-1.5 text-sm text-center rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
                   />
                 </div>
-                <div className="col-span-1 flex justify-center pt-2">
+                <div className="col-span-2 flex items-center justify-end gap-1 pt-1">
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                    {formatCurrency(lineTotal)}
+                  </span>
                   <button
                     onClick={() => removeLine(index)}
                     disabled={lines.length === 1}
-                    className="p-1 text-slate-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="p-1 rounded text-slate-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
-            ))}
+              );
+            })}
 
             <Button
               variant="ghost"
@@ -340,7 +403,7 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
         {/* Total */}
         <div className="bg-slate-50 dark:bg-dark-bg rounded-xl p-4">
           <div className="flex items-center justify-between">
-            <span className="text-slate-600 dark:text-slate-400">Sous-total HT</span>
+            <span className="text-slate-600 dark:text-slate-400">{getVatRate() > 0 ? 'Sous-total HT' : 'Sous-total'}</span>
             <span className="font-medium dark:text-slate-200">
               {formatCurrency(isNotesOnly ? editQuote.subtotal : getSubtotal())}
             </span>
@@ -361,16 +424,18 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
               </span>
             </div>
           )}
-          <div className="flex items-center justify-between mt-1">
-            <span className="text-slate-600 dark:text-slate-400">TVA ({getVatRate()}%)</span>
-            <span className="font-medium dark:text-slate-200">
-              {formatCurrency(isNotesOnly ? editQuote.vatAmount : getNetTotal() * (getVatRate() / 100))}
-            </span>
-          </div>
+          {getVatRate() > 0 && (
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-slate-600 dark:text-slate-400">TVA ({getVatRate()}%)</span>
+              <span className="font-medium dark:text-slate-200">
+                {formatCurrency(isNotesOnly ? editQuote.vatAmount : getNetTotal() * (getVatRate() / 100))}
+              </span>
+            </div>
+          )}
           <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-200 dark:border-dark-border text-lg font-bold dark:text-white">
-            <span>Total TTC</span>
+            <span>{getVatRate() > 0 ? 'Total TTC' : 'Total'}</span>
             <span className="text-primary-600">
-              {formatCurrency(isNotesOnly ? editQuote.total : getNetTotal() * (1 + getVatRate() / 100))}
+              {formatCurrency(isNotesOnly ? editQuote.total : Math.round(getNetTotal() * (1 + getVatRate() / 100) / 0.05) * 0.05)}
             </span>
           </div>
         </div>

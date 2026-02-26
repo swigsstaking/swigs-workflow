@@ -110,6 +110,8 @@ function buildUrgentItems(data) {
       actionType: 'send',
       invoiceId: r.invoiceId,
       projectId: r.projectId,
+      hasPreviousFailure: r.hasPreviousFailure || false,
+      failureError: r.failureError || null,
     });
   }
 

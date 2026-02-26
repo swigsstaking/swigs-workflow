@@ -6,6 +6,9 @@ import { generateQuotePDF } from '../services/pdf.service.js';
 import { sendQuoteEmail } from '../services/email.service.js';
 import { fireInternalTrigger } from '../services/automation/triggerService.js';
 
+/** Swiss rounding: round to nearest 5 centimes (0.05 CHF) */
+const roundTo5ct = (amount) => Math.round(amount / 0.05) * 0.05;
+
 // Helper: Verify project ownership
 const verifyProjectOwnership = async (projectId, userId) => {
   const query = { _id: projectId };
@@ -64,11 +67,12 @@ export const getInvoiceableQuotes = async (req, res, next) => {
       status: { $in: ['signed', 'partial'] }
     }).sort('-signedAt');
 
-    // Calculate remaining amounts for partial quotes
+    // Calculate remaining amounts based on net (after discount)
     const quotesWithRemaining = quotes.map(q => {
       const qObj = q.toObject();
       qObj.invoicedAmount = qObj.invoicedAmount || 0;
-      qObj.remainingAmount = qObj.subtotal - qObj.invoicedAmount;
+      const quoteNet = qObj.subtotal - (qObj.discountAmount || 0);
+      qObj.remainingAmount = quoteNet - qObj.invoicedAmount;
       return qObj;
     });
 
@@ -192,7 +196,7 @@ export const createQuote = async (req, res, next) => {
     const netTotal = subtotal - discountAmount;
     const vatRate = settings.invoicing.defaultVatRate;
     const vatAmount = netTotal * (vatRate / 100);
-    const total = netTotal + vatAmount;
+    const total = roundTo5ct(netTotal + vatAmount);
 
     // Generate quote number
     const number = await Quote.generateNumber();
@@ -319,7 +323,7 @@ export const updateQuote = async (req, res, next) => {
 
     const netTotal = quote.subtotal - discountAmt;
     quote.vatAmount = netTotal * (quote.vatRate / 100);
-    quote.total = netTotal + quote.vatAmount;
+    quote.total = roundTo5ct(netTotal + quote.vatAmount);
 
     if (notes !== undefined) quote.notes = notes;
     if (validUntil) quote.validUntil = validUntil;

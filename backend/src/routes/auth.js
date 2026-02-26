@@ -137,7 +137,7 @@ router.get('/callback', async (req, res) => {
     // Verify id_token with APP_SECRET — reject if not configured or verification fails
     if (!APP_SECRET) {
       console.error('APP_SECRET not configured — cannot verify id_token');
-      return res.status(500).json({ error: 'Configuration serveur incomplete' });
+      return res.status(500).json({ error: 'Configuration serveur incomplète' });
     }
 
     let hubUser;
@@ -270,10 +270,10 @@ router.post('/sso-verify', ssoVerifyLimiter, async (req, res) => {
 
     if (!APP_SECRET) {
       console.error('APP_SECRET not configured');
-      return res.status(500).json({ error: 'Configuration serveur incomplete' });
+      return res.status(500).json({ error: 'Configuration serveur incomplète' });
     }
 
-    // Verifier le token aupres du Hub
+    // Vérifier le token auprès du Hub
     const verifyResponse = await fetch(`${HUB_URL}/api/auth/sso-verify`, {
       method: 'POST',
       headers: {
@@ -445,7 +445,7 @@ router.get('/me', requireAuth, (req, res) => {
 
 /**
  * POST /api/auth/logout
- * Deconnexion (revoque la session)
+ * Déconnexion (révoque la session)
  */
 router.post('/logout', async (req, res) => {
   try {

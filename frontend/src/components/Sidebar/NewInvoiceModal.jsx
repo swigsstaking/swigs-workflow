@@ -124,6 +124,11 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
         setDiscountType(editInvoice.discountType || '');
         setDiscountValue(editInvoice.discountValue || '');
         setSkipReminders(!!editInvoice.skipReminders);
+        // Pre-fill issue date from existing invoice
+        if (editInvoice.issueDate) {
+          setCustomIssueDate(new Date(editInvoice.issueDate).toISOString().slice(0, 10));
+          setShowAdvanced(true);
+        }
         return;
       }
 
@@ -332,6 +337,9 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
       setLoading(true);
       try {
         const payload = { notes: notes || '' };
+        if (customIssueDate) {
+          payload.issueDate = customIssueDate;
+        }
 
         if (isCustomEdit) {
           if (!isCustomValid()) return;

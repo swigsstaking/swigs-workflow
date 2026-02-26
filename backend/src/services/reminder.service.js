@@ -165,12 +165,14 @@ export const sendReminder = async (invoice, project, settings, scheduleItem) => 
     await invoice.save();
 
     // Log to history
-    await historyService.log(
-      project._id,
-      'reminder_sent',
-      `Relance envoyée pour facture ${invoice.number} (${reminderLabel})`,
-      { invoiceNumber: invoice.number, reminderType: scheduleItem.type }
-    );
+    try {
+      await historyService.log(
+        project._id,
+        'reminder_sent',
+        `Relance envoyée pour facture ${invoice.number} (${reminderLabel})`,
+        { invoiceNumber: invoice.number, reminderType: scheduleItem.type }
+      );
+    } catch (e) { /* non-blocking */ }
 
     console.log(`Reminder sent for invoice ${invoice.number} (${scheduleItem.type})`);
 
@@ -189,6 +191,29 @@ export const sendReminder = async (invoice, project, settings, scheduleItem) => 
     return { success: true };
   } catch (error) {
     console.error(`Error sending reminder for invoice ${invoice.number}:`, error);
+
+    // Log failed reminder on invoice so user can see it
+    try {
+      const errorMsg = error.responseCode === 550
+        ? `Adresse rejetée: ${(error.rejected || []).join(', ')}`
+        : error.message;
+
+      invoice.reminders.push({
+        sentAt: new Date(),
+        type: scheduleItem.type,
+        emailSent: false,
+        error: errorMsg
+      });
+      await invoice.save();
+
+      await historyService.log(
+        project._id,
+        'reminder_failed',
+        `Échec relance facture ${invoice.number} (${scheduleItem.type}): ${errorMsg}`,
+        { invoiceNumber: invoice.number, reminderType: scheduleItem.type, error: errorMsg }
+      );
+    } catch (e) { /* non-blocking */ }
+
     return { success: false, error: error.message };
   }
 };

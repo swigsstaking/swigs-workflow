@@ -16,6 +16,21 @@ export const sendReminder = async (req, res, next) => {
       data: result
     });
   } catch (error) {
+    // Return user-facing error message instead of generic 500
+    const knownErrors = [
+      'Facture non trouvée',
+      'Projet non trouvé',
+      'Non autorisé',
+      'pas d\'adresse email',
+      'Configuration SMTP',
+      'pas encore échue',
+      'Aucune relance configurée',
+      'authentication failed'
+    ];
+    const isKnown = knownErrors.some(msg => error.message?.includes(msg));
+    if (isKnown) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
     next(error);
   }
 };

@@ -3,6 +3,7 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useToastStore } from '../../stores/toastStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { invoicesApi, quotesApi, remindersApi, portalApi, abaninjaApi } from '../../services/api';
+import { trackEvent } from '../../lib/posthog';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { Skeleton } from '../ui/Skeleton';
 import NewInvoiceModal from './NewInvoiceModal';
@@ -67,7 +68,9 @@ export default function DocumentsTab({ project }) {
       setDeleteConfirm(null);
       setActiveMenu(null);
     } catch (error) {
-      console.error('Error deleting invoice:', error);
+      const msg = error?.response?.data?.error || 'Erreur lors de la suppression';
+      addToast({ type: 'error', message: msg });
+      setDeleteConfirm(null);
     }
   };
 
@@ -175,13 +178,21 @@ export default function DocumentsTab({ project }) {
   const handleSendReminder = async (invoiceId) => {
     try {
       await remindersApi.send(invoiceId);
+      const invoice = projectInvoices.find(i => i._id === invoiceId);
+      trackEvent('invoice_reminder_sent', {
+        invoice_number: invoice?.number,
+        reminder_count: (invoice?.reminderCount || 0) + 1,
+      });
       addToast({ type: 'success', message: 'Relance envoyée avec succès' });
       if (fetchProjectInvoices) {
         fetchProjectInvoices(project._id);
       }
       setActiveMenu(null);
     } catch (error) {
-      addToast({ type: 'error', message: 'Erreur lors de l\'envoi de la relance' });
+      addToast({ type: 'error', message: error.response?.data?.error || 'Erreur lors de l\'envoi de la relance' });
+      // Refresh to show the failed reminder entry
+      if (fetchProjectInvoices) fetchProjectInvoices(project._id);
+      setActiveMenu(null);
     }
   };
 
@@ -257,6 +268,7 @@ export default function DocumentsTab({ project }) {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(blobUrl);
+      trackEvent('export_pdf', { type: 'invoice', number: invoice.number });
     } catch (error) {
       addToast({ type: 'error', message: 'Erreur lors du téléchargement du PDF' });
     }
@@ -274,6 +286,7 @@ export default function DocumentsTab({ project }) {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(blobUrl);
+      trackEvent('export_pdf', { type: 'quote', number: quote.number });
     } catch (error) {
       addToast({ type: 'error', message: 'Erreur lors du téléchargement du PDF' });
     }

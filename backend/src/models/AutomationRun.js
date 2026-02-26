@@ -48,6 +48,9 @@ const automationRunSchema = new mongoose.Schema({
   // Test mode flag
   isTest: { type: Boolean, default: false },
 
+  // For date.relative dedup — stores source record _id
+  triggerRecordId: String,
+
   // Overall run status
   status: {
     type: String,
@@ -84,6 +87,7 @@ const automationRunSchema = new mongoose.Schema({
 automationRunSchema.index({ automation: 1, createdAt: -1 });
 automationRunSchema.index({ status: 1 });
 automationRunSchema.index({ scheduledAt: 1, status: 1 });  // For finding runs to resume
+automationRunSchema.index({ automation: 1, triggerRecordId: 1 });  // For date.relative dedup
 
 // Calculate duration on completion
 automationRunSchema.pre('save', function(next) {

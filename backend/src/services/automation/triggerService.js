@@ -217,6 +217,12 @@ export const TRIGGER_TYPES = {
     expectedData: []
   },
 
+  // Date relative trigger
+  'date.relative': {
+    description: 'Avant/après une date (planifié, échéance, expiration)',
+    expectedData: ['recordId', 'recordType', 'targetDate', 'projectName', 'client', 'total']
+  },
+
   // Manual trigger
   'manual': {
     description: 'Déclenché manuellement',

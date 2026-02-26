@@ -11,17 +11,20 @@ export default function InvoicingSection({ settings, onSettingsUpdate }) {
     defaultVatRate: 8.1,
     defaultPaymentTerms: 30
   });
+  const [vatEnabled, setVatEnabled] = useState(true);
   const [hasChanges, setHasChanges] = useState(false);
   const [saving, setSaving] = useState(false);
   const { addToast } = useToastStore();
 
   useEffect(() => {
     if (settings?.invoicing) {
+      const rate = settings.invoicing.defaultVatRate;
       setFormData({
         defaultHourlyRate: settings.invoicing.defaultHourlyRate || 50,
-        defaultVatRate: parseFloat((settings.invoicing.defaultVatRate || 8.1).toFixed(2)),
+        defaultVatRate: rate > 0 ? parseFloat(rate.toFixed(2)) : 8.1,
         defaultPaymentTerms: settings.invoicing.defaultPaymentTerms || 30
       });
+      setVatEnabled(rate > 0);
       setHasChanges(false);
     }
   }, [settings]);
@@ -31,13 +34,18 @@ export default function InvoicingSection({ settings, onSettingsUpdate }) {
     setHasChanges(true);
   };
 
+  const toggleVat = () => {
+    setVatEnabled(prev => !prev);
+    setHasChanges(true);
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
       const payload = {
         invoicing: {
           defaultHourlyRate: parseFloat(formData.defaultHourlyRate),
-          defaultVatRate: parseFloat(formData.defaultVatRate),
+          defaultVatRate: vatEnabled ? parseFloat(formData.defaultVatRate) : 0,
           defaultPaymentTerms: parseInt(formData.defaultPaymentTerms, 10)
         }
       };
@@ -73,20 +81,47 @@ export default function InvoicingSection({ settings, onSettingsUpdate }) {
           />
 
           <Input
-            label="TVA par défaut (%)"
-            type="number"
-            value={formData.defaultVatRate}
-            onChange={(e) => updateField('defaultVatRate', e.target.value)}
-            placeholder="8.1"
-          />
-
-          <Input
             label="Délai de paiement (jours)"
             type="number"
             value={formData.defaultPaymentTerms}
             onChange={(e) => updateField('defaultPaymentTerms', e.target.value)}
             placeholder="30"
           />
+        </div>
+
+        {/* TVA toggle */}
+        <div className="mt-4 pt-4 border-t border-slate-200 dark:border-dark-border">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Assujetti à la TVA</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {vatEnabled ? 'La TVA sera affichée sur vos documents' : 'Aucune mention de TVA sur vos documents'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={toggleVat}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
+                vatEnabled ? 'bg-primary-600' : 'bg-slate-200 dark:bg-slate-700'
+              }`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                vatEnabled ? 'translate-x-[22px]' : 'translate-x-1'
+              }`} />
+            </button>
+          </div>
+
+          {vatEnabled && (
+            <div className="max-w-xs">
+              <Input
+                label="TVA par défaut (%)"
+                type="number"
+                value={formData.defaultVatRate}
+                onChange={(e) => updateField('defaultVatRate', e.target.value)}
+                placeholder="8.1"
+              />
+            </div>
+          )}
         </div>
 
         {hasChanges && (

@@ -5,6 +5,7 @@ import Input, { Textarea } from '../../ui/Input';
 import ConfirmDialog from '../../ui/ConfirmDialog';
 import { clientsApi } from '../../../services/api';
 import { useToastStore } from '../../../stores/toastStore';
+import { trackEvent } from '../../../lib/posthog';
 
 const emptyClient = {
   name: '',
@@ -97,6 +98,7 @@ export default function ClientsSection() {
     setSaving(true);
     try {
       await clientsApi.create(newClient);
+      trackEvent('client_created');
       await loadClients();
       setNewClient({ ...emptyClient });
       setShowNewClientForm(false);

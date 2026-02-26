@@ -116,7 +116,7 @@ export const getDashboard = async (req, res, next) => {
     if (settings?.reminders?.enabled) {
       for (const inv of overdueInvoices) {
         const daysOverdue = Math.floor((now - new Date(inv.dueDate)) / (1000 * 60 * 60 * 24));
-        const sentTypes = (inv.reminders || []).map(r => r.type);
+        const sentTypes = (inv.reminders || []).filter(r => r.emailSent !== false).map(r => r.type);
 
         for (const sched of reminderSchedule) {
           if (daysOverdue >= sched.days && !sentTypes.includes(sched.type)) {
@@ -136,7 +136,7 @@ export const getDashboard = async (req, res, next) => {
     const upcomingReminders = [];
     for (const inv of overdueInvoices) {
       const daysOverdue = Math.floor((now - new Date(inv.dueDate)) / (1000 * 60 * 60 * 24));
-      const sentTypes = (inv.reminders || []).map(r => r.type);
+      const sentTypes = (inv.reminders || []).filter(r => r.emailSent !== false).map(r => r.type);
 
       for (const sched of reminderSchedule) {
         if (!sentTypes.includes(sched.type) && sched.days > daysOverdue && sched.days - daysOverdue <= 14) {
@@ -371,7 +371,9 @@ export const getDashboard = async (req, res, next) => {
           company: r.invoice.project?.client?.company || '',
           reminderType: r.reminderType,
           daysOverdue: r.daysOverdue,
-          projectId: r.invoice.project?._id || null
+          projectId: r.invoice.project?._id || null,
+          hasPreviousFailure: (r.invoice.reminders || []).some(rem => rem.emailSent === false),
+          failureError: (r.invoice.reminders || []).find(rem => rem.emailSent === false)?.error || null
         })),
         upcomingReminders: upcomingReminders.slice(0, 10),
         paymentsThisWeek,

@@ -3,7 +3,8 @@ import { fr } from 'date-fns/locale';
 import {
   FolderPlus, RefreshCw, Archive, RotateCcw,
   Tag, Calendar, FileText, Receipt, CheckCircle,
-  XCircle, Send, PenTool, History
+  XCircle, Send, PenTool, History, Bell, BellOff,
+  Landmark
 } from 'lucide-react';
 import { useProjectStore } from '../../stores/projectStore';
 
@@ -23,7 +24,12 @@ const actionConfig = {
   invoice_created: { icon: Receipt, color: '#F59E0B' },
   invoice_sent: { icon: Send, color: '#3B82F6' },
   invoice_paid: { icon: CheckCircle, color: '#10B981' },
-  invoice_cancelled: { icon: XCircle, color: '#EF4444' }
+  invoice_cancelled: { icon: XCircle, color: '#EF4444' },
+  invoice_deleted: { icon: XCircle, color: '#6B7280' },
+  bank_import: { icon: Landmark, color: '#3B82F6' },
+  bank_reconciled: { icon: Landmark, color: '#10B981' },
+  reminder_sent: { icon: Bell, color: '#F59E0B' },
+  reminder_failed: { icon: BellOff, color: '#EF4444' }
 };
 
 export default function HistoryTab({ project }) {
