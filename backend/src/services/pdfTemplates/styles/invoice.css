@@ -46,7 +46,7 @@ html, body {
 /* ---------- Page Layout ---------- */
 .page {
   width: 100%;
-  min-height: 277mm;
+  min-height: 267mm;
   display: flex;
   flex-direction: column;
   padding: 0;
@@ -1343,7 +1343,9 @@ body.template-bold .company-meta {
 }
 
 body.template-bold .company-logo {
-  filter: brightness(0) invert(1);
+  background: #ffffff;
+  padding: 2mm;
+  border-radius: 4px;
 }
 
 body.template-bold .doc-type {
