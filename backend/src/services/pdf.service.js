@@ -39,6 +39,21 @@ const DEFAULT_DESIGN = {
 };
 
 /**
+ * Compute relative luminance of a hex color (WCAG formula)
+ * Returns true if the color is considered "dark" (needs light text)
+ */
+const isDarkColor = (hex) => {
+  if (!hex || typeof hex !== 'string') return true;
+  const c = hex.replace('#', '');
+  const r = parseInt(c.substring(0, 2), 16) / 255;
+  const g = parseInt(c.substring(2, 4), 16) / 255;
+  const b = parseInt(c.substring(4, 6), 16) / 255;
+  const toLinear = (v) => v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  const luminance = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+  return luminance < 0.4;
+};
+
+/**
  * Merge design settings with defaults
  */
 const getDesign = (settings) => {
@@ -47,7 +62,15 @@ const getDesign = (settings) => {
     : (settings.invoiceDesign || {});
   // Remove Mongoose internal fields
   delete invoiceDesign._id;
-  return { ...DEFAULT_DESIGN, ...invoiceDesign };
+  const design = { ...DEFAULT_DESIGN, ...invoiceDesign };
+  // Auto-compute text contrast based on background colors
+  const primaryDark = isDarkColor(design.primaryColor);
+  const accentDark = isDarkColor(design.accentColor);
+  design.primaryTextColor = primaryDark ? '#ffffff' : '#1a1a2e';
+  design.primaryTextMuted = primaryDark ? 'rgba(255,255,255,0.7)' : 'rgba(26,26,46,0.6)';
+  design.accentTextColor = accentDark ? '#ffffff' : '#1a1a2e';
+  design.logoInvert = primaryDark;
+  return design;
 };
 
 /**

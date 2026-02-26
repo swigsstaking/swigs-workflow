@@ -8,7 +8,7 @@
     {{{css}}}
   </style>
 </head>
-<body class="template-{{design.template}} table-header-{{design.tableHeaderStyle}} logo-{{design.logoPosition}}" style="--primary-color: {{design.primaryColor}}; --accent-color: {{design.accentColor}}; --font-family: '{{design.fontFamily}}', 'Helvetica Neue', Helvetica, Arial, sans-serif; --logo-size: {{design.logoSize}}mm; --logo-offset-x: {{design.logoOffsetX}}mm; --logo-offset-y: {{design.logoOffsetY}}mm;">
+<body class="template-{{design.template}} table-header-{{design.tableHeaderStyle}} logo-{{design.logoPosition}}{{#if design.logoInvert}} logo-invert{{/if}}" style="--primary-color: {{design.primaryColor}}; --accent-color: {{design.accentColor}}; --primary-text: {{design.primaryTextColor}}; --primary-text-muted: {{design.primaryTextMuted}}; --accent-text: {{design.accentTextColor}}; --font-family: '{{design.fontFamily}}', 'Helvetica Neue', Helvetica, Arial, sans-serif; --logo-size: {{design.logoSize}}mm; --logo-offset-x: {{design.logoOffsetX}}mm; --logo-offset-y: {{design.logoOffsetY}}mm;">
 <div class="page">
 
   <!-- ===== HEADER ===== -->

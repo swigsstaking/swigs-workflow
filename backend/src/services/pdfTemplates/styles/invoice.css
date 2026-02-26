@@ -1316,7 +1316,7 @@ body.template-bold {
 
 body.template-bold .doc-header {
   background: var(--primary-color);
-  color: #ffffff;
+  color: var(--primary-text);
   border-radius: var(--radius);
   padding: 8mm 8mm;
   margin: 0 0 8mm;
@@ -1330,41 +1330,39 @@ body.template-bold .company-block {
 body.template-bold .company-name {
   font-size: 15pt;
   font-weight: 900;
-  color: #ffffff;
+  color: var(--primary-text);
   letter-spacing: -0.5px;
 }
 
 body.template-bold .company-details {
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--primary-text-muted);
 }
 
 body.template-bold .company-meta {
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--primary-text-muted);
 }
 
-body.template-bold .company-logo {
-  background: #ffffff;
-  padding: 2mm;
-  border-radius: 4px;
+body.template-bold.logo-invert .company-logo {
+  filter: brightness(0) invert(1);
 }
 
 body.template-bold .doc-type {
   font-size: 32pt;
   font-weight: 900;
-  color: #ffffff;
+  color: var(--primary-text);
   letter-spacing: -2px;
   line-height: 0.9;
 }
 
 body.template-bold .doc-number {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--primary-text-muted);
   font-weight: 700;
 }
 
 body.template-bold .doc-status {
-  background: rgba(255, 255, 255, 0.2);
-  color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(128, 128, 128, 0.15);
+  color: var(--primary-text);
+  border: 1px solid rgba(128, 128, 128, 0.25);
 }
 
 body.template-bold .info-block {
@@ -1386,7 +1384,7 @@ body.template-bold .lines-table {
 
 body.template-bold .lines-table thead tr {
   background: var(--accent-color);
-  color: #ffffff;
+  color: var(--accent-text);
 }
 
 body.template-bold .lines-table thead th {
@@ -1402,6 +1400,7 @@ body.template-bold .totals-box {
 
 body.template-bold .totals-row.total-final {
   background: var(--primary-color);
+  color: var(--primary-text);
 }
 
 body.template-bold .totals-row.total-final .label {
