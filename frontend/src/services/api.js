@@ -91,7 +91,8 @@ export const invoicesApi = {
   delete: (id) => api.delete(`/invoices/${id}`),
   send: (id) => api.post(`/invoices/${id}/send`),
   getPdf: (id) => api.get(`/invoices/${id}/pdf`, { responseType: 'blob' }),
-  recordPayment: (id, data) => api.post(`/invoices/${id}/payments`, data)
+  recordPayment: (id, data) => api.post(`/invoices/${id}/payments`, data),
+  getEditData: (id) => api.get(`/invoices/${id}/edit-data`)
 };
 
 // Quotes

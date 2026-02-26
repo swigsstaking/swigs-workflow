@@ -52,6 +52,8 @@ const invoiceQuoteSchema = new mongoose.Schema({
   number: String,
   lines: [invoiceQuoteLineSchema],
   subtotal: Number,
+  invoicedAmount: Number,
+  isPartial: Boolean,
   signedAt: Date
 }, { _id: false });
 
@@ -201,6 +203,10 @@ const invoiceSchema = new mongoose.Schema({
     emailSent: {
       type: Boolean,
       default: false
+    },
+    error: {
+      type: String,
+      default: null
     }
   }],
   nextReminderDate: {
@@ -231,10 +237,37 @@ const invoiceSchema = new mongoose.Schema({
 });
 
 // Generate invoice number (atomic — safe for PM2 cluster)
-invoiceSchema.statics.generateNumber = async function(userId) {
+invoiceSchema.statics.generateNumber = async function() {
   const year = new Date().getFullYear();
-  const seq = await Counter.getNextSequence(`invoice_${year}_${userId || 'global'}`);
+  const seq = await Counter.getNextSequence(`invoice_${year}`);
   return `FAC-${year}-${String(seq).padStart(3, '0')}`;
+};
+
+// Sync global counter with existing invoices (run once at startup)
+invoiceSchema.statics.syncCounter = async function() {
+  const year = new Date().getFullYear();
+  const counterKey = `invoice_${year}`;
+
+  // Find the highest invoice number for this year
+  const latest = await this.findOne(
+    { number: new RegExp(`^FAC-${year}-`) },
+    { number: 1 },
+    { sort: { number: -1 } }
+  );
+
+  if (!latest) return;
+
+  const currentSeq = parseInt(latest.number.split('-')[2], 10);
+  if (!currentSeq) return;
+
+  // Ensure global counter is at least as high as the max existing number
+  await Counter.findByIdAndUpdate(
+    counterKey,
+    { $max: { seq: currentSeq } },
+    { upsert: true }
+  );
+
+  console.log(`Invoice counter synced: ${counterKey} = ${currentSeq}`);
 };
 
 // Indexes for common query patterns

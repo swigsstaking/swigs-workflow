@@ -55,7 +55,9 @@ export default function StandardInvoiceForm({
   collapsedSections,
   toggleSection,
   toggleAllInSection,
-  getQuoteAmount
+  getQuoteAmount,
+  notes,
+  setNotes
 }) {
   const hoursEvents = unbilledEvents.filter(e => e.type === 'hours');
   const expenseEvents = unbilledEvents.filter(e => e.type === 'expense');
@@ -178,7 +180,9 @@ export default function StandardInvoiceForm({
     const partial = quotePartials[quote._id];
     const displayAmount = getQuoteAmount(quote);
     const isPartiallyInvoiced = quote.status === 'partial' || (quote.invoicedAmount && quote.invoicedAmount > 0);
-    const remainingAmount = quote.remainingAmount ?? quote.subtotal;
+    const quoteNet = quote.subtotal - (quote.discountAmount || 0);
+    const remainingAmount = quote.remainingAmount ?? quoteNet;
+    const hasDiscount = (quote.discountAmount || 0) > 0;
 
     return (
       <div key={quote._id} className={`
@@ -217,6 +221,11 @@ export default function StandardInvoiceForm({
               {isPartiallyInvoiced && (
                 <span className="px-1.5 py-0.5 text-xs rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
                   Partiel
+                </span>
+              )}
+              {hasDiscount && (
+                <span className="px-1.5 py-0.5 text-xs rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
+                  -{formatCurrency(quote.discountAmount)}
                 </span>
               )}
             </div>
@@ -338,6 +347,18 @@ export default function StandardInvoiceForm({
         selectedItems={selectedQuotes}
         setSelectedItems={setSelectedQuotes}
       />
+      {setNotes && (
+        <div className="pt-2">
+          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Notes</label>
+          <textarea
+            value={notes || ''}
+            onChange={e => setNotes(e.target.value)}
+            className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-dark-card text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            rows={3}
+            placeholder="Notes optionnelles..."
+          />
+        </div>
+      )}
     </div>
   );
 }

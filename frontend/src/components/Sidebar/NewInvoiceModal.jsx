@@ -69,6 +69,31 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
   }, [isOpen, project?._id, preselectedQuoteId, editInvoice?._id]);
 
   const loadData = async () => {
+    // Reset all form state synchronously BEFORE async calls
+    // (prevents race condition where user enters data while API is in flight)
+    setShowAdvanced(false);
+    setCustomIssueDate('');
+    setQuotePartials({});
+    setCollapsedSections({});
+    setCustomLines([{ description: '', quantity: 1, unitPrice: 0 }]);
+    setNotes('');
+    setAutoSend(false);
+    setSkipReminders(false);
+    setDiscountType('');
+    setDiscountValue('');
+    setSelectedEvents([]);
+    setSelectedQuotes([]);
+    setRecurringForm({
+      lines: [{ description: '', quantity: 1, unitPrice: 0 }],
+      frequency: 'monthly',
+      dayOfMonth: 1,
+      startDate: new Date().toISOString().slice(0, 10),
+      hasEndDate: false,
+      endDate: '',
+      notes: '',
+      autoSend: false,
+    });
+
     try {
       // In edit mode, pre-fill from the invoice
       if (isEditMode) {
@@ -83,23 +108,22 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
                 }))
               : [{ description: '', quantity: 1, unitPrice: 0 }]
           );
-        } else {
+          setUnbilledEvents([]);
+          setInvoiceableQuotes([]);
+        } else if (isStandardEdit) {
           setMode('standard');
-          setCustomLines([{ description: '', quantity: 1, unitPrice: 0 }]);
+          // Load edit data: available events/quotes + current selections
+          const res = await invoicesApi.getEditData(editInvoice._id);
+          const editData = res.data.data;
+          setUnbilledEvents(editData.events);
+          setInvoiceableQuotes(editData.quotes);
+          setSelectedEvents(editData.currentEventIds);
+          setSelectedQuotes(editData.currentQuoteIds);
         }
         setNotes(editInvoice.notes || '');
         setDiscountType(editInvoice.discountType || '');
         setDiscountValue(editInvoice.discountValue || '');
         setSkipReminders(!!editInvoice.skipReminders);
-        setAutoSend(false);
-        setShowAdvanced(false);
-        setCustomIssueDate('');
-        setSelectedEvents([]);
-        setSelectedQuotes([]);
-        setQuotePartials({});
-        setCollapsedSections({});
-        setUnbilledEvents([]);
-        setInvoiceableQuotes([]);
         return;
       }
 
@@ -119,24 +143,6 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
         setSelectedEvents(eventsRes.data.data.map(e => e._id));
         setSelectedQuotes([]);
       }
-
-      setQuotePartials({});
-      setCollapsedSections({});
-      setShowAdvanced(false);
-      setCustomIssueDate('');
-      setCustomLines([{ description: '', quantity: 1, unitPrice: 0 }]);
-      setNotes('');
-      setAutoSend(false);
-      setRecurringForm({
-        lines: [{ description: '', quantity: 1, unitPrice: 0 }],
-        frequency: 'monthly',
-        dayOfMonth: 1,
-        startDate: new Date().toISOString().slice(0, 10),
-        hasEndDate: false,
-        endDate: '',
-        notes: '',
-        autoSend: false,
-      });
     } catch (error) {
       console.error('Error loading data:', error);
     }
@@ -249,13 +255,14 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
   const getQuoteAmount = (quote) => {
     const partial = quotePartials[quote._id];
     const numValue = parseFloat(partial?.value) || 0;
-    const remainingAmount = quote.remainingAmount ?? quote.subtotal;
+    const quoteNet = quote.subtotal - (quote.discountAmount || 0);
+    const remainingAmount = quote.remainingAmount ?? quoteNet;
 
     if (!partial || numValue === 0) {
       return remainingAmount;
     }
     if (partial.type === 'percent') {
-      return quote.subtotal * (numValue / 100);
+      return quoteNet * (numValue / 100);
     }
     return Math.min(numValue, remainingAmount);
   };
@@ -264,6 +271,19 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
     return invoiceableQuotes
       .filter(q => selectedQuotes.includes(q._id))
       .reduce((sum, q) => sum + getQuoteAmount(q), 0);
+  };
+
+  const getQuotesDiscount = () => {
+    return invoiceableQuotes
+      .filter(q => selectedQuotes.includes(q._id))
+      .reduce((sum, q) => {
+        const quoteDiscount = q.discountAmount || 0;
+        if (quoteDiscount <= 0) return sum;
+        const quoteNet = q.subtotal - quoteDiscount;
+        const amount = getQuoteAmount(q);
+        const ratio = quoteNet > 0 ? amount / quoteNet : 0;
+        return sum + quoteDiscount * ratio;
+      }, 0);
   };
 
   const getCustomLineTotal = (line) => {
@@ -322,6 +342,18 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
           }));
           payload.discountType = discountType || undefined;
           payload.discountValue = discountValue ? parseFloat(discountValue) : undefined;
+        } else if (isStandardEdit) {
+          if (selectedEvents.length === 0 && selectedQuotes.length === 0) return;
+          const cleanedPartials = {};
+          for (const [quoteId, partial] of Object.entries(quotePartials)) {
+            const numValue = parseFloat(partial.value);
+            if (numValue > 0) {
+              cleanedPartials[quoteId] = { type: partial.type, value: numValue };
+            }
+          }
+          payload.eventIds = selectedEvents;
+          payload.quoteIds = selectedQuotes;
+          payload.quotePartials = Object.keys(cleanedPartials).length > 0 ? cleanedPartials : undefined;
         }
 
         await updateInvoice(editInvoice._id, payload);
@@ -448,7 +480,7 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
   };
 
   const totalSelected = isEditMode
-    ? (isCustomEdit ? (isCustomValid() ? customLines.length : 0) : 1)
+    ? (isCustomEdit ? (isCustomValid() ? customLines.length : 0) : selectedEvents.length + selectedQuotes.length)
     : mode === 'standard'
       ? selectedEvents.length + selectedQuotes.length
       : mode === 'custom'
@@ -478,47 +510,7 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
         <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
           {/* Left column */}
           <div className="flex-1 overflow-y-auto max-h-[50vh] lg:max-h-none px-6 py-4 lg:border-r border-slate-200 dark:border-slate-700/50">
-            {isStandardEdit ? (
-              <div className="space-y-4">
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Les lignes d'une facture standard ne peuvent pas être modifiées. Vous pouvez modifier les notes ci-dessous.
-                </p>
-                {/* Read-only events */}
-                {editInvoice.events?.length > 0 && (
-                  <div>
-                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">Événements</p>
-                    {editInvoice.events.map((e, i) => (
-                      <div key={i} className="flex justify-between text-sm py-1.5 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
-                        <span className="text-slate-700 dark:text-slate-300">{e.description}</span>
-                        <span className="text-slate-900 dark:text-white font-medium">{formatCurrency(e.amount)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {/* Read-only quotes */}
-                {editInvoice.quotes?.length > 0 && (
-                  <div>
-                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">Devis</p>
-                    {editInvoice.quotes.map((q, i) => (
-                      <div key={i} className="flex justify-between text-sm py-1.5 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
-                        <span className="text-slate-700 dark:text-slate-300">{q.number}</span>
-                        <span className="text-slate-900 dark:text-white font-medium">{formatCurrency(q.subtotal)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Notes</label>
-                  <textarea
-                    value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-dark-card text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    rows={3}
-                    placeholder="Notes optionnelles..."
-                  />
-                </div>
-              </div>
-            ) : mode === 'standard' ? (
+            {(isStandardEdit || mode === 'standard') && !isCustomEdit ? (
               <StandardInvoiceForm
                 unbilledEvents={unbilledEvents}
                 invoiceableQuotes={invoiceableQuotes}
@@ -533,6 +525,8 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
                 toggleSection={toggleSection}
                 toggleAllInSection={toggleAllInSection}
                 getQuoteAmount={getQuoteAmount}
+                notes={isStandardEdit ? notes : undefined}
+                setNotes={isStandardEdit ? setNotes : undefined}
               />
             ) : mode === 'custom' ? (
               <CustomInvoiceForm
@@ -567,6 +561,7 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
             quotePartials={quotePartials}
             getEventsTotal={getEventsTotal}
             getQuotesTotal={getQuotesTotal}
+            getQuotesDiscount={getQuotesDiscount}
             getCustomTotal={getCustomTotal}
             getSelectedTotal={getSelectedTotal}
             getDiscountAmount={getDiscountAmount}

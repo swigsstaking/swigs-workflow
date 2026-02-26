@@ -9,6 +9,9 @@ import { sendInvoiceEmail } from '../services/email.service.js';
 import { decrypt } from '../utils/crypto.js';
 import { fireInternalTrigger } from '../services/automation/triggerService.js';
 
+/** Swiss rounding: round to nearest 5 centimes (0.05 CHF) */
+const roundTo5ct = (amount) => Math.round(amount / 0.05) * 0.05;
+
 // Helper: Verify project ownership
 const verifyProjectOwnership = async (projectId, userId) => {
   const query = { _id: projectId };
@@ -154,7 +157,10 @@ export const createInvoice = async (req, res, next) => {
     const vatRate = settings.invoicing.defaultVatRate;
 
     // Calculate issue date (allow custom date for past invoices)
-    const finalIssueDate = issueDate ? new Date(issueDate) : new Date();
+    // Append T12:00:00 to date-only strings to avoid UTC midnight → previous day in CET/CEST
+    const finalIssueDate = issueDate
+      ? new Date(issueDate.length === 10 ? issueDate + 'T12:00:00' : issueDate)
+      : new Date();
 
     // Calculate due date based on issue date
     const finalDueDate = dueDate ? new Date(dueDate) : new Date(
@@ -194,7 +200,7 @@ export const createInvoice = async (req, res, next) => {
 
       const netTotal = subtotal - discountAmt;
       const vatAmount = netTotal * (vatRate / 100);
-      const total = netTotal + vatAmount;
+      const total = roundTo5ct(netTotal + vatAmount);
 
       // Create custom invoice
       invoice = await Invoice.create({
@@ -282,29 +288,38 @@ export const createInvoice = async (req, res, next) => {
       };
     });
 
-    // Calculate totals from quotes with partial support
+    // Calculate totals from quotes with partial + DISCOUNT support
+    let totalQuoteDiscount = 0;
     const quoteSnapshots = quotes.map(quote => {
       const partial = quotePartials[quote._id.toString()];
-      let invoiceAmount = quote.subtotal; // Default: full amount
+      const quoteDiscount = quote.discountAmount || 0;
+      const quoteNet = quote.subtotal - quoteDiscount; // Net = after discount
+      let invoiceNetAmount = quoteNet; // Default: full net amount
       let isPartial = false;
 
-      // Calculate partial amount if specified
+      // Calculate partial amount if specified (based on net amount)
       if (partial && partial.value > 0) {
         if (partial.type === 'percent') {
-          invoiceAmount = quote.subtotal * (partial.value / 100);
+          invoiceNetAmount = quoteNet * (partial.value / 100);
         } else {
-          invoiceAmount = partial.value;
+          invoiceNetAmount = Math.min(partial.value, quoteNet);
         }
-        isPartial = invoiceAmount < quote.subtotal;
+        isPartial = invoiceNetAmount < quoteNet;
       }
 
-      // Check remaining amount (if quote was already partially invoiced)
-      const remainingAmount = quote.subtotal - (quote.invoicedAmount || 0);
-      if (invoiceAmount > remainingAmount) {
-        invoiceAmount = remainingAmount;
+      // Check remaining amount (based on net, tracking net amounts)
+      const remainingNet = quoteNet - (quote.invoicedAmount || 0);
+      if (invoiceNetAmount > remainingNet) {
+        invoiceNetAmount = remainingNet;
       }
 
-      subtotal += invoiceAmount;
+      // Prorate the discount based on how much of the quote is being invoiced
+      const invoiceRatio = quoteNet > 0 ? invoiceNetAmount / quoteNet : 0;
+      const proRatedDiscount = quoteDiscount * invoiceRatio;
+      totalQuoteDiscount += proRatedDiscount;
+
+      // Add pre-discount amount to invoice subtotal (for transparent breakdown)
+      subtotal += invoiceNetAmount + proRatedDiscount;
 
       return {
         quoteId: quote._id,
@@ -316,14 +331,17 @@ export const createInvoice = async (req, res, next) => {
           total: line.total
         })),
         subtotal: quote.subtotal,
-        invoicedAmount: invoiceAmount, // Amount invoiced this time
+        invoicedAmount: invoiceNetAmount, // Net amount invoiced (for tracking)
         isPartial,
         signedAt: quote.signedAt
       };
     });
 
-    const vatAmount = subtotal * (vatRate / 100);
-    const total = subtotal + vatAmount;
+    // Apply quote discounts — VAT calculated on net (after discount)
+    const discountAmount = Math.round(totalQuoteDiscount * 100) / 100;
+    const netAmount = subtotal - discountAmount;
+    const vatAmount = netAmount * (vatRate / 100);
+    const total = roundTo5ct(netAmount + vatAmount);
 
     // Step 1: Create the invoice document
     invoice = await Invoice.create({
@@ -334,6 +352,9 @@ export const createInvoice = async (req, res, next) => {
       quotes: quoteSnapshots,
       customLines: [],
       subtotal,
+      discountType: discountAmount > 0 ? 'fixed' : undefined,
+      discountValue: discountAmount > 0 ? discountAmount : undefined,
+      discountAmount,
       vatRate,
       vatAmount,
       total,
@@ -356,7 +377,8 @@ export const createInvoice = async (req, res, next) => {
     for (const quote of quotes) {
       const snapshot = quoteSnapshots.find(qs => qs.quoteId.toString() === quote._id.toString());
       const newInvoicedAmount = (quote.invoicedAmount || 0) + snapshot.invoicedAmount;
-      const isFullyInvoiced = newInvoicedAmount >= quote.subtotal;
+      const quoteNetAmount = quote.subtotal - (quote.discountAmount || 0);
+      const isFullyInvoiced = newInvoicedAmount >= quoteNetAmount;
 
       await Quote.findByIdAndUpdate(quote._id, {
         $set: {
@@ -431,6 +453,120 @@ export const createInvoice = async (req, res, next) => {
   }
 };
 
+// @desc    Get edit data for a standard draft invoice
+// @route   GET /api/invoices/:id/edit-data
+export const getInvoiceEditData = async (req, res, next) => {
+  try {
+    const invoice = await Invoice.findById(req.params.id).populate('project');
+
+    if (!invoice) {
+      return res.status(404).json({ success: false, error: 'Facture non trouvée' });
+    }
+
+    // Verify ownership
+    if (req.user) {
+      if (!invoice.project.userId) {
+        return res.status(403).json({ success: false, error: 'Ce projet n\'a pas de propriétaire assigné' });
+      }
+      if (invoice.project.userId.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ success: false, error: 'Accès refusé' });
+      }
+    }
+
+    if (invoice.status !== 'draft') {
+      return res.status(400).json({ success: false, error: 'Seules les factures en brouillon peuvent être modifiées' });
+    }
+    if (invoice.invoiceType !== 'standard') {
+      return res.status(400).json({ success: false, error: 'Cette route est réservée aux factures standard' });
+    }
+
+    const projectId = invoice.project._id;
+
+    // Current snapshot IDs
+    const currentEventIds = (invoice.events || []).map(e => e.eventId).filter(Boolean);
+    const currentQuoteIds = (invoice.quotes || []).map(q => q.quoteId).filter(Boolean);
+
+    // 1. Unbilled events from this project
+    const unbilledEvents = await Event.find({
+      project: projectId,
+      billed: false
+    }).sort('-date').lean();
+
+    // 2. Events billed by THIS invoice (they show as billed but belong to this invoice)
+    const invoiceBilledEvents = currentEventIds.length > 0
+      ? await Event.find({ _id: { $in: currentEventIds } }).sort('-date').lean()
+      : [];
+
+    // Merge without duplicates (unbilled + this invoice's events)
+    const seenEventIds = new Set();
+    const allEvents = [];
+    for (const ev of [...invoiceBilledEvents, ...unbilledEvents]) {
+      const id = ev._id.toString();
+      if (!seenEventIds.has(id)) {
+        seenEventIds.add(id);
+        allEvents.push(ev);
+      }
+    }
+    // Sort by date desc
+    allEvents.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    // 3. Invoiceable quotes from project (signed/partial)
+    const invoiceableQuotes = await Quote.find({
+      project: projectId,
+      status: { $in: ['signed', 'partial'] }
+    }).sort('-signedAt');
+
+    // Build quotes map for fast lookup
+    const quotesMap = new Map();
+    for (const q of invoiceableQuotes) {
+      quotesMap.set(q._id.toString(), q.toObject());
+    }
+
+    // 4. For quotes in this invoice's snapshots, restore their remainingAmount
+    //    as if this invoice didn't exist
+    for (const snapshot of invoice.quotes || []) {
+      const qId = snapshot.quoteId?.toString();
+      if (!qId) continue;
+      const snapshotInvoicedAmount = snapshot.invoicedAmount || snapshot.subtotal || 0;
+
+      if (quotesMap.has(qId)) {
+        // Quote is already invoiceable — add back what this invoice took
+        const q = quotesMap.get(qId);
+        q.invoicedAmount = Math.max(0, (q.invoicedAmount || 0) - snapshotInvoicedAmount);
+      } else {
+        // Quote might be fully 'invoiced' because of this invoice — load it
+        const quote = await Quote.findById(qId).lean();
+        if (quote) {
+          quote.invoicedAmount = Math.max(0, (quote.invoicedAmount || 0) - snapshotInvoicedAmount);
+          quotesMap.set(qId, quote);
+        }
+      }
+    }
+
+    // Calculate remainingAmount for each quote (same logic as getInvoiceableQuotes)
+    const allQuotes = Array.from(quotesMap.values()).map(q => {
+      const quoteNet = q.subtotal - (q.discountAmount || 0);
+      q.remainingAmount = quoteNet - (q.invoicedAmount || 0);
+      return q;
+    });
+
+    // Sort by signedAt desc
+    allQuotes.sort((a, b) => new Date(b.signedAt || 0) - new Date(a.signedAt || 0));
+
+    res.json({
+      success: true,
+      data: {
+        events: allEvents,
+        quotes: allQuotes,
+        currentEventIds: currentEventIds.map(id => id.toString()),
+        currentQuoteIds: currentQuoteIds.map(id => id.toString())
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Update invoice
 // @route   PUT /api/invoices/:id
 export const updateInvoice = async (req, res, next) => {
@@ -469,10 +605,293 @@ export const updateInvoice = async (req, res, next) => {
       });
     }
 
-    const { notes, dueDate, vatRate, customLines, discountType, discountValue } = req.body;
+    const { notes, dueDate, vatRate, customLines, discountType, discountValue, eventIds, quoteIds, quotePartials } = req.body;
 
     if (notes !== undefined) invoice.notes = notes;
     if (dueDate) invoice.dueDate = dueDate;
+
+    // ─── Standard invoice edit (events/quotes) ───
+    if (invoice.invoiceType === 'standard' && (eventIds !== undefined || quoteIds !== undefined)) {
+      const newEventIds = eventIds || [];
+      const newQuoteIds = quoteIds || [];
+
+      if (newEventIds.length === 0 && newQuoteIds.length === 0) {
+        return res.status(400).json({ success: false, error: 'Sélectionnez au moins un événement ou un devis' });
+      }
+
+      const currentEventIds = (invoice.events || []).map(e => e.eventId?.toString()).filter(Boolean);
+      const currentQuoteIds = (invoice.quotes || []).map(q => q.quoteId?.toString()).filter(Boolean);
+
+      const removedEventIds = currentEventIds.filter(id => !newEventIds.includes(id));
+      const addedEventIds = newEventIds.filter(id => !currentEventIds.includes(id));
+      const removedQuoteIds = currentQuoteIds.filter(id => !newQuoteIds.includes(id));
+      const addedQuoteIds = newQuoteIds.filter(id => !currentQuoteIds.includes(id));
+
+      // Track rollback state
+      const rollbackOps = { unbilledEvents: [], revertedQuotes: [], billedEvents: [], updatedQuotes: [] };
+
+      try {
+        // 1. Unbill removed events
+        if (removedEventIds.length > 0) {
+          await Event.updateMany(
+            { _id: { $in: removedEventIds } },
+            { billed: false, invoice: null }
+          );
+          rollbackOps.unbilledEvents = removedEventIds;
+        }
+
+        // 2. Revert removed quotes
+        for (const qId of removedQuoteIds) {
+          const snapshot = invoice.quotes.find(q => q.quoteId?.toString() === qId);
+          const quote = await Quote.findById(qId);
+          if (!quote || !snapshot) continue;
+
+          const snapshotAmount = snapshot.invoicedAmount || snapshot.subtotal || 0;
+          const newInvoicedAmount = Math.max(0, (quote.invoicedAmount || 0) - snapshotAmount);
+          const quoteNetAmount = quote.subtotal - (quote.discountAmount || 0);
+          const updatedInvoices = (quote.invoices || []).filter(inv => inv.invoice.toString() !== invoice._id.toString());
+
+          let newStatus = 'signed';
+          if (newInvoicedAmount > 0 && newInvoicedAmount < quoteNetAmount) newStatus = 'partial';
+          else if (newInvoicedAmount >= quoteNetAmount) newStatus = 'invoiced';
+
+          rollbackOps.revertedQuotes.push({
+            id: qId, previousStatus: quote.status,
+            previousInvoicedAmount: quote.invoicedAmount || 0,
+            previousInvoices: quote.invoices
+          });
+
+          await Quote.findByIdAndUpdate(qId, {
+            $set: {
+              status: newStatus, invoicedAmount: newInvoicedAmount,
+              invoice: newStatus === 'invoiced' ? quote.invoice : null,
+              invoicedAt: newStatus === 'invoiced' ? quote.invoicedAt : null,
+              invoices: updatedInvoices
+            }
+          });
+        }
+
+        // 3. Fetch & validate new events
+        const addedEvents = addedEventIds.length > 0
+          ? await Event.find({ _id: { $in: addedEventIds }, project: invoice.project._id, billed: false })
+          : [];
+        // Kept events (still in the invoice) — use original snapshots
+        const keptEventSnapshots = (invoice.events || []).filter(e => newEventIds.includes(e.eventId?.toString()));
+
+        // Create snapshots for added events (same logic as createInvoice)
+        const addedEventSnapshots = addedEvents.map(event => {
+          let amount = 0;
+          if (event.type === 'hours') amount = event.hours * event.hourlyRate;
+          else if (event.type === 'expense') amount = event.amount;
+          return {
+            eventId: event._id, description: event.description, type: event.type,
+            hours: event.hours, hourlyRate: event.hourlyRate, amount, date: event.date
+          };
+        });
+
+        // 4. Bill added events
+        if (addedEvents.length > 0) {
+          const addedIds = addedEvents.map(e => e._id);
+          await Event.updateMany({ _id: { $in: addedIds } }, { billed: true, invoice: invoice._id });
+          rollbackOps.billedEvents = addedIds;
+        }
+
+        // 5. Fetch & validate new quotes + create snapshots
+        const addedQuotes = addedQuoteIds.length > 0
+          ? await Quote.find({ _id: { $in: addedQuoteIds }, project: invoice.project._id, status: { $in: ['signed', 'partial'] } })
+          : [];
+        const keptQuoteSnapshots = (invoice.quotes || []).filter(q => newQuoteIds.includes(q.quoteId?.toString()));
+
+        let subtotal = 0;
+        let totalQuoteDiscount = 0;
+
+        // Sum kept event snapshots
+        for (const es of keptEventSnapshots) subtotal += es.amount || 0;
+        // Sum added event snapshots
+        for (const es of addedEventSnapshots) subtotal += es.amount || 0;
+
+        // Sum kept quote snapshots (reuse existing snapshot amounts)
+        for (const qs of keptQuoteSnapshots) {
+          const qId = qs.quoteId?.toString();
+          const quote = await Quote.findById(qId).lean();
+          const quoteDiscount = quote?.discountAmount || 0;
+          const quoteNet = (quote?.subtotal || qs.subtotal) - quoteDiscount;
+          const invoiceNetAmount = qs.invoicedAmount || qs.subtotal || 0;
+          const invoiceRatio = quoteNet > 0 ? invoiceNetAmount / quoteNet : 0;
+          totalQuoteDiscount += quoteDiscount * invoiceRatio;
+          subtotal += invoiceNetAmount + (quoteDiscount * invoiceRatio);
+        }
+
+        // Create snapshots for added quotes (same logic as createInvoice)
+        const addedQuoteSnapshots = [];
+        for (const quote of addedQuotes) {
+          const partial = quotePartials?.[quote._id.toString()];
+          const quoteDiscount = quote.discountAmount || 0;
+          const quoteNet = quote.subtotal - quoteDiscount;
+          let invoiceNetAmount = quoteNet;
+          let isPartial = false;
+
+          if (partial && partial.value > 0) {
+            if (partial.type === 'percent') invoiceNetAmount = quoteNet * (partial.value / 100);
+            else invoiceNetAmount = Math.min(partial.value, quoteNet);
+            isPartial = invoiceNetAmount < quoteNet;
+          }
+
+          const remainingNet = quoteNet - (quote.invoicedAmount || 0);
+          if (invoiceNetAmount > remainingNet) invoiceNetAmount = remainingNet;
+
+          const invoiceRatio = quoteNet > 0 ? invoiceNetAmount / quoteNet : 0;
+          const proRatedDiscount = quoteDiscount * invoiceRatio;
+          totalQuoteDiscount += proRatedDiscount;
+          subtotal += invoiceNetAmount + proRatedDiscount;
+
+          addedQuoteSnapshots.push({
+            quoteId: quote._id, number: quote.number,
+            lines: quote.lines.map(l => ({ description: l.description, quantity: l.quantity, unitPrice: l.unitPrice, total: l.total })),
+            subtotal: quote.subtotal, invoicedAmount: invoiceNetAmount, isPartial, signedAt: quote.signedAt
+          });
+
+          // 6. Update quote tracking
+          const newInvoicedAmount = (quote.invoicedAmount || 0) + invoiceNetAmount;
+          const isFullyInvoiced = newInvoicedAmount >= quoteNet;
+
+          rollbackOps.updatedQuotes.push({
+            id: quote._id, previousStatus: quote.status,
+            previousInvoicedAmount: quote.invoicedAmount || 0, previousInvoice: quote.invoice
+          });
+
+          await Quote.findByIdAndUpdate(quote._id, {
+            $set: {
+              status: isFullyInvoiced ? 'invoiced' : 'partial',
+              invoicedAmount: newInvoicedAmount,
+              invoice: isFullyInvoiced ? invoice._id : quote.invoice,
+              invoicedAt: isFullyInvoiced ? new Date() : quote.invoicedAt
+            },
+            $push: { invoices: { invoice: invoice._id, amount: invoiceNetAmount, invoicedAt: new Date() } }
+          });
+        }
+
+        // 7. Also handle quotePartials for KEPT quotes (user may have changed partial amounts)
+        // For kept quotes that have a new partial value, we need to update them
+        const updatedKeptQuoteSnapshots = [];
+        for (const qs of keptQuoteSnapshots) {
+          const qId = qs.quoteId?.toString();
+          const partial = quotePartials?.[qId];
+
+          if (partial && parseFloat(partial.value) > 0) {
+            // User specified a new partial amount for this kept quote — recalculate
+            const quote = await Quote.findById(qId);
+            if (quote) {
+              const quoteDiscount = quote.discountAmount || 0;
+              const quoteNet = quote.subtotal - quoteDiscount;
+              const oldSnapshotAmount = qs.invoicedAmount || qs.subtotal || 0;
+
+              // The quote's invoicedAmount in DB includes this invoice's old amount
+              // So remaining = quoteNet - (currentInvoicedAmount - oldSnapshotAmount)
+              const otherInvoicedAmount = Math.max(0, (quote.invoicedAmount || 0) - oldSnapshotAmount);
+              const remainingNet = quoteNet - otherInvoicedAmount;
+
+              let newInvoiceNetAmount;
+              if (partial.type === 'percent') {
+                newInvoiceNetAmount = quoteNet * (parseFloat(partial.value) / 100);
+              } else {
+                newInvoiceNetAmount = Math.min(parseFloat(partial.value), remainingNet);
+              }
+              if (newInvoiceNetAmount > remainingNet) newInvoiceNetAmount = remainingNet;
+
+              const isPartialQuote = newInvoiceNetAmount < quoteNet;
+
+              // Subtract old amounts from subtotal/discount and add new
+              const oldInvoiceRatio = quoteNet > 0 ? oldSnapshotAmount / quoteNet : 0;
+              subtotal -= oldSnapshotAmount + (quoteDiscount * oldInvoiceRatio);
+              totalQuoteDiscount -= quoteDiscount * oldInvoiceRatio;
+
+              const newInvoiceRatio = quoteNet > 0 ? newInvoiceNetAmount / quoteNet : 0;
+              subtotal += newInvoiceNetAmount + (quoteDiscount * newInvoiceRatio);
+              totalQuoteDiscount += quoteDiscount * newInvoiceRatio;
+
+              // Update quote tracking in DB
+              const newTotalInvoiced = otherInvoicedAmount + newInvoiceNetAmount;
+              const isFullyInvoiced = newTotalInvoiced >= quoteNet;
+
+              // Update the invoices[] entry for this invoice
+              const updatedInvoices = (quote.invoices || []).map(inv => {
+                if (inv.invoice.toString() === invoice._id.toString()) {
+                  return { ...inv.toObject(), amount: newInvoiceNetAmount, invoicedAt: new Date() };
+                }
+                return inv;
+              });
+
+              await Quote.findByIdAndUpdate(qId, {
+                $set: {
+                  status: isFullyInvoiced ? 'invoiced' : newTotalInvoiced > 0 ? 'partial' : 'signed',
+                  invoicedAmount: newTotalInvoiced,
+                  invoice: isFullyInvoiced ? invoice._id : quote.invoice,
+                  invoicedAt: isFullyInvoiced ? new Date() : quote.invoicedAt,
+                  invoices: updatedInvoices
+                }
+              });
+
+              updatedKeptQuoteSnapshots.push({
+                quoteId: quote._id, number: quote.number,
+                lines: quote.lines.map(l => ({ description: l.description, quantity: l.quantity, unitPrice: l.unitPrice, total: l.total })),
+                subtotal: quote.subtotal, invoicedAmount: newInvoiceNetAmount, isPartial: isPartialQuote, signedAt: quote.signedAt
+              });
+              continue;
+            }
+          }
+          updatedKeptQuoteSnapshots.push(qs);
+        }
+
+        // 8. Recalculate totals
+        const discountAmount = Math.round(totalQuoteDiscount * 100) / 100;
+        const netAmount = subtotal - discountAmount;
+        const vatAmt = netAmount * (invoice.vatRate / 100);
+        const total = roundTo5ct(netAmount + vatAmt);
+
+        // 9. Update invoice
+        invoice.events = [...keptEventSnapshots, ...addedEventSnapshots];
+        invoice.quotes = [...updatedKeptQuoteSnapshots, ...addedQuoteSnapshots];
+        invoice.subtotal = subtotal;
+        invoice.discountType = discountAmount > 0 ? 'fixed' : undefined;
+        invoice.discountValue = discountAmount > 0 ? discountAmount : undefined;
+        invoice.discountAmount = discountAmount;
+        invoice.vatAmount = vatAmt;
+        invoice.total = total;
+
+        await invoice.save();
+        return res.json({ success: true, data: invoice });
+
+      } catch (error) {
+        // Compensatory rollback
+        try {
+          // Re-bill unbilled events
+          if (rollbackOps.unbilledEvents.length > 0) {
+            await Event.updateMany({ _id: { $in: rollbackOps.unbilledEvents } }, { billed: true, invoice: invoice._id });
+          }
+          // Unbill newly billed events
+          if (rollbackOps.billedEvents.length > 0) {
+            await Event.updateMany({ _id: { $in: rollbackOps.billedEvents } }, { billed: false, invoice: null });
+          }
+          // Restore reverted quotes
+          for (const q of rollbackOps.revertedQuotes) {
+            await Quote.findByIdAndUpdate(q.id, {
+              $set: { status: q.previousStatus, invoicedAmount: q.previousInvoicedAmount, invoices: q.previousInvoices }
+            });
+          }
+          // Revert newly updated quotes
+          for (const q of rollbackOps.updatedQuotes) {
+            await Quote.findByIdAndUpdate(q.id, {
+              $set: { status: q.previousStatus, invoicedAmount: q.previousInvoicedAmount, invoice: q.previousInvoice },
+              $pull: { invoices: { invoice: invoice._id } }
+            });
+          }
+        } catch (rollbackErr) {
+          console.error('Standard invoice update rollback failed:', rollbackErr.message, { invoiceId: invoice._id });
+        }
+        throw error;
+      }
+    }
 
     // Allow editing custom lines on custom invoices
     if (customLines !== undefined && invoice.invoiceType === 'custom') {
@@ -540,7 +959,7 @@ export const changeInvoiceStatus = async (req, res, next) => {
     // Validate status transition
     const ALLOWED_TRANSITIONS = {
       'draft': ['sent', 'cancelled'],
-      'sent': ['paid', 'cancelled'],
+      'sent': ['draft', 'paid', 'cancelled'],
       'partial': ['paid', 'cancelled'],
       'paid': ['cancelled'],
       'cancelled': []
@@ -624,6 +1043,8 @@ export const changeInvoiceStatus = async (req, res, next) => {
       }
 
       await historyService.invoiceCancelled(invoice.project._id, invoice.number);
+    } else if (status === 'draft' && oldStatus === 'sent') {
+      await historyService.log(invoice.project._id, 'invoice_reverted', `Facture ${invoice.number} repassée en brouillon`, { invoiceNumber: invoice.number });
     } else if (status === 'sent') {
       await historyService.invoiceSent(invoice.project._id, invoice.number);
     } else if (status === 'paid') {

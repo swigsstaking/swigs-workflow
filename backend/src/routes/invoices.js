@@ -8,7 +8,8 @@ import {
   deleteInvoice,
   getInvoicePDF,
   sendInvoice,
-  recordPayment
+  recordPayment,
+  getInvoiceEditData
 } from '../controllers/invoiceController.js';
 import { validate } from '../middleware/validate.js';
 
@@ -29,6 +30,9 @@ router.route('/:id')
   .get(getInvoice)
   .put(updateInvoice)
   .delete(deleteInvoice);
+
+router.route('/:id/edit-data')
+  .get(getInvoiceEditData);
 
 router.route('/:id/status')
   .patch(
