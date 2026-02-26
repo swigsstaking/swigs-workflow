@@ -322,6 +322,14 @@ export const fetchImapNow = async (req, res, next) => {
     const result = await fetchBankEmails(req.user._id, settings.bankImap);
     res.json({ success: true, data: result });
   } catch (error) {
+    // Return IMAP errors as 400 with clear message instead of 500
+    const msg = error.message || '';
+    if (msg.includes('Authentication failed') || msg.includes('Invalid login') || msg.includes('LOGIN')) {
+      return res.status(400).json({ success: false, error: 'Échec d\'authentification IMAP. Vérifiez l\'utilisateur et le mot de passe dans les paramètres.' });
+    }
+    if (msg.includes('ECONNREFUSED') || msg.includes('ETIMEDOUT') || msg.includes('getaddrinfo')) {
+      return res.status(400).json({ success: false, error: `Connexion IMAP impossible: ${msg}. Vérifiez l\'hôte et le port.` });
+    }
     next(error);
   }
 };

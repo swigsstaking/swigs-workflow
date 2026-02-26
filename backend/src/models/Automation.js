@@ -7,7 +7,23 @@ const triggerConfigSchema = new mongoose.Schema({
   statusFilters: [String],           // Multiple status filters for project.status_changed
   amountMin: Number,                 // Min amount filter for invoice/quote triggers
   amountMax: Number,                 // Max amount filter for invoice/quote triggers
-  scheduleExpression: String         // For time.schedule (cron format)
+  scheduleExpression: String,        // For time.schedule (cron format)
+
+  // For date.relative trigger
+  dateSource: {
+    type: String,
+    enum: ['planned_block', 'invoice_due', 'quote_expiry', 'custom']
+  },
+  dateOffset: Number,                // e.g. 3
+  dateOffsetUnit: {
+    type: String,
+    enum: ['minutes', 'hours', 'days']
+  },
+  dateOffsetDirection: {
+    type: String,
+    enum: ['before', 'after']
+  },
+  scheduledDate: Date               // For custom one-shot trigger
 }, { _id: false });
 
 const actionConfigSchema = new mongoose.Schema({
@@ -136,6 +152,7 @@ const automationSchema = new mongoose.Schema({
       'client.updated',
       'event.created',
       'reminder.sent',
+      'date.relative',
       'manual'
     ],
     required: true

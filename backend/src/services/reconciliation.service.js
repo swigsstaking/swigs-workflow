@@ -27,11 +27,10 @@ export async function reconcileTransaction(tx, userId) {
     return { matchedInvoice: null, matchMethod: null, matchConfidence: 0, matchStatus: 'unmatched' };
   }
 
-  // Strategy 1: QR structured reference (confidence 100)
+  // Strategy 1: QR structured reference — full digits (confidence 100)
   if (tx.reference) {
     const refDigits = tx.reference.replace(/[^0-9]/g, '');
     for (const inv of sentInvoices) {
-      // FAC-2026-001 → 2026001
       const invoiceDigits = inv.number.replace(/[^0-9]/g, '');
       if (refDigits && invoiceDigits && refDigits.includes(invoiceDigits)) {
         return {
@@ -46,17 +45,46 @@ export async function reconcileTransaction(tx, userId) {
 
   // Strategy 1b: FAC-YYYY-NNN pattern in unstructured reference (confidence 90)
   if (tx.unstructuredReference) {
-    const facMatch = tx.unstructuredReference.match(/FAC-\d{4}-\d{3}/i);
-    if (facMatch) {
-      const facNumber = facMatch[0].toUpperCase();
-      const inv = sentInvoices.find(i => i.number === facNumber);
-      if (inv) {
-        return {
-          matchedInvoice: inv._id,
-          matchMethod: 'qr_reference',
-          matchConfidence: 90,
-          matchStatus: 'matched'
-        };
+    const facMatches = tx.unstructuredReference.match(/FAC-\d{4}-\d{3,4}/gi);
+    if (facMatches) {
+      for (const fac of facMatches) {
+        const facNumber = fac.toUpperCase();
+        const inv = sentInvoices.find(i => i.number === facNumber);
+        if (inv) {
+          return {
+            matchedInvoice: inv._id,
+            matchMethod: 'qr_reference',
+            matchConfidence: 90,
+            matchStatus: 'matched'
+          };
+        }
+      }
+    }
+  }
+
+  // Strategy 1c: Short ref pattern (R0010, etc.) in SCOR reference or unstructured (confidence 95)
+  // Swiss banks often embed a short ref like "R0010" in SCOR or payment details
+  // which maps to the trailing number of FAC-2026-0010
+  {
+    const refSources = [tx.reference, tx.unstructuredReference].filter(Boolean).join(' ');
+    const shortRefs = refSources.match(/\bR(\d{3,})\b/gi);
+    if (shortRefs) {
+      for (const shortRef of shortRefs) {
+        const shortDigits = shortRef.replace(/[^0-9]/g, '');
+        for (const inv of sentInvoices) {
+          // Extract trailing number from invoice: FAC-2026-0010 → "0010"
+          const trailingMatch = inv.number.match(/-(\d{3,})$/);
+          if (trailingMatch && trailingMatch[1] === shortDigits) {
+            // Confirm with amount match for extra confidence
+            const amountOk = Math.abs(inv.total - tx.amount) < 0.01;
+            return {
+              matchedInvoice: inv._id,
+              matchMethod: 'qr_reference',
+              matchConfidence: amountOk ? 95 : 85,
+              matchStatus: 'matched'
+            };
+          }
+        }
       }
     }
   }
@@ -69,7 +97,7 @@ export async function reconcileTransaction(tx, userId) {
   if (amountMatches.length === 1) {
     // Single amount match — check client name
     const inv = amountMatches[0];
-    const confidence = computeNameConfidence(tx.counterpartyName, inv.project?.client);
+    const confidence = computeNameConfidence(tx.counterpartyName, inv.project?.client, tx.unstructuredReference);
     if (confidence >= 60) {
       return {
         matchedInvoice: inv._id,
@@ -84,7 +112,7 @@ export async function reconcileTransaction(tx, userId) {
     let bestConfidence = 0;
 
     for (const inv of amountMatches) {
-      const confidence = computeNameConfidence(tx.counterpartyName, inv.project?.client);
+      const confidence = computeNameConfidence(tx.counterpartyName, inv.project?.client, tx.unstructuredReference);
       if (confidence > bestConfidence) {
         bestConfidence = confidence;
         bestMatch = inv;
@@ -104,25 +132,50 @@ export async function reconcileTransaction(tx, userId) {
   return { matchedInvoice: null, matchMethod: null, matchConfidence: 0, matchStatus: 'unmatched' };
 }
 
-function computeNameConfidence(txName, client) {
+function computeNameConfidence(txName, client, unstructuredRef) {
   if (!txName || !client) return 0;
 
   const normalize = (s) => (s || '').toLowerCase().trim().replace(/[^a-z0-9\s]/g, '');
   const txNorm = normalize(txName);
   if (!txNorm) return 0;
 
-  // Check company name
   const companyNorm = normalize(client.company);
+  const nameNorm = normalize(client.name);
+
+  // Direct full match — counterparty contains entire company/name
   if (companyNorm && txNorm.includes(companyNorm)) return 85;
   if (companyNorm && companyNorm.includes(txNorm)) return 80;
-
-  // Check person name
-  const nameNorm = normalize(client.name);
   if (nameNorm && txNorm.includes(nameNorm)) return 75;
   if (nameNorm && nameNorm.includes(txNorm)) return 70;
 
-  // Partial match: check if all words in client name appear in tx name
+  // Swiss bank format: "Person Name - Company" or "Person Name / Company"
+  // Split counterparty on separators and check each segment
+  const segments = txName.split(/\s+[-\/|]\s+/).map(s => normalize(s)).filter(Boolean);
+  if (segments.length > 1) {
+    for (const seg of segments) {
+      if (companyNorm && (seg.includes(companyNorm) || companyNorm.includes(seg))) return 85;
+      if (nameNorm && (seg.includes(nameNorm) || nameNorm.includes(seg))) return 80;
+    }
+  }
+
+  // Check if company/name words appear in counterparty (partial word match)
+  const companyWords = companyNorm.split(/\s+/).filter(w => w.length > 2);
   const nameWords = nameNorm.split(/\s+/).filter(w => w.length > 2);
+
+  // Company words in counterparty
+  if (companyWords.length > 0) {
+    const matchedWords = companyWords.filter(w => txNorm.includes(w));
+    if (matchedWords.length === companyWords.length) return 80;
+    // If most words match (e.g., "moontain" from "moontain studio"), check unstructured ref too
+    if (matchedWords.length > 0 && unstructuredRef) {
+      const refNorm = normalize(unstructuredRef);
+      const refMatchedWords = companyWords.filter(w => refNorm.includes(w));
+      if (refMatchedWords.length === companyWords.length) return 85;
+    }
+    if (matchedWords.length > 0) return 65;
+  }
+
+  // Person name words in counterparty
   if (nameWords.length > 0) {
     const matchedWords = nameWords.filter(w => txNorm.includes(w));
     if (matchedWords.length === nameWords.length) return 70;

@@ -58,14 +58,132 @@ export default function NodeConfigPanel({ node, onClose, onUpdateConfig, onDelet
     const isCmsTrigger = automationTriggerType?.startsWith('order.') || automationTriggerType?.startsWith('customer.');
     const isProjectTrigger = automationTriggerType === 'project.status_changed';
     const isInvoiceQuoteTrigger = automationTriggerType?.startsWith('invoice.') || automationTriggerType?.startsWith('quote.');
+    const isDateRelative = automationTriggerType === 'date.relative';
 
     return (
       <div className="space-y-4">
         <div className="p-3 rounded-lg bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800">
           <p className="text-sm text-violet-700 dark:text-violet-300">
-            Configurez les filtres pour ce déclencheur.
+            {isDateRelative
+              ? 'Configurez la source de date et le délai.'
+              : 'Configurez les filtres pour ce déclencheur.'}
           </p>
         </div>
+
+        {/* Date relative trigger config */}
+        {isDateRelative && (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Source de la date
+              </label>
+              <select
+                value={config.dateSource || ''}
+                onChange={(e) => handleConfigChange('dateSource', e.target.value)}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              >
+                <option value="">Sélectionner</option>
+                <option value="planned_block">Bloc planifié (date de début)</option>
+                <option value="invoice_due">Échéance facture</option>
+                <option value="quote_expiry">Expiration devis</option>
+                <option value="custom">Date personnalisée (one-shot)</option>
+              </select>
+            </div>
+
+            {/* Custom one-shot: datetime picker */}
+            {config.dateSource === 'custom' && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Date et heure de déclenchement
+                </label>
+                <input
+                  type="datetime-local"
+                  value={config.scheduledDate ? new Date(config.scheduledDate).toISOString().slice(0, 16) : ''}
+                  onChange={(e) => handleConfigChange('scheduledDate', e.target.value ? new Date(e.target.value).toISOString() : '')}
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+              </div>
+            )}
+
+            {/* Standard offset config (hidden for custom) */}
+            {config.dateSource && config.dateSource !== 'custom' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Direction
+                  </label>
+                  <select
+                    value={config.dateOffsetDirection || ''}
+                    onChange={(e) => handleConfigChange('dateOffsetDirection', e.target.value)}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  >
+                    <option value="">Sélectionner</option>
+                    <option value="before">Avant la date</option>
+                    <option value="after">Après la date</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      Délai
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={config.dateOffset || ''}
+                      onChange={(e) => handleConfigChange('dateOffset', parseInt(e.target.value) || '')}
+                      className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      placeholder="1"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      Unité
+                    </label>
+                    <select
+                      value={config.dateOffsetUnit || 'hours'}
+                      onChange={(e) => handleConfigChange('dateOffsetUnit', e.target.value)}
+                      className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    >
+                      <option value="minutes">Minutes</option>
+                      <option value="hours">Heures</option>
+                      <option value="days">Jours</option>
+                    </select>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Summary for custom one-shot */}
+            {config.dateSource === 'custom' && config.scheduledDate && (
+              <div className="p-3 rounded-lg bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800">
+                <p className="text-sm text-violet-700 dark:text-violet-300">
+                  Déclenchement unique le{' '}
+                  <strong>{new Date(config.scheduledDate).toLocaleString('fr-CH')}</strong>.
+                  <br />
+                  <span className="text-xs opacity-75">Vérifié toutes les 5 minutes.</span>
+                </p>
+              </div>
+            )}
+
+            {/* Summary for standard offset */}
+            {config.dateSource && config.dateSource !== 'custom' && config.dateOffset && config.dateOffsetDirection && (
+              <div className="p-3 rounded-lg bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800">
+                <p className="text-sm text-violet-700 dark:text-violet-300">
+                  Déclenchement{' '}
+                  <strong>
+                    {config.dateOffset} {config.dateOffsetUnit === 'minutes' ? 'minute(s)' : config.dateOffsetUnit === 'hours' ? 'heure(s)' : 'jour(s)'}
+                  </strong>{' '}
+                  <strong>{config.dateOffsetDirection === 'before' ? 'avant' : 'après'}</strong>{' '}
+                  {config.dateSource === 'planned_block' ? 'le bloc planifié' : config.dateSource === 'invoice_due' ? "l'échéance facture" : "l'expiration du devis"}.
+                  <br />
+                  <span className="text-xs opacity-75">Vérifié toutes les 5 minutes.</span>
+                </p>
+              </div>
+            )}
+          </>
+        )}
 
         {/* CMS trigger: siteId filter */}
         {isCmsTrigger && (
@@ -158,23 +276,29 @@ export default function NodeConfigPanel({ node, onClose, onUpdateConfig, onDelet
             {(() => {
               // Backwards compat: derive 'to' from old recipientType/customEmail format
               const toValue = config.to || (config.recipientType === 'custom' ? (config.customEmail || '') : 'customer');
-              const isCustom = toValue && toValue !== 'customer';
+              const recipientMode = toValue === 'customer' ? 'customer' : toValue === 'admin' ? 'admin' : 'custom';
               return (
                 <>
                   <select
-                    value={isCustom ? 'custom' : 'customer'}
-                    onChange={(e) => handleConfigChange('to', e.target.value === 'customer' ? 'customer' : '')}
+                    value={recipientMode}
+                    onChange={(e) => {
+                      const mode = e.target.value;
+                      if (mode === 'customer') handleConfigChange('to', 'customer');
+                      else if (mode === 'admin') handleConfigChange('to', 'admin');
+                      else handleConfigChange('to', (toValue && toValue !== 'customer' && toValue !== 'admin') ? toValue : '');
+                    }}
                     className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   >
                     <option value="customer">Client (depuis le trigger)</option>
+                    <option value="admin">Admin (email entreprise)</option>
                     <option value="custom">Email personnalisé</option>
                   </select>
-                  {isCustom && (
+                  {recipientMode === 'custom' && (
                     <div className="mt-4">
                       <Input
                         label="Email personnalisé"
                         type="email"
-                        value={toValue === 'customer' ? '' : toValue}
+                        value={toValue === 'customer' || toValue === 'admin' ? '' : (toValue || '')}
                         onChange={(e) => handleConfigChange('to', e.target.value)}
                         placeholder="email@example.com"
                       />
@@ -337,56 +461,98 @@ export default function NodeConfigPanel({ node, onClose, onUpdateConfig, onDelet
     );
   };
 
-  const renderConditionConfig = () => (
-    <div className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-          Champ à vérifier
-        </label>
-        <select
-          value={config.field || ''}
-          onChange={(e) => handleConfigChange('field', e.target.value)}
-          className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-        >
-          <option value="">Sélectionner un champ</option>
-          <optgroup label="Commande">
-            <option value="order.total">Total commande</option>
-            <option value="order.status">Statut commande</option>
-            <option value="order.itemsCount">Nombre d'articles</option>
-          </optgroup>
-          <optgroup label="Client">
-            <option value="customer.ordersCount">Nombre de commandes</option>
-            <option value="customer.isNew">Nouveau client</option>
-          </optgroup>
-        </select>
-      </div>
+  const renderConditionConfig = () => {
+    const needsValue = config.operator && config.operator !== 'is_empty' && config.operator !== 'is_not_empty';
+    return (
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+            Champ à vérifier
+          </label>
+          <select
+            value={config.field || ''}
+            onChange={(e) => handleConfigChange('field', e.target.value)}
+            className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          >
+            <option value="">Sélectionner un champ</option>
+            <optgroup label="Projet">
+              <option value="projectName">Nom du projet</option>
+              <option value="oldStatus">Ancien statut</option>
+              <option value="newStatus">Nouveau statut</option>
+            </optgroup>
+            <optgroup label="Facture">
+              <option value="invoiceNumber">Numéro</option>
+              <option value="total">Montant total</option>
+              <option value="status">Statut</option>
+              <option value="daysOverdue">Jours de retard</option>
+            </optgroup>
+            <optgroup label="Devis">
+              <option value="quoteNumber">Numéro</option>
+              <option value="total">Montant total</option>
+              <option value="status">Statut</option>
+            </optgroup>
+            <optgroup label="Client">
+              <option value="clientName">Nom</option>
+              <option value="email">Email</option>
+              <option value="company">Entreprise</option>
+              <option value="client.name">Nom (imbriqué)</option>
+              <option value="client.email">Email (imbriqué)</option>
+              <option value="client.company">Entreprise (imbriqué)</option>
+              <option value="client.country">Pays</option>
+            </optgroup>
+            <optgroup label="Événement">
+              <option value="eventType">Type</option>
+              <option value="description">Description</option>
+              <option value="amount">Montant</option>
+            </optgroup>
+            <optgroup label="Rappel">
+              <option value="reminderType">Type de rappel</option>
+              <option value="daysOverdue">Jours de retard</option>
+              <option value="total">Montant</option>
+            </optgroup>
+            <optgroup label="Commande (CMS)">
+              <option value="order.total">Total commande</option>
+              <option value="order.status">Statut commande</option>
+              <option value="order.itemsCount">Nombre d'articles</option>
+            </optgroup>
+            <optgroup label="Client (CMS)">
+              <option value="customer.ordersCount">Nombre de commandes</option>
+              <option value="customer.isNew">Nouveau client</option>
+            </optgroup>
+          </select>
+        </div>
 
-      <div>
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-          Opérateur
-        </label>
-        <select
-          value={config.operator || ''}
-          onChange={(e) => handleConfigChange('operator', e.target.value)}
-          className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-        >
-          <option value="">Sélectionner</option>
-          <option value="equals">Égal à</option>
-          <option value="not_equals">Différent de</option>
-          <option value="greater_than">Supérieur à</option>
-          <option value="less_than">Inférieur à</option>
-          <option value="contains">Contient</option>
-        </select>
-      </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+            Opérateur
+          </label>
+          <select
+            value={config.operator || ''}
+            onChange={(e) => handleConfigChange('operator', e.target.value)}
+            className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          >
+            <option value="">Sélectionner</option>
+            <option value="equals">Égal à</option>
+            <option value="not_equals">Différent de</option>
+            <option value="greater_than">Supérieur à</option>
+            <option value="less_than">Inférieur à</option>
+            <option value="contains">Contient</option>
+            <option value="is_empty">Est vide</option>
+            <option value="is_not_empty">N'est pas vide</option>
+          </select>
+        </div>
 
-      <Input
-        label="Valeur"
-        value={config.value || ''}
-        onChange={(e) => handleConfigChange('value', e.target.value)}
-        placeholder="Valeur à comparer"
-      />
-    </div>
-  );
+        {needsValue && (
+          <Input
+            label="Valeur"
+            value={config.value || ''}
+            onChange={(e) => handleConfigChange('value', e.target.value)}
+            placeholder="Valeur à comparer"
+          />
+        )}
+      </div>
+    );
+  };
 
   const renderWaitConfig = () => (
     <div className="space-y-4">
