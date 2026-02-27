@@ -33,8 +33,8 @@ export default function QuoteList({
       {activeMenu?.startsWith('quote-') && (
         <div className="fixed inset-0 z-[5]" onClick={() => setActiveMenu(null)} />
       )}
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold text-slate-900 dark:text-white">Devis</h3>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="swigs-section-label">Devis</h3>
         <Button
           size="sm"
           variant="secondary"
@@ -46,25 +46,35 @@ export default function QuoteList({
       </div>
 
       {quotes.length === 0 ? (
-        <div className="flex flex-col items-center py-8 text-center">
-          <FileText className="w-10 h-10 text-slate-300 dark:text-slate-600 mb-3" />
-          <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Aucun devis</p>
-          <p className="text-xs text-slate-400 dark:text-slate-500">Créez un devis pour ce projet</p>
+        <div className="flex flex-col items-center py-8 text-center border border-dashed border-[rgb(var(--swigs-stone)/0.4)] dark:border-dark-border rounded-[8px] bg-[rgb(var(--swigs-cream)/0.3)] dark:bg-white/[0.02]">
+          <FileText className="w-8 h-8 text-[rgb(var(--swigs-stone))] mb-2" />
+          <p className="text-sm font-medium text-slate-600 dark:text-zinc-300 mb-0.5">Aucun devis</p>
+          <p className="text-xs text-slate-400 dark:text-zinc-500">Créez un devis pour ce projet</p>
         </div>
       ) : (
         <div className="space-y-2">
           {quotes.map(quote => {
             const hasSmtp = !!(settings?.smtp?.host && settings?.smtp?.user);
             const mailtoLink = !hasSmtp ? generateMailtoLink('quote', quote) : null;
+            const accentColor = quote.status === 'signed' || quote.status === 'invoiced'
+              ? '#10b981'
+              : quote.status === 'refused'
+                ? '#ef4444'
+                : quote.status === 'partial'
+                  ? '#f59e0b'
+                  : quote.status === 'sent'
+                    ? 'rgb(var(--primary-500))'
+                    : 'rgb(var(--swigs-stone))';
             return (
               <div
                 key={quote._id}
-                className="flex items-center justify-between p-3 bg-slate-50 dark:bg-dark-bg rounded-lg"
+                className="flex items-center justify-between p-3 bg-white dark:bg-dark-card rounded-[8px] border border-[rgb(var(--swigs-stone)/0.35)] dark:border-dark-border transition-all duration-200 hover:-translate-y-px hover:shadow-sm"
+                style={{ borderLeftWidth: '3px', borderLeftColor: accentColor }}
               >
                 <div className="flex items-center gap-3">
                   <FileText className="w-5 h-5 text-slate-400" />
                   <div>
-                    <p className="text-sm font-medium text-slate-900 dark:text-white">{quote.number}</p>
+                    <p className="text-[13px] font-display font-semibold text-slate-900 dark:text-white">{quote.number}</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
                       {format(new Date(quote.issueDate), 'dd MMM yyyy', { locale: fr })}
                     </p>
@@ -72,7 +82,7 @@ export default function QuoteList({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                  <span className="swigs-amount text-[13px] font-bold text-slate-900 dark:text-white">
                     {formatCurrency(quote.total)}
                   </span>
                   <QuoteStatusBadge status={quote.status} />

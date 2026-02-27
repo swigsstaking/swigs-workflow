@@ -71,7 +71,7 @@ export default function InvoiceSummary({
   const hasReminders = !!settings?.reminders?.enabled;
 
   return (
-    <div className="w-full lg:w-80 flex-shrink-0 px-6 py-4 bg-slate-50/50 dark:bg-slate-800/20 overflow-y-auto max-h-[50vh] lg:max-h-none">
+    <div className="w-full lg:w-80 flex-shrink-0 px-4 py-4 bg-[rgb(var(--swigs-cream)/0.3)] dark:bg-zinc-950/40 border-l border-[rgb(var(--swigs-stone)/0.25)] dark:border-dark-border overflow-y-auto max-h-[50vh] lg:max-h-none">
       {/* Advanced options - standard/custom only */}
       {mode !== 'recurring' && (
         <div className="mb-4">
@@ -106,10 +106,8 @@ export default function InvoiceSummary({
         </div>
       )}
 
-      <div className="rounded-xl bg-white dark:bg-slate-800/50 p-4 border border-slate-200/50 dark:border-slate-700/50">
-        <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">
-          Récapitulatif
-        </h4>
+      <div className="rounded-[8px] bg-white dark:bg-dark-card p-4 border border-[rgb(var(--swigs-stone)/0.4)] dark:border-dark-border border-l-[3px] border-l-primary-500">
+        <h4 className="swigs-section-label mb-4">Récapitulatif</h4>
 
         {mode === 'recurring' ? (
           <RecurringSummary
@@ -208,9 +206,9 @@ export default function InvoiceSummary({
                   </span>
                 </div>
               )}
-              <div className="flex justify-between pt-2 border-t border-slate-200/50 dark:border-slate-700/30">
-                <span className="text-slate-700 dark:text-slate-300 font-medium">{vatRate ? 'Total TTC' : 'Total'}</span>
-                <span className="text-xl font-bold text-primary-600 dark:text-primary-400">
+              <div className="flex justify-between pt-2 border-t border-[rgb(var(--swigs-stone)/0.3)] dark:border-dark-border">
+                <span className="text-slate-700 dark:text-zinc-300 font-medium text-sm">{vatRate ? 'Total TTC' : 'Total'}</span>
+                <span className="swigs-kpi-value text-[1.2rem] text-primary-600 dark:text-primary-400">
                   {formatCurrency(roundTo5ct(getSelectedTotal() * (1 + vatRate)))}
                 </span>
               </div>
@@ -222,14 +220,11 @@ export default function InvoiceSummary({
       {/* Send options - all modes */}
       {(
         <div className="mt-4 space-y-3">
-          {/* Auto-send toggle */}
           {hasSmtp && (
-            <div className="flex items-center justify-between p-3 rounded-xl bg-white dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50">
+            <div className="flex items-center justify-between p-3 rounded-[8px] bg-white dark:bg-dark-card border border-[rgb(var(--swigs-stone)/0.35)] dark:border-dark-border">
               <div className="flex items-center gap-2">
-                <Send className="w-3.5 h-3.5 text-slate-400" />
-                <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                  Envoi automatique
-                </span>
+                <Send className="w-3.5 h-3.5 text-[rgb(var(--swigs-stone))]" />
+                <span className="swigs-section-label">Envoi automatique</span>
               </div>
               <button
                 type="button"
@@ -257,12 +252,10 @@ export default function InvoiceSummary({
 
           {/* Reminders toggle */}
           {hasReminders && (
-            <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800/30">
+            <div className="flex items-center justify-between px-3 py-2 rounded-[6px] bg-[rgb(var(--swigs-cream)/0.5)] dark:bg-white/[0.03] border border-[rgb(var(--swigs-stone)/0.25)] dark:border-dark-border">
               <div className="flex items-center gap-2">
-                <Bell className="w-3.5 h-3.5 text-slate-400" />
-                <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                  Relances automatiques
-                </span>
+                <Bell className="w-3.5 h-3.5 text-[rgb(var(--swigs-stone))]" />
+                <span className="swigs-section-label">Relances automatiques</span>
               </div>
               <button
                 type="button"
@@ -345,11 +338,11 @@ function RecurringSummary({ recurringForm, vatRate }) {
             </span>
           </div>
         )}
-        <div className="flex justify-between pt-2 border-t border-slate-200/50 dark:border-slate-700/30">
-          <span className="text-slate-700 dark:text-slate-300 font-medium">
+      <div className="flex justify-between pt-2 border-t border-[rgb(var(--swigs-stone)/0.3)] dark:border-dark-border">
+          <span className="text-slate-700 dark:text-zinc-300 font-medium text-sm">
             Total / {FREQUENCY_LABELS[recurringForm.frequency] || recurringForm.frequency}
           </span>
-          <span className="text-xl font-bold text-primary-600 dark:text-primary-400">
+          <span className="swigs-kpi-value text-[1.2rem] text-primary-600 dark:text-primary-400">
             {formatCurrency(total)}
           </span>
         </div>

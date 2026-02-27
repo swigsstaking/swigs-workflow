@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, memo } from 'react';
-import { format, addDays, startOfWeek, isSameDay, isToday } from 'date-fns';
+import { format, addDays, startOfWeek, isSameDay, isToday, getDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useDroppable } from '@dnd-kit/core';
 import PlannedBlockCard from './PlannedBlockCard';
@@ -124,7 +124,9 @@ export default function CalendarGrid({
           {days.map(day => (
             <div
               key={day.toISOString()}
-              className="flex-1 min-w-[100px] border-r border-slate-200 dark:border-dark-border last:border-r-0"
+              className={`flex-1 min-w-[100px] border-r border-slate-200 dark:border-dark-border last:border-r-0 ${
+                getDay(day) === 0 || getDay(day) === 6 ? 'planning-weekend' : ''
+              }`}
             >
               {/* Day header - sticky */}
               <div
@@ -133,7 +135,9 @@ export default function CalendarGrid({
                   sticky top-0 z-10
                   ${isToday(day)
                     ? 'bg-primary-100 dark:bg-primary-900/30'
-                    : 'bg-white dark:bg-dark-card'
+                    : getDay(day) === 0 || getDay(day) === 6
+                      ? 'bg-[rgb(var(--swigs-cream)/0.6)] dark:bg-zinc-950/80'
+                      : 'bg-white dark:bg-dark-card'
                   }
                 `}
               >

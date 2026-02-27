@@ -38,6 +38,15 @@
   --glow-color: var(--primary-500);
 }
 
+/* SWIGS Brand Colors (used by sidebar + header) */
+:root {
+  --swigs-stone: 200 195 188;
+  --swigs-rose: 210 170 165;
+  --swigs-cream: 245 240 235;
+  --swigs-red: 227 6 19;
+  --swigs-charcoal: 46 45 44;
+}
+
 /* Accent: Emerald (default V2) */
 [data-accent="emerald"] {
   --primary-50: 236 253 245;
