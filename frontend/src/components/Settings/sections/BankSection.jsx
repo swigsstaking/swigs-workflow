@@ -154,7 +154,7 @@ export default function BankSection() {
 
   const loadImportTransactions = async (importId) => {
     try {
-      const { data } = await bankApi.getTransactions(importId);
+      const { data } = await bankApi.getImportTransactions(importId);
       setTransactions(data.data || []);
       setImportResult(null);
     } catch {
