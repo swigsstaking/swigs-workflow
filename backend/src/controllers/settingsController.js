@@ -486,9 +486,14 @@ export const getInvoicePreviewHTML = async (req, res, next) => {
 // @route   GET /api/projects/:projectId/history
 export const getProjectHistory = async (req, res, next) => {
   try {
-    const query = { project: req.params.projectId };
-    // Note: History is linked to project, which is already filtered by user
+    // Verify project belongs to current user
+    const Project = (await import('../models/Project.js')).default;
+    const project = await Project.findOne({ _id: req.params.projectId, userId: req.user._id });
+    if (!project) {
+      return res.status(403).json({ success: false, error: 'Accès refusé' });
+    }
 
+    const query = { project: req.params.projectId };
     const history = await History.find(query).sort('-createdAt');
 
     res.json({ success: true, data: history });
@@ -511,57 +516,29 @@ export const getStats = async (req, res, next) => {
       userQuery.userId = req.user._id;
     }
 
-    // Active projects count
-    const activeProjects = await Project.countDocuments({ ...userQuery, archivedAt: null });
-
-    // Pending invoices - need to get user's projects first
-    let pendingInvoices = [];
+    // Fetch user project IDs once (not 3 times)
+    let projectIds = null;
     if (req.user) {
       const userProjects = await Project.find(userQuery).select('_id');
-      const projectIds = userProjects.map(p => p._id);
-      pendingInvoices = await Invoice.find({
-        project: { $in: projectIds },
-        status: { $in: ['draft', 'sent'] }
-      });
-    } else {
-      pendingInvoices = await Invoice.find({ status: { $in: ['draft', 'sent'] } });
+      projectIds = userProjects.map(p => p._id);
     }
-    const pendingAmount = pendingInvoices.reduce((sum, inv) => sum + inv.total, 0);
 
-    // Paid this month
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
 
-    let paidInvoices = [];
-    if (req.user) {
-      const userProjects = await Project.find(userQuery).select('_id');
-      const projectIds = userProjects.map(p => p._id);
-      paidInvoices = await Invoice.find({
-        project: { $in: projectIds },
-        status: 'paid',
-        paidAt: { $gte: startOfMonth }
-      });
-    } else {
-      paidInvoices = await Invoice.find({
-        status: 'paid',
-        paidAt: { $gte: startOfMonth }
-      });
-    }
-    const paidThisMonth = paidInvoices.reduce((sum, inv) => sum + inv.total, 0);
+    const projectFilter = projectIds ? { project: { $in: projectIds } } : {};
 
-    // Unbilled events total - need to get user's projects first
-    let unbilledEvents = [];
-    if (req.user) {
-      const userProjects = await Project.find(userQuery).select('_id');
-      const projectIds = userProjects.map(p => p._id);
-      unbilledEvents = await Event.find({
-        project: { $in: projectIds },
-        billed: false
-      });
-    } else {
-      unbilledEvents = await Event.find({ billed: false });
-    }
+    // Run all queries in parallel
+    const [activeProjects, pendingInvoices, paidInvoices, unbilledEvents] = await Promise.all([
+      Project.countDocuments({ ...userQuery, archivedAt: null }),
+      Invoice.find({ ...projectFilter, status: { $in: ['draft', 'sent'] } }),
+      Invoice.find({ ...projectFilter, status: 'paid', paidAt: { $gte: startOfMonth } }),
+      Event.find({ ...projectFilter, billed: false })
+    ]);
+
+    const pendingAmount = pendingInvoices.reduce((sum, inv) => sum + inv.total, 0);
+    const paidThisMonth = paidInvoices.reduce((sum, inv) => sum + inv.total, 0);
     const unbilledTotal = unbilledEvents.reduce((sum, event) => {
       if (event.type === 'hours') return sum + (event.hours * event.hourlyRate);
       if (event.type === 'expense') return sum + event.amount;

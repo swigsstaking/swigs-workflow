@@ -9,18 +9,26 @@ import { fireInternalTrigger } from '../services/automation/triggerService.js';
 /** Swiss rounding: round to nearest 5 centimes (0.05 CHF) */
 const roundTo5ct = (amount) => Math.round(amount / 0.05) * 0.05;
 
+/** Compute per-line discount amount from type + value */
+const computeLineDiscount = (line) => {
+  const gross = (line.quantity || 1) * (line.unitPrice || 0);
+  if (!line.discountType || !line.discountValue || line.discountValue <= 0) return 0;
+  if (line.discountType === 'percentage') return Math.min(gross, gross * (line.discountValue / 100));
+  return Math.min(line.discountValue, gross); // fixed
+};
+
+// Allowed status values for quotes
+const ALLOWED_QUOTE_STATUSES = ['draft', 'sent', 'signed', 'invoiced', 'partial', 'cancelled'];
+
 // Helper: Verify project ownership
 const verifyProjectOwnership = async (projectId, userId) => {
-  const query = { _id: projectId };
-  if (userId) {
-    query.userId = userId;
-  }
-  return Project.findOne(query);
+  if (!userId) throw new Error('userId requis pour vérifier l\'appartenance du projet');
+  return Project.findOne({ _id: projectId, userId });
 };
 
 // Helper: Get user's project IDs
 const getUserProjectIds = async (userId) => {
-  if (!userId) return null;
+  if (!userId) return [];
   const projects = await Project.find({ userId }).select('_id');
   return projects.map(p => p._id);
 };
@@ -39,7 +47,7 @@ export const getQuotes = async (req, res, next) => {
 
     let query = { project: req.params.projectId };
 
-    if (status) {
+    if (status && ALLOWED_QUOTE_STATUSES.includes(status)) {
       query.status = status;
     }
 
@@ -109,7 +117,7 @@ export const getAllQuotes = async (req, res, next) => {
     if (projectIds) {
       query.project = { $in: projectIds };
     }
-    if (status) query.status = status;
+    if (status && ALLOWED_QUOTE_STATUSES.includes(status)) query.status = status;
 
     const [quotes, total] = await Promise.all([
       Quote.find(query)
@@ -176,14 +184,22 @@ export const createQuote = async (req, res, next) => {
     const settings = await Settings.getSettings(req.user?._id);
 
     // Calculate totals
-    const processedLines = lines.map(line => ({
-      description: line.description,
-      quantity: line.quantity,
-      unitPrice: line.unitPrice,
-      total: line.quantity * line.unitPrice
-    }));
+    const processedLines = lines.map(line => {
+      const isInfo = !!line.isInfoLine;
+      const discount = isInfo ? 0 : computeLineDiscount(line);
+      return {
+        description: line.description,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        discountType: line.discountType || undefined,
+        discountValue: line.discountValue || undefined,
+        discount,
+        total: isInfo ? 0 : Math.max(0, line.quantity * line.unitPrice - discount),
+        isInfoLine: isInfo || undefined
+      };
+    });
 
-    const subtotal = processedLines.reduce((sum, line) => sum + line.total, 0);
+    const subtotal = processedLines.filter(l => !l.isInfoLine).reduce((sum, line) => sum + line.total, 0);
 
     // Calculate discount
     let discountAmount = 0;
@@ -292,14 +308,22 @@ export const updateQuote = async (req, res, next) => {
 
     // Full edit for draft, sent, refused, expired
     if (lines) {
-      quote.lines = lines.map(line => ({
-        description: line.description,
-        quantity: line.quantity,
-        unitPrice: line.unitPrice,
-        total: line.quantity * line.unitPrice
-      }));
+      quote.lines = lines.map(line => {
+        const isInfo = !!line.isInfoLine;
+        const discount = isInfo ? 0 : computeLineDiscount(line);
+        return {
+          description: line.description,
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+          discountType: line.discountType || undefined,
+          discountValue: line.discountValue || undefined,
+          discount,
+          total: isInfo ? 0 : Math.max(0, line.quantity * line.unitPrice - discount),
+          isInfoLine: isInfo || undefined
+        };
+      });
 
-      quote.subtotal = quote.lines.reduce((sum, line) => sum + line.total, 0);
+      quote.subtotal = quote.lines.filter(l => !l.isInfoLine).reduce((sum, line) => sum + line.total, 0);
     }
 
     if (vatRate !== undefined) {

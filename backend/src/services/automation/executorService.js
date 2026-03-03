@@ -342,6 +342,18 @@ const executeWebhook = async (run, config) => {
 };
 
 /**
+ * Resolve {{variable}} placeholders in a string using the automation run context.
+ * Supports dot notation, e.g. {{customer.email}}, {{project.name}}.
+ */
+const resolveTemplate = (template, context) => {
+  if (!template || typeof template !== 'string') return template || '';
+  return template.replace(/\{\{(.+?)\}\}/g, (_, path) => {
+    const value = path.trim().split('.').reduce((obj, key) => obj?.[key], context);
+    return value != null ? String(value) : '';
+  });
+};
+
+/**
  * Execute create_task action via Event Bus
  */
 const executeCreateTask = async (run, config) => {
@@ -351,13 +363,28 @@ const executeCreateTask = async (run, config) => {
     throw new Error('Task title is required');
   }
 
+  // Resolve template variables in title and description
+  const resolvedTitle = resolveTemplate(taskTitle, run.context);
+  const resolvedDescription = resolveTemplate(taskDescription, run.context);
+
+  // Fallback assignTo: if not configured, use automation owner's email
+  let resolvedAssignTo = assignTo || null;
+  if (!resolvedAssignTo && run.automation?.userId) {
+    const User = (await import('../../models/User.js')).default;
+    const owner = await User.findById(run.automation.userId, 'email');
+    if (owner?.email) {
+      resolvedAssignTo = owner.email;
+      console.log(`[Automation] create_task: assignTo fallback to owner ${owner.email}`);
+    }
+  }
+
   // Import the event bus singleton
   const { default: eventBus } = await import('../eventBus.service.js');
 
   const taskPayload = {
-    title: taskTitle,
-    description: taskDescription || '',
-    assignTo: assignTo || null,
+    title: resolvedTitle,
+    description: resolvedDescription,
+    assignTo: resolvedAssignTo,
     source: 'automation',
     automationId: run.automation?._id?.toString(),
     context: run.context
@@ -368,8 +395,8 @@ const executeCreateTask = async (run, config) => {
   return {
     taskCreated: true,
     published,
-    title: taskTitle,
-    assignTo: assignTo || 'non assignée'
+    title: resolvedTitle,
+    assignTo: resolvedAssignTo || 'non assignée'
   };
 };
 

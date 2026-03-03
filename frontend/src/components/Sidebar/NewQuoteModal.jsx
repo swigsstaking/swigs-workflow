@@ -1,53 +1,26 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { Plus, Trash2, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { AlertCircle } from 'lucide-react';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import Input, { Textarea } from '../ui/Input';
 import ServicePicker from './invoice/ServicePicker';
+import TemplatePicker from './invoice/TemplatePicker';
+import LinesEditor from './invoice/LinesEditor';
 import { useProjectStore } from '../../stores/projectStore';
 import { useToastStore } from '../../stores/toastStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { formatCurrency } from '../../utils/format';
 
-/** Split stored "title\ndescription" into separate parts */
-function splitDescription(desc) {
-  if (!desc) return { title: '', detail: '' };
-  const idx = desc.indexOf('\n');
-  if (idx < 0) return { title: desc, detail: '' };
-  return { title: desc.substring(0, idx), detail: desc.substring(idx + 1) };
+/** Compute per-line discount CHF amount from type + value */
+function computeLineDiscount(line) {
+  const gross = (parseFloat(line.quantity) || 0) * (parseFloat(line.unitPrice) || 0);
+  const val = parseFloat(line.discountValue) || 0;
+  if (!line.discountType || val <= 0) return 0;
+  if (line.discountType === 'percentage') return Math.min(gross, gross * (val / 100));
+  return Math.min(val, gross);
 }
 
-/** Join title + detail back into stored format */
-function joinDescription(title, detail) {
-  const t = title || '';
-  const d = detail || '';
-  return d ? `${t}\n${d}` : t;
-}
-
-/** Auto-growing textarea */
-function AutoTextarea({ value, onChange, placeholder, className, ariaLabel }) {
-  const resize = useCallback((el) => {
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = el.scrollHeight + 'px';
-  }, []);
-
-  const setRef = useCallback((el) => {
-    if (el) resize(el);
-  }, [resize]);
-
-  return (
-    <textarea
-      ref={setRef}
-      value={value}
-      onChange={(e) => { onChange(e); resize(e.target); }}
-      placeholder={placeholder}
-      aria-label={ariaLabel}
-      rows={1}
-      className={`w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-dark-card text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none overflow-hidden ${className || ''}`}
-    />
-  );
-}
+const EMPTY_LINE = { description: '', quantity: 1, unitPrice: 0, discountType: '', discountValue: 0, isInfoLine: false };
 
 // Statuses that allow full editing
 const FULL_EDIT_STATUSES = ['draft', 'sent', 'refused', 'expired'];
@@ -64,9 +37,7 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
   const isNotesOnly = isEditMode && NOTES_ONLY_STATUSES.includes(editQuote?.status);
 
   const [loading, setLoading] = useState(false);
-  const [lines, setLines] = useState([
-    { description: '', quantity: 1, unitPrice: 0 }
-  ]);
+  const [lines, setLines] = useState([{ ...EMPTY_LINE }]);
   const [notes, setNotes] = useState('');
   const [discountType, setDiscountType] = useState('');
   const [discountValue, setDiscountValue] = useState('');
@@ -77,18 +48,19 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
   useEffect(() => {
     if (isOpen) {
       if (editQuote) {
-        // Pre-fill form with quote data
         setLines(editQuote.lines.map(l => ({
           description: l.description,
           quantity: l.quantity,
-          unitPrice: l.unitPrice
+          unitPrice: l.unitPrice,
+          discountType: l.discountType || '',
+          discountValue: l.discountValue || 0,
+          isInfoLine: l.isInfoLine || false
         })));
         setNotes(editQuote.notes || '');
         setDiscountType(editQuote.discountType || '');
         setDiscountValue(editQuote.discountValue || '');
       } else {
-        // Reset form for new quote
-        setLines([{ description: '', quantity: 1, unitPrice: 0 }]);
+        setLines([{ ...EMPTY_LINE }]);
         setNotes('');
         setDiscountType('');
         setDiscountValue('');
@@ -96,7 +68,6 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
       setStatusChangeWarning(null);
     }
     return () => {
-      // Clear timeout on unmount or close
       if (statusTimeoutRef.current) {
         clearTimeout(statusTimeoutRef.current);
         statusTimeoutRef.current = null;
@@ -105,7 +76,7 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
   }, [isOpen, editQuote]);
 
   const addLine = () => {
-    setLines([...lines, { description: '', quantity: 1, unitPrice: 0 }]);
+    setLines([...lines, { ...EMPTY_LINE }]);
   };
 
   const addServiceLine = (service) => {
@@ -116,7 +87,10 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
       quantity: service.defaultQuantity || 1,
       unitPrice: service.priceType === 'hourly' && service.estimatedHours
         ? service.unitPrice * service.estimatedHours
-        : service.unitPrice
+        : service.unitPrice,
+      discountType: '',
+      discountValue: 0,
+      isInfoLine: false
     };
     setLines([...lines.filter(l => l.description || l.unitPrice), newLine]);
   };
@@ -127,13 +101,19 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
   };
 
   const updateLine = (index, field, value) => {
-    const newLines = [...lines];
-    newLines[index] = { ...newLines[index], [field]: value };
-    setLines(newLines);
+    setLines(prev => {
+      const newLines = [...prev];
+      newLines[index] = { ...newLines[index], [field]: value };
+      return newLines;
+    });
   };
 
   const getSubtotal = () => {
-    return lines.reduce((sum, line) => sum + (line.quantity * line.unitPrice), 0);
+    return lines.filter(l => !l.isInfoLine).reduce((sum, line) => {
+      const gross = (parseFloat(line.quantity) || 0) * (parseFloat(line.unitPrice) || 0);
+      const discount = computeLineDiscount(line);
+      return sum + Math.max(0, gross - discount);
+    }, 0);
   };
 
   const getDiscountAmount = () => {
@@ -153,9 +133,8 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
   };
 
   const handleSubmit = async () => {
-    const validLines = lines.filter(l => l.description && l.quantity && l.unitPrice);
+    const validLines = lines.filter(l => l.description && (l.isInfoLine || (l.quantity && l.unitPrice)));
 
-    // For notes-only mode, we don't need valid lines
     if (!isNotesOnly && validLines.length === 0) return;
 
     setLoading(true);
@@ -163,11 +142,22 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
       if (isEditMode) {
         const payload = isNotesOnly
           ? { notes }
-          : { lines: validLines, notes, discountType: discountType || undefined, discountValue: discountValue ? parseFloat(discountValue) : undefined };
+          : {
+              lines: validLines.map(l => ({
+                description: l.description,
+                quantity: l.quantity,
+                unitPrice: l.unitPrice,
+                discountType: l.discountType || undefined,
+                discountValue: l.discountValue || undefined,
+                isInfoLine: l.isInfoLine || undefined
+              })),
+              notes,
+              discountType: discountType || undefined,
+              discountValue: discountValue ? parseFloat(discountValue) : undefined
+            };
 
         const result = await updateQuote(editQuote._id, payload);
 
-        // Show warning if status changed
         if (result.statusChanged) {
           setStatusChangeWarning(`Le devis est repassé en brouillon (était: ${result.previousStatus})`);
           statusTimeoutRef.current = setTimeout(() => {
@@ -179,14 +169,21 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
         }
       } else {
         await createQuote(project._id, {
-          lines: validLines,
+          lines: validLines.map(l => ({
+            description: l.description,
+            quantity: l.quantity,
+            unitPrice: l.unitPrice,
+            discountType: l.discountType || undefined,
+            discountValue: l.discountValue || undefined,
+            isInfoLine: l.isInfoLine || undefined
+          })),
           notes,
           discountType: discountType || undefined,
           discountValue: discountValue ? parseFloat(discountValue) : undefined
         });
       }
       onClose();
-      setLines([{ description: '', quantity: 1, unitPrice: 0 }]);
+      setLines([{ ...EMPTY_LINE }]);
       setNotes('');
     } catch (error) {
       console.error('Error saving quote:', error);
@@ -250,95 +247,41 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
           </div>
         )}
 
+        {/* Template picker - only show for new quote creation */}
+        {canFullEdit && !isEditMode && (
+          <TemplatePicker onSelectTemplate={(template) => {
+            setLines(template.lines.map(l => ({
+              description: l.description,
+              quantity: l.quantity,
+              unitPrice: l.unitPrice,
+              discountType: l.discountType || '',
+              discountValue: l.discountValue || 0,
+              isInfoLine: l.isInfoLine || false
+            })));
+            if (template.discountType) {
+              setDiscountType(template.discountType);
+              setDiscountValue(template.discountValue || '');
+            }
+            if (template.notes) {
+              setNotes(template.notes);
+            }
+          }} />
+        )}
+
         {/* Service picker - only show for full edit */}
         {canFullEdit && (
           <ServicePicker onSelectService={addServiceLine} />
         )}
 
-        {/* Lines - only show for full edit */}
+        {/* Lines editor */}
         {canFullEdit && (
-          <div className="space-y-3">
-            <div className="grid grid-cols-12 gap-2 px-1 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
-              <div className="col-span-6">Description</div>
-              <div className="col-span-2 text-center">Qté</div>
-              <div className="col-span-2 text-center">Prix</div>
-              <div className="col-span-2 text-right">Total</div>
-            </div>
-
-            {lines.map((line, index) => {
-              const { title, detail } = splitDescription(line.description);
-              const lineTotal = (parseFloat(line.quantity) || 0) * (parseFloat(line.unitPrice) || 0);
-              return (
-              <div key={index} className="grid grid-cols-12 gap-2 items-start p-2 rounded-lg bg-slate-50/80 dark:bg-slate-800/30">
-                <div className="col-span-6 space-y-1">
-                  <input
-                    value={title}
-                    onChange={(e) => {
-                      updateLine(index, 'description', joinDescription(e.target.value, detail));
-                    }}
-                    placeholder="Titre..."
-                    aria-label={`Titre ligne ${index + 1}`}
-                    className="w-full px-2 py-1.5 text-sm font-medium rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400"
-                  />
-                  <AutoTextarea
-                    value={detail}
-                    onChange={(e) => {
-                      updateLine(index, 'description', joinDescription(title, e.target.value));
-                    }}
-                    placeholder="Description (optionnel)..."
-                    ariaLabel={`Description ligne ${index + 1}`}
-                    className="text-slate-600 dark:text-slate-300"
-                  />
-                </div>
-                <div className="col-span-2 pt-1">
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.5"
-                    value={line.quantity === '' ? '' : (line.quantity || '')}
-                    onChange={(e) => updateLine(index, 'quantity', e.target.value === '' ? '' : parseFloat(e.target.value))}
-                    onBlur={(e) => updateLine(index, 'quantity', parseFloat(e.target.value) || 1)}
-                    aria-label={`Quantité ligne ${index + 1}`}
-                    className="w-full px-2 py-1.5 text-sm text-center rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
-                  />
-                </div>
-                <div className="col-span-2 pt-1">
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={line.unitPrice === '' ? '' : (line.unitPrice || '')}
-                    onChange={(e) => updateLine(index, 'unitPrice', e.target.value === '' ? '' : parseFloat(e.target.value))}
-                    onBlur={(e) => updateLine(index, 'unitPrice', parseFloat(e.target.value) || 0)}
-                    aria-label={`Prix ligne ${index + 1}`}
-                    className="w-full px-2 py-1.5 text-sm text-center rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
-                  />
-                </div>
-                <div className="col-span-2 flex items-center justify-end gap-1 pt-1">
-                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                    {formatCurrency(lineTotal)}
-                  </span>
-                  <button
-                    onClick={() => removeLine(index)}
-                    disabled={lines.length === 1}
-                    className="p-1 rounded text-slate-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-              );
-            })}
-
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={Plus}
-              onClick={addLine}
-            >
-              Ajouter une ligne
-            </Button>
-          </div>
+          <LinesEditor
+            lines={lines}
+            updateLine={updateLine}
+            removeLine={removeLine}
+            addLine={addLine}
+            showInfoToggle
+          />
         )}
 
         {/* Read-only lines display for locked quotes */}
@@ -346,7 +289,7 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
           <div className="space-y-2">
             <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Lignes du devis (lecture seule)</p>
             <div className="bg-slate-50 dark:bg-dark-bg rounded-lg p-3 space-y-2">
-              {editQuote.lines.map((line, index) => (
+              {editQuote.lines.filter(l => !l.isInfoLine).map((line, index) => (
                 <div key={index} className="flex justify-between text-sm">
                   <span className="text-slate-700 dark:text-slate-300">{line.description}</span>
                   <span className="text-slate-900 dark:text-white font-medium">
@@ -354,21 +297,27 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
                   </span>
                 </div>
               ))}
+              {editQuote.lines.filter(l => l.isInfoLine).map((line, index) => (
+                <div key={`info-${index}`} className="flex justify-between text-sm border-t border-blue-100 dark:border-blue-800/30 pt-2 mt-2">
+                  <span className="text-blue-600 dark:text-blue-400">{line.description}</span>
+                  <span className="text-xs font-medium text-blue-500 px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30">Info</span>
+                </div>
+              ))}
             </div>
           </div>
         )}
 
-        {/* Discount */}
+        {/* Global Discount */}
         {canFullEdit && (
           <div className="space-y-2">
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Rabais</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Remise globale</p>
             <div className="flex items-center gap-2">
               <select
                 value={discountType}
                 onChange={(e) => { setDiscountType(e.target.value); if (!e.target.value) setDiscountValue(''); }}
                 className="px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-dark-card text-slate-900 dark:text-white"
               >
-                <option value="">Aucun</option>
+                <option value="">Aucune</option>
                 <option value="percentage">%</option>
                 <option value="fixed">CHF</option>
               </select>
@@ -410,7 +359,7 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
           </div>
           {getDiscountAmount() > 0 && !isNotesOnly && (
             <div className="flex items-center justify-between mt-1">
-              <span className="text-emerald-600 dark:text-emerald-400">Rabais{discountType === 'percentage' ? ` (${discountValue}%)` : ''}</span>
+              <span className="text-emerald-600 dark:text-emerald-400">Remise{discountType === 'percentage' ? ` (${discountValue}%)` : ''}</span>
               <span className="font-medium text-emerald-600 dark:text-emerald-400">
                 -{formatCurrency(getDiscountAmount())}
               </span>
@@ -418,7 +367,7 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
           )}
           {isNotesOnly && editQuote.discountAmount > 0 && (
             <div className="flex items-center justify-between mt-1">
-              <span className="text-emerald-600 dark:text-emerald-400">Rabais</span>
+              <span className="text-emerald-600 dark:text-emerald-400">Remise</span>
               <span className="font-medium text-emerald-600 dark:text-emerald-400">
                 -{formatCurrency(editQuote.discountAmount)}
               </span>
@@ -438,6 +387,18 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
               {formatCurrency(isNotesOnly ? editQuote.total : Math.round(getNetTotal() * (1 + getVatRate() / 100) / 0.05) * 0.05)}
             </span>
           </div>
+          {/* Info lines summary */}
+          {lines.some(l => l.isInfoLine && l.description) && !isNotesOnly && (
+            <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800/50">
+              <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-1">Informations de paiement</p>
+              {lines.filter(l => l.isInfoLine && l.description).map((l, i) => (
+                <div key={i} className="flex justify-between text-xs text-blue-700 dark:text-blue-300">
+                  <span>{l.description.split('\n')[0]}</span>
+                  <span>{l.quantity} x {formatCurrency(l.unitPrice)}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Actions */}
@@ -454,7 +415,7 @@ export default function NewQuoteModal({ project, isOpen, onClose, editQuote = nu
           <Button
             onClick={handleSubmit}
             loading={loading}
-            disabled={!isNotesOnly && lines.every(l => !l.description || !l.unitPrice)}
+            disabled={!isNotesOnly && lines.every(l => !l.description || (!l.isInfoLine && !l.unitPrice))}
           >
             {isEditMode ? 'Enregistrer' : 'Créer le devis'}
           </Button>

@@ -11,6 +11,8 @@ export const useUIStore = create(
       // Card personalization
       cardStyle: 'left-border', // 'left-border' | 'full-border' | 'top-gradient'
       cardSize: 'medium', // 'small' | 'medium' | 'large'
+      viewMode: 'grid', // 'grid' | 'list'
+      sortMode: 'manual', // 'manual' | 'name-asc' | 'name-desc' | 'created-desc' | 'created-asc' | 'amount-desc'
 
       // Sidebar
       sidebarOpen: false,
@@ -43,6 +45,8 @@ export const useUIStore = create(
       setAccentColor: (color) => set({ accentColor: color }),
       setCardStyle: (style) => set({ cardStyle: style }),
       setCardSize: (size) => set({ cardSize: size }),
+      setViewMode: (mode) => set({ viewMode: mode }),
+      setSortMode: (mode) => set({ sortMode: mode }),
 
       // Sidebar Actions
       openSidebar: (tab = 'info') => set({ sidebarOpen: true, sidebarTab: tab }),
@@ -110,7 +114,14 @@ export const useUIStore = create(
           [projectId]: expanded
         }
       })),
-      collapseAllCards: () => set({ expandedCards: {} })
+      collapseAllCards: () => set({ expandedCards: {} }),
+      expandAllCards: (projectIds) => set({
+        expandedCards: Object.fromEntries(projectIds.map(id => [id, true]))
+      }),
+      toggleAllCardsExpanded: (projectIds) => set(state => {
+        const allExpanded = projectIds.length > 0 && projectIds.every(id => state.expandedCards[id]);
+        return { expandedCards: allExpanded ? {} : Object.fromEntries(projectIds.map(id => [id, true])) };
+      })
     }),
     {
       name: 'swigs-workflow-ui',
@@ -122,7 +133,9 @@ export const useUIStore = create(
         analyticsHiddenStatuses: state.analyticsHiddenStatuses,
         planningHiddenStatuses: state.planningHiddenStatuses,
         cardStyle: state.cardStyle,
-        cardSize: state.cardSize
+        cardSize: state.cardSize,
+        viewMode: state.viewMode,
+        sortMode: state.sortMode
       })
     }
   )

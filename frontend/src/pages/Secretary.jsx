@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Loader2, Sparkles, X, Building2, Landmark, Palette, ChevronRight, Check, PartyPopper } from 'lucide-react';
+import { Loader2, X, ChevronRight, Check } from 'lucide-react';
 import { useDashboardStore } from '../stores/dashboardStore';
 import { useAuthStore } from '../stores/authStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { remindersApi } from '../services/api';
 import { useToastStore } from '../stores/toastStore';
-import { trackEvent, trackOnboardingStep, trackBusinessEvent } from '../lib/posthog';
+import { trackEvent, trackBusinessEvent } from '../lib/posthog';
 import { computeBriefing } from '../components/Briefing/utils/briefingLogic';
 import BriefingHeader from '../components/Briefing/BriefingHeader';
 import BriefingFeed from '../components/Briefing/BriefingFeed';
@@ -15,7 +15,6 @@ import BriefingSidebar from '../components/Briefing/sidebar/BriefingSidebar';
 const ONBOARDING_STEPS = [
   {
     key: 'company',
-    icon: Building2,
     label: 'Mon entreprise',
     href: '/settings?section=company',
     description: 'Nom, adresse, contact',
@@ -23,7 +22,6 @@ const ONBOARDING_STEPS = [
   },
   {
     key: 'banking',
-    icon: Landmark,
     label: 'Coordonnées bancaires',
     href: '/settings?section=company',
     description: 'IBAN pour factures QR',
@@ -31,7 +29,6 @@ const ONBOARDING_STEPS = [
   },
   {
     key: 'design',
-    icon: Palette,
     label: 'Design PDF',
     href: '/settings?section=invoice-design',
     description: 'Logo, couleurs, template',
@@ -125,92 +122,106 @@ export default function Secretary() {
       </div>
 
       <div className="relative z-10 max-w-[1440px] mx-auto px-6 py-6">
-        {/* Onboarding banner */}
+        {/* Onboarding card */}
         {showOnboarding && (
-          <div className="mb-6 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-xl p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-3 flex-1">
-                <div className="p-2 bg-primary-100 dark:bg-primary-900/40 rounded-lg flex-shrink-0">
-                  <Sparkles className="w-5 h-5 text-primary-600 dark:text-primary-400" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-sm font-semibold text-primary-900 dark:text-primary-100 mb-1">
-                    Bienvenue ! Configurez votre espace en 3 étapes
+          <div className="mb-6 relative overflow-hidden rounded-2xl border border-primary-200 dark:border-primary-800/60 bg-gradient-to-br from-primary-50 via-white to-primary-50/50 dark:from-primary-950/40 dark:via-dark-card dark:to-primary-950/20 shadow-lg shadow-primary-500/5 dark:shadow-primary-500/10">
+            {/* Background glow */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-primary-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none" />
+
+            <div className="relative p-6">
+              {/* Header */}
+              <div className="flex items-start justify-between mb-5">
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                    Configurez votre espace
                   </h3>
-                  <p className="text-xs text-primary-700 dark:text-primary-300 mb-3">
-                    Complétez votre profil pour générer des factures professionnelles.
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    3 étapes pour commencer à facturer
                   </p>
-
-                  {/* Progress bar */}
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="flex-1 h-1.5 bg-primary-200 dark:bg-primary-800 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-primary-600 dark:bg-primary-400 rounded-full transition-all duration-500"
-                        style={{ width: `${(completedSteps.length / ONBOARDING_STEPS.length) * 100}%` }}
-                      />
-                    </div>
-                    <span className="text-xs font-medium text-primary-600 dark:text-primary-400">
-                      {completedSteps.length}/{ONBOARDING_STEPS.length}
-                    </span>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    {ONBOARDING_STEPS.map((step) => {
-                      const Icon = step.icon;
-                      const done = step.check(settings);
-                      return (
-                        <Link
-                          key={step.href}
-                          to={step.href}
-                          className={`flex items-center gap-2 px-3 py-2 border rounded-lg text-xs font-medium transition-colors group ${
-                            done
-                              ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
-                              : 'bg-white dark:bg-primary-900/30 border-primary-200 dark:border-primary-700 text-primary-700 dark:text-primary-300 hover:bg-primary-100 dark:hover:bg-primary-900/50 hover:border-primary-300 dark:hover:border-primary-600'
-                          }`}
-                        >
-                          {done ? (
-                            <Check className="w-3.5 h-3.5 flex-shrink-0" />
-                          ) : (
-                            <Icon className="w-3.5 h-3.5 flex-shrink-0" />
-                          )}
-                          <span className={done ? 'line-through opacity-70' : ''}>{step.label}</span>
-                          {!done && <ChevronRight className="w-3 h-3 opacity-50 group-hover:opacity-100 transition-opacity" />}
-                        </Link>
-                      );
-                    })}
-                  </div>
                 </div>
+                <button
+                  onClick={handleDismissOnboarding}
+                  className="p-1.5 rounded-lg text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+                  title="Fermer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-              <button
-                onClick={handleDismissOnboarding}
-                className="p-1.5 rounded-lg text-primary-500 dark:text-primary-400 hover:bg-primary-100 dark:hover:bg-primary-900/40 transition-colors flex-shrink-0"
-                title="Fermer"
-              >
-                <X className="w-4 h-4" />
-              </button>
+
+              {/* Progress */}
+              <div className="flex items-center gap-3 mb-5">
+                <div className="flex-1 h-2 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-primary-500 to-primary-600 rounded-full transition-all duration-700 ease-out"
+                    style={{ width: `${(completedSteps.length / ONBOARDING_STEPS.length) * 100}%` }}
+                  />
+                </div>
+                <span className="text-sm font-bold text-primary-600 dark:text-primary-400 tabular-nums">
+                  {completedSteps.length}/{ONBOARDING_STEPS.length}
+                </span>
+              </div>
+
+              {/* Steps */}
+              <div className="grid sm:grid-cols-3 gap-3">
+                {ONBOARDING_STEPS.map((step, index) => {
+                  const done = step.check(settings);
+                  return (
+                    <Link
+                      key={step.key}
+                      to={step.href}
+                      className={`group relative flex flex-col p-4 rounded-xl border transition-all duration-200 ${
+                        done
+                          ? 'bg-emerald-50 dark:bg-emerald-900/15 border-emerald-200 dark:border-emerald-800/50'
+                          : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 hover:border-primary-300 dark:hover:border-primary-700 hover:shadow-md hover:shadow-primary-500/5'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors ${
+                          done
+                            ? 'bg-emerald-500 text-white'
+                            : 'bg-primary-100 dark:bg-primary-900/40 text-primary-600 dark:text-primary-400 group-hover:bg-primary-200 dark:group-hover:bg-primary-900/60'
+                        }`}>
+                          {done ? <Check className="w-4 h-4" /> : <span className="text-sm font-bold">{index + 1}</span>}
+                        </div>
+                        <span className={`text-sm font-semibold ${
+                          done
+                            ? 'text-emerald-700 dark:text-emerald-300 line-through opacity-70'
+                            : 'text-slate-900 dark:text-white'
+                        }`}>
+                          {step.label}
+                        </span>
+                      </div>
+                      <p className={`text-xs leading-relaxed ${
+                        done
+                          ? 'text-emerald-600 dark:text-emerald-400/70'
+                          : 'text-slate-500 dark:text-slate-400'
+                      }`}>
+                        {step.description}
+                      </p>
+                      {!done && (
+                        <div className="mt-3 flex items-center gap-1 text-xs font-medium text-primary-600 dark:text-primary-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                          Configurer <ChevronRight className="w-3 h-3" />
+                        </div>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
 
         {/* Onboarding complete celebration (shows once) */}
         {settings && allStepsDone && !onboardingDismissed && !localStorage.getItem('onboarding_celebration_seen') && (() => {
-          // Show celebration briefly then auto-dismiss
           setTimeout(() => localStorage.setItem('onboarding_celebration_seen', 'true'), 0);
           return (
-            <div className="mb-6 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-emerald-100 dark:bg-emerald-900/40 rounded-lg">
-                  <PartyPopper className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">
-                    Configuration terminée !
-                  </h3>
-                  <p className="text-xs text-emerald-700 dark:text-emerald-300">
-                    Votre espace est prêt. Vous pouvez maintenant créer des projets et facturer vos clients.
-                  </p>
-                </div>
-              </div>
+            <div className="mb-6 relative overflow-hidden rounded-2xl border border-emerald-200 dark:border-emerald-800/60 bg-gradient-to-br from-emerald-50 via-white to-emerald-50/50 dark:from-emerald-950/40 dark:via-dark-card dark:to-emerald-950/20 p-5">
+              <h3 className="text-base font-bold text-emerald-900 dark:text-emerald-100">
+                Configuration terminée !
+              </h3>
+              <p className="text-sm text-emerald-700 dark:text-emerald-300 mt-1">
+                Votre espace est prêt. Créez votre premier projet et commencez à facturer.
+              </p>
             </div>
           );
         })()}

@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   RefreshCw, Plus, Pause, Play, Trash2, Edit2, Zap,
-  Calendar, AlertCircle, ChevronDown, ChevronUp
+  Calendar, AlertCircle, ChevronDown, ChevronUp,
+  Receipt, Send, Check, FileDown, Mail
 } from 'lucide-react';
-import { recurringInvoicesApi } from '../../../services/api';
+import { recurringInvoicesApi, invoicesApi } from '../../../services/api';
 import { useToastStore } from '../../../stores/toastStore';
 import Button from '../../ui/Button';
 import ConfirmDialog from '../../ui/ConfirmDialog';
+import { InvoiceStatusBadge } from '../../ui/Badge';
 import RecurringInvoiceModal from './RecurringInvoiceModal';
 import { formatCurrency } from '../../../utils/format';
 
@@ -65,12 +67,84 @@ function StatusBadge({ status }) {
   );
 }
 
-function RecurringRow({ item, onEdit, onChangeStatus, onDelete, onGenerate, generatingId, deletingId, statusChangingId }) {
+function RecurringRow({ item, onEdit, onChangeStatus, onDelete, onGenerate, onRefresh, generatingId, deletingId, statusChangingId }) {
   const [expanded, setExpanded] = useState(false);
+  const [actionLoading, setActionLoading] = useState(null);
+  const [missingEmailWarning, setMissingEmailWarning] = useState(false);
+  const { addToast } = useToastStore();
 
+  const clientEmail = item.project?.client?.email;
   const clientName = item.project?.client?.name || item.project?.client?.company || '—';
   const projectName = item.project?.name || '—';
   const total = getTotal(item);
+  const generatedInvoices = item.generatedInvoices || [];
+  const [autoSendLocal, setAutoSendLocal] = useState(item.autoSend || false);
+  const [togglingAutoSend, setTogglingAutoSend] = useState(false);
+
+  const handleToggleAutoSend = async () => {
+    if (!autoSendLocal && !clientEmail) {
+      setMissingEmailWarning(true);
+      return;
+    }
+    setTogglingAutoSend(true);
+    const newVal = !autoSendLocal;
+    try {
+      await recurringInvoicesApi.update(item._id, { autoSend: newVal });
+      setAutoSendLocal(newVal);
+      addToast({ type: 'success', message: newVal ? 'Envoi automatique activé' : 'Envoi automatique désactivé' });
+    } catch {
+      addToast({ type: 'error', message: 'Erreur lors de la mise à jour' });
+    } finally {
+      setTogglingAutoSend(false);
+    }
+  };
+
+  const handleSendEmail = async (invoiceId) => {
+    if (!clientEmail) {
+      setMissingEmailWarning(true);
+      return;
+    }
+    setActionLoading(invoiceId);
+    try {
+      await invoicesApi.send(invoiceId);
+      addToast({ type: 'success', message: 'Facture envoyée par email' });
+      onRefresh();
+    } catch (err) {
+      addToast({ type: 'error', message: err?.response?.data?.error || 'Erreur lors de l\'envoi' });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleInvoiceStatus = async (invoiceId, newStatus) => {
+    setActionLoading(invoiceId);
+    try {
+      await invoicesApi.changeStatus(invoiceId, newStatus);
+      addToast({ type: 'success', message: newStatus === 'sent' ? 'Facture marquée envoyée' : 'Facture marquée payée' });
+      onRefresh();
+    } catch {
+      addToast({ type: 'error', message: 'Erreur lors du changement de statut' });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDownloadPdf = async (invoiceId, number) => {
+    setActionLoading(invoiceId);
+    try {
+      const { data } = await invoicesApi.getPdf(invoiceId);
+      const url = URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${number || 'facture'}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      addToast({ type: 'error', message: 'Erreur lors du téléchargement du PDF' });
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   return (
     <div className="border border-slate-200 dark:border-dark-border rounded-xl overflow-hidden bg-white dark:bg-dark-card">
@@ -220,12 +294,28 @@ function RecurringRow({ item, onEdit, onChangeStatus, onDelete, onGenerate, gene
               <span>Délai paiement</span>
               <span className="font-medium text-slate-800 dark:text-slate-200">{item.paymentDays ?? 30} jours</span>
             </div>
-            {item.autoSend && (
-              <div className="col-span-2 flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-                <Zap className="w-3 h-3" />
-                <span>Envoi automatique activé</span>
+            <div className="col-span-2 flex items-center justify-between pt-1">
+              <div className="flex items-center gap-1.5">
+                <Zap className={`w-3 h-3 ${autoSendLocal ? 'text-emerald-500' : 'text-slate-400'}`} />
+                <span className={autoSendLocal ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-slate-500 dark:text-slate-400'}>
+                  Envoi automatique {autoSendLocal ? 'activé' : 'désactivé'}
+                </span>
               </div>
-            )}
+              {item.status !== 'cancelled' && (
+                <button
+                  type="button"
+                  onClick={handleToggleAutoSend}
+                  disabled={togglingAutoSend}
+                  className={`relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-1 disabled:opacity-50 ${
+                    autoSendLocal ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                  }`}
+                >
+                  <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                    autoSendLocal ? 'translate-x-[18px]' : 'translate-x-[3px]'
+                  }`} />
+                </button>
+              )}
+            </div>
             {item.notes && (
               <div className="col-span-2">
                 <span className="text-slate-500 dark:text-slate-400">Notes : </span>
@@ -233,8 +323,95 @@ function RecurringRow({ item, onEdit, onChangeStatus, onDelete, onGenerate, gene
               </div>
             )}
           </div>
+
+          {/* Generated Invoices */}
+          <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+              <Receipt className="w-3.5 h-3.5" />
+              Factures générées ({generatedInvoices.length})
+            </p>
+            {generatedInvoices.length === 0 ? (
+              <p className="text-sm text-slate-500 dark:text-slate-400 italic">
+                Aucune facture générée.
+                {item.nextGenerationDate && (
+                  <span className="ml-1">Prochaine génération : {formatDate(item.nextGenerationDate)}</span>
+                )}
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                {generatedInvoices.map(inv => (
+                  <div key={inv._id} className="flex items-center gap-3 text-sm bg-slate-50 dark:bg-slate-800/50 rounded-lg px-3 py-2">
+                    <span className="font-mono font-medium text-slate-700 dark:text-slate-300 min-w-[120px]">
+                      {inv.number || '—'}
+                    </span>
+                    <span className="text-slate-500 dark:text-slate-400 text-xs">
+                      {formatDate(inv.issueDate)}
+                    </span>
+                    <span className="font-medium text-slate-700 dark:text-slate-300">
+                      {formatCurrency(inv.total)}
+                    </span>
+                    <InvoiceStatusBadge status={inv.status} />
+                    <div className="flex items-center gap-1 ml-auto">
+                      {inv.status === 'draft' && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleSendEmail(inv._id)}
+                            disabled={actionLoading === inv._id}
+                            title="Envoyer par email"
+                            className="p-1 rounded text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-white dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+                          >
+                            <Mail className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleInvoiceStatus(inv._id, 'sent')}
+                            disabled={actionLoading === inv._id}
+                            title="Marquer envoyée (sans email)"
+                            className="p-1 rounded text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-white dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
+                      {inv.status === 'sent' && (
+                        <button
+                          type="button"
+                          onClick={() => handleInvoiceStatus(inv._id, 'paid')}
+                          disabled={actionLoading === inv._id}
+                          title="Marquer payée"
+                          className="p-1 rounded text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-white dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadPdf(inv._id, inv.number)}
+                        disabled={actionLoading === inv._id}
+                        title="Télécharger PDF"
+                        className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-white dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+                      >
+                        <FileDown className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={missingEmailWarning}
+        onClose={() => setMissingEmailWarning(false)}
+        onConfirm={() => setMissingEmailWarning(false)}
+        title="Email client manquant"
+        message={`Le client "${clientName}" n'a pas d'adresse email configurée. L'envoi automatique et les rappels ne fonctionneront pas. Ajoutez un email dans les informations du projet.`}
+        confirmLabel="Compris"
+        cancelLabel="Fermer"
+      />
     </div>
   );
 }
@@ -387,6 +564,7 @@ export default function RecurringSection({ settings }) {
               onChangeStatus={handleChangeStatus}
               onDelete={handleDelete}
               onGenerate={handleGenerate}
+              onRefresh={load}
               generatingId={generatingId}
               deletingId={deletingId}
               statusChangingId={statusChangingId}

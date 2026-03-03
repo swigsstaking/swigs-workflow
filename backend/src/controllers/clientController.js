@@ -1,5 +1,9 @@
 import Client from '../models/Client.js';
+import Project from '../models/Project.js';
 import { fireInternalTrigger } from '../services/automation/triggerService.js';
+
+// Fields to sync between Client and Project.client embedded
+const CLIENT_SYNC_FIELDS = ['name', 'email', 'phone', 'address', 'street', 'zip', 'city', 'country', 'che', 'company', 'siret'];
 
 // @desc    Get all clients
 // @route   GET /api/clients
@@ -103,6 +107,20 @@ export const updateClient = async (req, res, next) => {
       return res.status(404).json({ success: false, error: 'Client non trouvé' });
     }
 
+    // Sync to all projects linked to this client
+    const syncData = {};
+    for (const field of CLIENT_SYNC_FIELDS) {
+      if (client[field] !== undefined) {
+        syncData[`client.${field}`] = client[field] || '';
+      }
+    }
+    if (Object.keys(syncData).length > 0) {
+      await Project.updateMany(
+        { clientRef: client._id },
+        { $set: syncData }
+      );
+    }
+
     // Fire automation trigger (non-blocking)
     fireInternalTrigger('client.updated', {
       clientId: client._id.toString(),
@@ -132,9 +150,8 @@ export const deleteClient = async (req, res, next) => {
       return res.status(404).json({ success: false, error: 'Client non trouvé' });
     }
 
-    // Check if client has projects
-    const Project = (await import('../models/Project.js')).default;
-    const projectQuery = { 'client._id': client._id };
+    // Check if client has linked projects
+    const projectQuery = { clientRef: client._id };
     if (req.user) {
       projectQuery.userId = req.user._id;
     }

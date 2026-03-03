@@ -122,7 +122,7 @@ export default function BankSection() {
     if (!invoiceSearch.trim()) return;
     setSearching(true);
     try {
-      const { data } = await invoicesApi.getAll({ status: 'sent', search: invoiceSearch.trim() });
+      const { data } = await invoicesApi.getAll({ status: 'sent,partial', search: invoiceSearch.trim() });
       setInvoiceResults(data.data || []);
     } catch {
       setInvoiceResults([]);

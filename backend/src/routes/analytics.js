@@ -5,8 +5,12 @@ import {
   getQuoteStats,
   getProjectStats,
   getTopClients,
-  getHoursStats
+  getHoursStats,
+  getExpenseStats,
+  getProfitLoss,
+  getVatDetail
 } from '../controllers/analyticsController.js';
+import { checkComptaPlus } from '../middleware/requireComptaPlus.js';
 
 const router = express.Router();
 
@@ -27,5 +31,10 @@ router.get('/clients', getTopClients);
 
 // GET /api/analytics/hours - Hours worked statistics
 router.get('/hours', getHoursStats);
+
+// Compta Plus analytics
+router.get('/expenses', checkComptaPlus, getExpenseStats);
+router.get('/profitloss', checkComptaPlus, getProfitLoss);
+router.get('/vat-detail', checkComptaPlus, getVatDetail);
 
 export default router;

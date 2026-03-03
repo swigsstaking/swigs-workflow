@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, Trash2, Mail, Clock, GitBranch, Zap, ClipboardList, Globe, User, UserPlus, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Modal from '../ui/Modal';
+import VariablePicker from './VariablePicker';
 import { useAutomationStore } from '../../stores/automationStore';
 import { useAuthStore } from '../../stores/authStore';
 
@@ -39,6 +40,7 @@ export default function NodeConfigPanel({ node, onClose, onUpdateConfig, onDelet
   const [config, setConfig] = useState(node.data.config || {});
   const [showAssignConfirm, setShowAssignConfirm] = useState(false);
   const [pendingAssignEmail, setPendingAssignEmail] = useState('');
+  const [activeVarField, setActiveVarField] = useState(null); // 'taskTitle' | 'taskDescription' | 'recordValue'
 
   useEffect(() => {
     setConfig(node.data.config || {});
@@ -350,21 +352,48 @@ export default function NodeConfigPanel({ node, onClose, onUpdateConfig, onDelet
         setPendingAssignEmail('');
       };
 
+      const insertVariable = (tag) => {
+        const field = activeVarField || 'taskTitle';
+        const key = field === 'taskDescription' ? 'taskDescription' : 'taskTitle';
+        const current = config[key] || '';
+        handleConfigChange(key, current + tag);
+      };
+
       return (
         <div className="space-y-4">
-          <Input
-            label="Titre de la tâche"
-            value={config.taskTitle || ''}
-            onChange={(e) => handleConfigChange('taskTitle', e.target.value)}
-            placeholder="Ex: Traiter la commande {{number}}"
-          />
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Description
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                Titre de la tâche
+              </label>
+              <VariablePicker
+                triggerType={automationTriggerType}
+                onInsert={(tag) => { setActiveVarField('taskTitle'); handleConfigChange('taskTitle', (config.taskTitle || '') + tag); }}
+              />
+            </div>
+            <input
+              type="text"
+              value={config.taskTitle || ''}
+              onChange={(e) => handleConfigChange('taskTitle', e.target.value)}
+              onFocus={() => setActiveVarField('taskTitle')}
+              placeholder="Ex: Traiter la commande {{orderNumber}}"
+              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            />
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                Description
+              </label>
+              <VariablePicker
+                triggerType={automationTriggerType}
+                onInsert={(tag) => { setActiveVarField('taskDescription'); handleConfigChange('taskDescription', (config.taskDescription || '') + tag); }}
+              />
+            </div>
             <textarea
               value={config.taskDescription || ''}
               onChange={(e) => handleConfigChange('taskDescription', e.target.value)}
+              onFocus={() => setActiveVarField('taskDescription')}
               rows={3}
               className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
               placeholder="Description de la tâche..."
@@ -727,19 +756,25 @@ export default function NodeConfigPanel({ node, onClose, onUpdateConfig, onDelet
           )}
 
           {config.recordField && (
-            <Input
-              label="Nouvelle valeur"
-              value={config.recordValue || ''}
-              onChange={(e) => handleConfigChange('recordValue', e.target.value)}
-              placeholder="Ex: terminé ou {{project.status}}"
-            />
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Nouvelle valeur
+                </label>
+                <VariablePicker
+                  triggerType={automationTriggerType}
+                  onInsert={(tag) => handleConfigChange('recordValue', (config.recordValue || '') + tag)}
+                />
+              </div>
+              <input
+                type="text"
+                value={config.recordValue || ''}
+                onChange={(e) => handleConfigChange('recordValue', e.target.value)}
+                placeholder="Ex: terminé ou {{newStatus}}"
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
+            </div>
           )}
-
-          <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-            <p className="text-xs text-blue-700 dark:text-blue-300">
-              Utilisez <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{variable}}'}</code> pour référencer des données du contexte.
-            </p>
-          </div>
         </div>
       );
     }

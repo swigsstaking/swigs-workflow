@@ -1,3 +1,5 @@
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import {
@@ -27,11 +29,40 @@ export default function QuoteList({
   canDeleteQuote,
   generateMailtoLink
 }) {
+  const [menuPos, setMenuPos] = useState(null);
+
+  // Clear position when menu closes (e.g. parent resets activeMenu after action)
+  useEffect(() => {
+    if (!activeMenu?.startsWith('quote-')) setMenuPos(null);
+  }, [activeMenu]);
+
+  const handleMenuToggle = (e, quoteId) => {
+    const id = `quote-${quoteId}`;
+    if (activeMenu === id) {
+      setActiveMenu(null);
+      setMenuPos(null);
+    } else {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const spaceAbove = rect.top;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      setMenuPos({
+        right: window.innerWidth - rect.right,
+        ...(spaceAbove > spaceBelow
+          ? { bottom: window.innerHeight - rect.top + 4, top: undefined }
+          : { top: rect.bottom + 4, bottom: undefined }),
+      });
+      setActiveMenu(id);
+    }
+  };
+
+  const closeMenu = () => { setActiveMenu(null); setMenuPos(null); };
+
   return (
     <section>
-      {/* Click-outside overlay to close dropdown */}
-      {activeMenu?.startsWith('quote-') && (
-        <div className="fixed inset-0 z-[5]" onClick={() => setActiveMenu(null)} />
+      {/* Click-outside overlay — portaled to escape overflow */}
+      {activeMenu?.startsWith('quote-') && createPortal(
+        <div className="fixed inset-0 z-[9998]" onClick={closeMenu} />,
+        document.body
       )}
       <div className="flex items-center justify-between mb-3">
         <h3 className="swigs-section-label">Devis</h3>
@@ -122,98 +153,104 @@ export default function QuoteList({
                     </a>
                   ) : null}
 
-                  <div className="relative">
-                    <button
-                      onClick={() => setActiveMenu(activeMenu === `quote-${quote._id}` ? null : `quote-${quote._id}`)}
-                      className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-hover rounded transition-colors"
+                  <button
+                    onClick={(e) => handleMenuToggle(e, quote._id)}
+                    className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-hover rounded transition-colors"
+                  >
+                    <MoreVertical className="w-4 h-4" />
+                  </button>
+
+                  {/* Dropdown menu — portaled to escape overflow */}
+                  {activeMenu === `quote-${quote._id}` && menuPos && createPortal(
+                    <div
+                      className="fixed w-52 bg-white dark:bg-dark-card rounded-lg shadow-lg border border-slate-200 dark:border-dark-border py-1 z-[9999] max-h-[80vh] overflow-y-auto"
+                      style={{
+                        right: menuPos.right,
+                        ...(menuPos.bottom != null ? { bottom: menuPos.bottom } : { top: menuPos.top }),
+                      }}
                     >
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
+                      {/* Edit button - always available */}
+                      <button
+                        onClick={() => { onEdit(quote); closeMenu(); }}
+                        className="w-full px-4 py-2 text-sm text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-dark-hover flex items-center gap-2"
+                      >
+                        <Pencil className="w-4 h-4" />
+                        Modifier
+                      </button>
 
-                    {activeMenu === `quote-${quote._id}` && (
-                      <div className="absolute right-0 mt-1 w-52 bg-white dark:bg-dark-card rounded-lg shadow-lg border border-slate-200 dark:border-dark-border py-1 z-10">
-                        {/* Edit button - always available */}
+                      {/* Portal link */}
+                      <button
+                        onClick={() => onGeneratePortalLink(quote._id, 'quote')}
+                        className="w-full px-4 py-2 text-sm text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-dark-hover flex items-center gap-2"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                        Générer lien portail
+                      </button>
+
+                      {/* AbaNinja sync */}
+                      {settings?.abaninja?.enabled && !quote.abaNinjaId && (
                         <button
-                          onClick={() => onEdit(quote)}
+                          onClick={() => onSyncAbaNinja(quote._id, 'quote')}
                           className="w-full px-4 py-2 text-sm text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-dark-hover flex items-center gap-2"
                         >
-                          <Pencil className="w-4 h-4" />
-                          Modifier
+                          <Link2 className="w-4 h-4" />
+                          Sync AbaNinja
                         </button>
+                      )}
 
-                        {/* Portal link */}
+                      {quote.status === 'draft' && (
                         <button
-                          onClick={() => onGeneratePortalLink(quote._id, 'quote')}
+                          onClick={() => onStatusChange(quote._id, 'sent')}
                           className="w-full px-4 py-2 text-sm text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-dark-hover flex items-center gap-2"
                         >
-                          <ExternalLink className="w-4 h-4" />
-                          Générer lien portail
+                          <Send className="w-4 h-4" />
+                          Marquer envoyé
                         </button>
+                      )}
+                      {quote.status === 'sent' && (
+                        <>
+                          <button
+                            onClick={() => onStatusChange(quote._id, 'signed')}
+                            className="w-full px-4 py-2 text-sm text-left text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 flex items-center gap-2"
+                          >
+                            <Check className="w-4 h-4" />
+                            Marquer signé
+                          </button>
+                          <button
+                            onClick={() => onStatusChange(quote._id, 'refused')}
+                            className="w-full px-4 py-2 text-sm text-left text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
+                          >
+                            <X className="w-4 h-4" />
+                            Marquer refusé
+                          </button>
+                        </>
+                      )}
+                      {(quote.status === 'signed' || quote.status === 'partial') && (
+                        <button
+                          onClick={() => onCreateInvoiceFromQuote(quote._id)}
+                          className="w-full px-4 py-2 text-sm text-left text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20 flex items-center gap-2"
+                        >
+                          <Receipt className="w-4 h-4" />
+                          Créer facture
+                        </button>
+                      )}
 
-                        {/* AbaNinja sync */}
-                        {settings?.abaninja?.enabled && !quote.abaNinjaId && (
-                          <button
-                            onClick={() => onSyncAbaNinja(quote._id, 'quote')}
-                            className="w-full px-4 py-2 text-sm text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-dark-hover flex items-center gap-2"
-                          >
-                            <Link2 className="w-4 h-4" />
-                            Sync AbaNinja
-                          </button>
-                        )}
-
-                        {quote.status === 'draft' && (
-                          <button
-                            onClick={() => onStatusChange(quote._id, 'sent')}
-                            className="w-full px-4 py-2 text-sm text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-dark-hover flex items-center gap-2"
-                          >
-                            <Send className="w-4 h-4" />
-                            Marquer envoyé
-                          </button>
-                        )}
-                        {quote.status === 'sent' && (
-                          <>
-                            <button
-                              onClick={() => onStatusChange(quote._id, 'signed')}
-                              className="w-full px-4 py-2 text-sm text-left text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 flex items-center gap-2"
-                            >
-                              <Check className="w-4 h-4" />
-                              Marquer signé
-                            </button>
-                            <button
-                              onClick={() => onStatusChange(quote._id, 'refused')}
-                              className="w-full px-4 py-2 text-sm text-left text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
-                            >
-                              <X className="w-4 h-4" />
-                              Marquer refusé
-                            </button>
-                          </>
-                        )}
-                        {(quote.status === 'signed' || quote.status === 'partial') && (
-                          <button
-                            onClick={() => onCreateInvoiceFromQuote(quote._id)}
-                            className="w-full px-4 py-2 text-sm text-left text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20 flex items-center gap-2"
-                          >
-                            <Receipt className="w-4 h-4" />
-                            Créer facture
-                          </button>
-                        )}
-
-                        {/* Delete button - conditional */}
-                        {canDeleteQuote(quote) && (
-                          <button
-                            onClick={() => {
-                              setDeleteQuoteConfirm(quote);
-                              setActiveMenu(null);
-                            }}
-                            className="w-full px-4 py-2 text-sm text-left text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                            Supprimer
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                      {/* Delete button - conditional */}
+                      {canDeleteQuote(quote) && (
+                        <button
+                          onClick={() => {
+                            setDeleteQuoteConfirm(quote);
+                            closeMenu();
+                          }}
+                          className="w-full px-4 py-2 text-sm text-left text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Supprimer
+                        </button>
+                      )}
+                    </div>,
+                    document.body
+                  )}
                 </div>
               </div>
             );

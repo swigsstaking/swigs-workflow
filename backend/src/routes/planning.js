@@ -3,10 +3,14 @@ import {
   getPlannedBlocks,
   createPlannedBlock,
   updatePlannedBlock,
-  deletePlannedBlock
+  deletePlannedBlock,
+  generateCalendarToken
 } from '../controllers/planningController.js';
 
 const router = express.Router();
+
+// Calendar token generation (protected by requireAuth at server.js level)
+router.post('/calendar-token', generateCalendarToken);
 
 router.route('/')
   .get(getPlannedBlocks)

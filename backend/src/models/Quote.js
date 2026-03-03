@@ -16,10 +16,27 @@ const quoteLineSchema = new mongoose.Schema({
     required: true,
     min: 0
   },
+  discountType: {
+    type: String,
+    enum: ['percentage', 'fixed']
+  },
+  discountValue: {
+    type: Number,
+    min: 0
+  },
+  discount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
   total: {
     type: Number,
     required: true,
     min: 0
+  },
+  isInfoLine: {
+    type: Boolean,
+    default: false
   }
 }, { _id: false });
 

@@ -87,6 +87,11 @@ const projectSchema = new mongoose.Schema({
     type: clientSchema,
     required: [true, 'Les informations client sont requises']
   },
+  clientRef: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Client',
+    default: null
+  },
   status: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Status',

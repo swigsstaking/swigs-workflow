@@ -4,10 +4,12 @@ import crypto from 'crypto';
 import Settings from '../models/Settings.js';
 import BankTransaction from '../models/BankTransaction.js';
 import BankImport from '../models/BankImport.js';
+import BankAccount from '../models/BankAccount.js';
 import Invoice from '../models/Invoice.js';
 import { parseCamtXml } from './camtParser.service.js';
 import { parseBankNotificationEmail } from './bankEmailParser.service.js';
 import { reconcileTransaction } from './reconciliation.service.js';
+import { classifyTransaction } from './expenseClassifier.service.js';
 import { historyService } from './historyService.js';
 import { sendPaymentConfirmationEmail } from './email.service.js';
 import { decrypt } from '../utils/crypto.js';
@@ -134,8 +136,22 @@ async function processXmlBuffer(buffer, filename, userId) {
   const importId = crypto.randomUUID();
   const results = { matched: 0, suggested: 0, unmatched: 0 };
 
+  // Resolve bankAccountId from statement IBAN
+  let bankAccountId = null;
+  if (statementInfo.iban) {
+    const cleanIban = statementInfo.iban.replace(/\s/g, '').toUpperCase();
+    const account = await BankAccount.findOne({ iban: cleanIban, userId });
+    if (account) bankAccountId = account._id;
+  }
+
   for (const tx of transactions) {
     const reconciliation = await reconcileTransaction(tx, userId);
+
+    // Auto-classify DBIT
+    let classification = null;
+    if (tx.creditDebit === 'DBIT') {
+      classification = await classifyTransaction(tx, userId);
+    }
 
     await BankTransaction.create({
       importId,
@@ -153,6 +169,11 @@ async function processXmlBuffer(buffer, filename, userId) {
       matchMethod: reconciliation.matchMethod,
       matchedInvoice: reconciliation.matchedInvoice,
       matchConfidence: reconciliation.matchConfidence,
+      bankAccountId,
+      ...(classification ? {
+        expenseCategory: classification.expenseCategory,
+        autoClassified: classification.autoClassified
+      } : {}),
       userId
     });
 
@@ -203,6 +224,7 @@ async function processXmlBuffer(buffer, filename, userId) {
     statementOpeningBalance: statementInfo.openingBalance,
     statementClosingBalance: statementInfo.closingBalance,
     statementDate: statementInfo.date,
+    bankAccountId,
     userId
   });
 

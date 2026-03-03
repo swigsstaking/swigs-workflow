@@ -6,6 +6,9 @@ const customLineSchema = new mongoose.Schema({
   description: { type: String, required: true },
   quantity: { type: Number, default: 1 },
   unitPrice: { type: Number, required: true },
+  discountType: { type: String, enum: ['percentage', 'fixed'] },
+  discountValue: { type: Number, min: 0 },
+  discount: { type: Number, default: 0, min: 0 },
   unit: { type: String, default: '' }
 }, { _id: false });
 

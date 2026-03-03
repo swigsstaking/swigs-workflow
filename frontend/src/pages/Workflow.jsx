@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { ChevronsDownUp, ChevronsUpDown, LayoutGrid, List, ArrowUpDown } from 'lucide-react';
 import { useProjectStore } from '../stores/projectStore';
 import { useUIStore } from '../stores/uiStore';
 import { useSettingsStore } from '../stores/settingsStore';
@@ -33,7 +34,13 @@ export default function Workflow() {
     showArchived,
     openSidebar,
     closeSidebar,
-    sidebarOpen
+    sidebarOpen,
+    expandedCards,
+    toggleAllCardsExpanded,
+    viewMode,
+    setViewMode,
+    sortMode,
+    setSortMode
   } = useUIStore();
 
   const [initialLoading, setInitialLoading] = useState(true);
@@ -79,7 +86,7 @@ export default function Workflow() {
     }
   }, [initialLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Filter projects
+  // Filter and sort projects
   const filteredProjects = useMemo(() => {
     let result = projects;
 
@@ -97,13 +104,32 @@ export default function Workflow() {
       result = result.filter(p => !hiddenStatuses.includes(p.status?._id));
     }
 
+    // Sort
+    const sort = sortMode || 'manual';
+    if (sort !== 'manual') {
+      result = [...result].sort((a, b) => {
+        if (sort === 'name-asc') return (a.name || '').localeCompare(b.name || '', 'fr');
+        if (sort === 'name-desc') return (b.name || '').localeCompare(a.name || '', 'fr');
+        if (sort === 'created-desc') return new Date(b.createdAt) - new Date(a.createdAt);
+        if (sort === 'created-asc') return new Date(a.createdAt) - new Date(b.createdAt);
+        if (sort === 'amount-desc') return (b.unbilledTotal || 0) - (a.unbilledTotal || 0);
+        return 0;
+      });
+    }
+
     return result;
-  }, [projects, searchQuery, hiddenStatuses]);
+  }, [projects, searchQuery, hiddenStatuses, sortMode]);
 
   // Handle project click
   const handleProjectClick = async (project) => {
     await fetchProject(project._id);
     openSidebar('info');
+  };
+
+  // Handle invoice badge click → open sidebar on documents tab
+  const handleInvoiceClick = async (project) => {
+    await fetchProject(project._id);
+    openSidebar('documents');
   };
 
   // Handle sidebar close
@@ -150,16 +176,80 @@ export default function Workflow() {
                 <StatusFilter />
               </div>
 
-              {/* Project count */}
-              <div className="mb-4 text-sm text-slate-500 dark:text-slate-400">
-                {filteredProjects.length} projet{filteredProjects.length > 1 ? 's' : ''}
-                {showArchived && ' (archivés)'}
+              {/* Project count + view mode toggle + expand toggle */}
+              <div className="mb-4 flex items-center justify-between">
+                <span className="text-sm text-slate-500 dark:text-slate-400">
+                  {filteredProjects.length} projet{filteredProjects.length > 1 ? 's' : ''}
+                  {showArchived && ' (archivés)'}
+                </span>
+
+                <div className="flex items-center gap-2">
+                  {/* Sort dropdown */}
+                  <div className="relative">
+                    <select
+                      value={sortMode || 'manual'}
+                      onChange={(e) => setSortMode(e.target.value)}
+                      className="appearance-none pl-7 pr-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 dark:bg-dark-hover text-slate-600 dark:text-slate-300 border-0 cursor-pointer hover:bg-slate-200 dark:hover:bg-dark-card transition-colors"
+                    >
+                      <option value="manual">Tri manuel</option>
+                      <option value="name-asc">A → Z</option>
+                      <option value="name-desc">Z → A</option>
+                      <option value="created-desc">Plus récent</option>
+                      <option value="created-asc">Plus ancien</option>
+                      <option value="amount-desc">Montant ↓</option>
+                    </select>
+                    <ArrowUpDown className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  </div>
+
+                  {/* View mode toggle */}
+                  <div className="flex items-center bg-slate-100 dark:bg-dark-hover rounded-lg p-0.5">
+                    {[
+                      { mode: 'grid', icon: LayoutGrid, title: 'Grille' },
+                      { mode: 'list', icon: List, title: 'Liste' }
+                    ].map(({ mode, icon: Icon, title }) => (
+                      <button
+                        key={mode}
+                        onClick={() => setViewMode(mode)}
+                        className={`p-1.5 rounded-md transition-all ${
+                          (viewMode || 'grid') === mode
+                            ? 'bg-white dark:bg-dark-card text-primary-600 shadow-sm'
+                            : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                        }`}
+                        title={title}
+                      >
+                        <Icon className="w-4 h-4" />
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Expand/collapse toggle (hidden in list mode) */}
+                  {filteredProjects.length > 0 && (viewMode || 'grid') !== 'list' && (
+                    <button
+                      onClick={() => toggleAllCardsExpanded(filteredProjects.map(p => p._id))}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-dark-hover transition-colors"
+                      title={filteredProjects.every(p => expandedCards[p._id]) ? 'Réduire toutes les cartes' : 'Étendre toutes les cartes'}
+                    >
+                      {filteredProjects.every(p => expandedCards[p._id]) ? (
+                        <>
+                          <ChevronsDownUp className="w-3.5 h-3.5" />
+                          Réduire
+                        </>
+                      ) : (
+                        <>
+                          <ChevronsUpDown className="w-3.5 h-3.5" />
+                          Étendre
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Grid */}
               <WorkflowGrid
                 projects={filteredProjects}
                 onProjectClick={handleProjectClick}
+                onInvoiceClick={handleInvoiceClick}
                 onPositionsChange={updatePositions}
                 showArchived={showArchived}
               />

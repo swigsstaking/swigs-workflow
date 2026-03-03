@@ -147,7 +147,8 @@ export const planningApi = {
   getBlocks: (params) => api.get('/planning', { params }),
   create: (data) => api.post('/planning', data),
   update: (id, data) => api.put(`/planning/${id}`, data),
-  delete: (id) => api.delete(`/planning/${id}`)
+  delete: (id) => api.delete(`/planning/${id}`),
+  generateCalendarToken: () => api.post('/planning/calendar-token')
 };
 
 // Dashboard
@@ -162,7 +163,11 @@ export const analyticsApi = {
   getQuotes: (params) => api.get('/analytics/quotes', { params }),
   getProjects: (params) => api.get('/analytics/projects', { params }),
   getTopClients: (limit = 5, extraParams = {}) => api.get('/analytics/clients', { params: { limit, ...extraParams } }),
-  getHours: (months = 12, extraParams = {}) => api.get('/analytics/hours', { params: { months, ...extraParams } })
+  getHours: (months = 12, extraParams = {}) => api.get('/analytics/hours', { params: { months, ...extraParams } }),
+  // Compta Plus
+  getExpenses: (params) => api.get('/analytics/expenses', { params }),
+  getProfitLoss: (params) => api.get('/analytics/profitloss', { params }),
+  getVatDetail: (params) => api.get('/analytics/vat-detail', { params })
 };
 
 // Services
@@ -227,7 +232,8 @@ export const exportsApi = {
   revenueReport: () => {
     const year = new Date().getFullYear();
     return api.get(`/exports/revenue-report?from=${year}-01-01&to=${year}-12-31`, { responseType: 'blob' });
-  }
+  },
+  fiduciary: (from, to) => api.get(`/exports/fiduciary?from=${from}&to=${to}`, { responseType: 'blob' })
 };
 
 // Portal
@@ -257,12 +263,52 @@ export const bankApi = {
     });
   },
   getImports: () => api.get('/bank/imports'),
-  getTransactions: (importId, params) => api.get(`/bank/imports/${importId}/transactions`, { params }),
+  getImportTransactions: (importId, params) => api.get(`/bank/imports/${importId}/transactions`, { params }),
+  getTransactions: (params) => api.get('/bank/transactions', { params }),
   getUnmatched: () => api.get('/bank/unmatched'),
   matchTransaction: (id, invoiceId) => api.patch(`/bank/transactions/${id}/match`, { invoiceId }),
   ignoreTransaction: (id) => api.patch(`/bank/transactions/${id}/ignore`),
+  categorizeTransaction: (id, expenseCategoryId) => api.patch(`/bank/transactions/${id}/categorize`, { expenseCategoryId }),
+  setTransactionVat: (id, data) => api.patch(`/bank/transactions/${id}/vat`, data),
+  addAttachment: (id, file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post(`/bank/transactions/${id}/attachments`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
+  removeAttachment: (id, aid) => api.delete(`/bank/transactions/${id}/attachments/${aid}`),
   testImap: (config) => api.post('/bank/imap/test', config),
   fetchImapNow: () => api.post('/bank/imap/fetch')
+};
+
+// Bank Accounts (Compta Plus)
+export const bankAccountsApi = {
+  getAll: () => api.get('/bank-accounts'),
+  create: (data) => api.post('/bank-accounts', data),
+  update: (id, data) => api.put(`/bank-accounts/${id}`, data),
+  remove: (id) => api.delete(`/bank-accounts/${id}`),
+  setDefault: (id) => api.patch(`/bank-accounts/${id}/default`)
+};
+
+// Expense Categories (Compta Plus)
+export const expenseCategoriesApi = {
+  getAll: () => api.get('/expense-categories'),
+  create: (data) => api.post('/expense-categories', data),
+  update: (id, data) => api.put(`/expense-categories/${id}`, data),
+  remove: (id) => api.delete(`/expense-categories/${id}`),
+  seed: () => api.post('/expense-categories/seed'),
+  reorder: (categoryIds) => api.put('/expense-categories/reorder', { categoryIds })
+};
+
+// Counterparty Rules (Compta Plus)
+export const counterpartyRulesApi = {
+  getAll: () => api.get('/counterparty-rules'),
+  create: (data) => api.post('/counterparty-rules', data),
+  update: (id, data) => api.put(`/counterparty-rules/${id}`, data),
+  remove: (id) => api.delete(`/counterparty-rules/${id}`),
+  getSuggestions: () => api.get('/counterparty-rules/suggestions'),
+  bulkCreate: (rules) => api.post('/counterparty-rules/bulk', { rules })
 };
 
 // Timer
@@ -284,6 +330,16 @@ export const recurringInvoicesApi = {
   changeStatus: (id, status) => api.patch(`/recurring-invoices/${id}/status`, { status }),
   delete: (id) => api.delete(`/recurring-invoices/${id}`),
   generateNow: (id) => api.post(`/recurring-invoices/${id}/generate`),
+};
+
+// Quote Templates
+export const quoteTemplatesApi = {
+  getAll: (params) => api.get('/quote-templates', { params }),
+  getOne: (id) => api.get(`/quote-templates/${id}`),
+  create: (data) => api.post('/quote-templates', data),
+  update: (id, data) => api.put(`/quote-templates/${id}`, data),
+  delete: (id) => api.delete(`/quote-templates/${id}`),
+  reorder: (templateIds) => api.put('/quote-templates/reorder', { templateIds })
 };
 
 // AbaNinja

@@ -141,28 +141,46 @@ export const sendReminder = async (invoice, project, settings, scheduleItem) => 
       }).catch(() => {});
     } catch (_) { /* ignore */ }
 
-    // Update invoice
-    invoice.reminders.push({
-      sentAt: new Date(),
-      type: scheduleItem.type,
-      emailSent: true
-    });
-    invoice.reminderCount = (invoice.reminderCount || 0) + 1;
-
-    // Calculate next reminder date
+    // Update reminder record — works for both auto (pending marker exists) and manual sends
     const nextScheduleItem = getNextScheduleItem(
       settings.reminders.schedule,
       daysOverdue
     );
-    if (nextScheduleItem) {
-      const nextReminderDate = new Date(dueDate);
-      nextReminderDate.setDate(nextReminderDate.getDate() + nextScheduleItem.days);
-      invoice.nextReminderDate = nextReminderDate;
-    } else {
-      invoice.nextReminderDate = null;
-    }
+    const nextReminderDate = nextScheduleItem
+      ? new Date(dueDate.getTime() + nextScheduleItem.days * 86400000)
+      : null;
 
-    await invoice.save();
+    const updated = await Invoice.updateOne(
+      { _id: invoice._id, 'reminders.type': scheduleItem.type },
+      {
+        $set: {
+          'reminders.$.emailSent': true,
+          'reminders.$.pending': false,
+          'reminders.$.sentAt': new Date(),
+          nextReminderDate
+        },
+        $inc: { reminderCount: 1 }
+      }
+    );
+
+    // Manual send — no pending marker exists, push a new confirmed entry
+    if (updated.matchedCount === 0) {
+      await Invoice.updateOne(
+        { _id: invoice._id },
+        {
+          $push: {
+            reminders: {
+              sentAt: new Date(),
+              type: scheduleItem.type,
+              emailSent: true,
+              pending: false
+            }
+          },
+          $set: { nextReminderDate },
+          $inc: { reminderCount: 1 }
+        }
+      );
+    }
 
     // Log to history
     try {
@@ -198,13 +216,34 @@ export const sendReminder = async (invoice, project, settings, scheduleItem) => 
         ? `Adresse rejetée: ${(error.rejected || []).join(', ')}`
         : error.message;
 
-      invoice.reminders.push({
-        sentAt: new Date(),
-        type: scheduleItem.type,
-        emailSent: false,
-        error: errorMsg
-      });
-      await invoice.save();
+      // Try to update existing pending marker (auto send path)
+      const updated = await Invoice.updateOne(
+        { _id: invoice._id, 'reminders.type': scheduleItem.type },
+        {
+          $set: {
+            'reminders.$.emailSent': false,
+            'reminders.$.pending': false,
+            'reminders.$.error': errorMsg
+          }
+        }
+      );
+
+      // Manual send — no pending marker, push a new failed entry
+      if (updated.matchedCount === 0) {
+        await Invoice.updateOne(
+          { _id: invoice._id },
+          {
+            $push: {
+              reminders: {
+                sentAt: new Date(),
+                type: scheduleItem.type,
+                emailSent: false,
+                error: errorMsg
+              }
+            }
+          }
+        );
+      }
 
       await historyService.log(
         project._id,
@@ -264,19 +303,20 @@ export const checkOverdueInvoices = async () => {
       try {
         if (!settings.reminders?.enabled) continue;
 
-        // Find overdue invoices for this user (skip those with reminders disabled)
-        const overdueInvoices = await Invoice.find({
+        // Get user's project IDs first, then query only their invoices
+        const userProjects = await Project.find({ userId: settings.userId }).select('_id');
+        const projectIds = userProjects.map(p => p._id);
+        if (projectIds.length === 0) continue;
+
+        const userInvoices = await Invoice.find({
+          project: { $in: projectIds },
           status: { $in: ['sent', 'partial'] },
           dueDate: { $lt: now },
           skipReminders: { $ne: true }
         }).populate({
           path: 'project',
-          match: { userId: settings.userId },
           select: 'name client userId'
         });
-
-        // Filter out invoices where project doesn't belong to user
-        const userInvoices = overdueInvoices.filter(inv => inv.project !== null);
 
         for (const invoice of userInvoices) {
           try {
@@ -293,18 +333,40 @@ export const checkOverdueInvoices = async () => {
 
             if (!scheduleItem) continue;
 
-            // Check if this reminder type was already sent
-            const alreadySent = invoice.reminders?.some(
-              r => r.type === scheduleItem.type
-            );
-
-            if (alreadySent) continue;
-
             // Check if enough days have passed for this reminder
             if (daysOverdue < scheduleItem.days) continue;
 
-            // Send reminder
-            await sendReminder(invoice, invoice.project, settings, scheduleItem);
+            // Atomic lock: only one PM2 instance can claim this reminder.
+            // Uses findOneAndUpdate to atomically check "no reminder of this type"
+            // and insert a pending marker, preventing the other instance from proceeding.
+            const locked = await Invoice.findOneAndUpdate(
+              {
+                _id: invoice._id,
+                'reminders.type': { $ne: scheduleItem.type }
+              },
+              {
+                $push: {
+                  reminders: {
+                    sentAt: new Date(),
+                    type: scheduleItem.type,
+                    emailSent: false,
+                    pending: true
+                  }
+                }
+              },
+              { new: true }
+            ).populate({
+              path: 'project',
+              select: 'name client userId'
+            });
+
+            if (!locked) {
+              // Another instance already claimed this reminder — skip
+              continue;
+            }
+
+            // Send reminder using the locked (fresh) invoice
+            await sendReminder(locked, locked.project, settings, scheduleItem);
           } catch (error) {
             console.error(`Error processing invoice ${invoice.number}:`, error);
             // Continue with next invoice

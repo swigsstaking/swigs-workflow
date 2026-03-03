@@ -105,6 +105,7 @@ const buildClient = (project) => {
   }
   return {
     name: client.name || '-',
+    company: client.company || '',
     email: client.email || '',
     phone: client.phone || '',
     address,
@@ -151,6 +152,7 @@ const buildInvoiceLines = (invoice) => {
         lines.push({
           description: prefix + line.description,
           detail: null,
+          discount: line.discount || 0,
           quantity: line.quantity,
           unitPrice: line.unitPrice,
           total: line.total
@@ -177,6 +179,7 @@ const buildInvoiceLines = (invoice) => {
       lines.push({
         description: title,
         detail,
+        discount: line.discount || 0,
         quantity: line.quantity || 1,
         unitPrice: line.unitPrice || 0,
         total: line.total || 0
@@ -207,14 +210,28 @@ const splitDescription = (description) => {
  */
 const buildQuoteLines = (quote) => {
   if (!quote.lines || quote.lines.length === 0) return [];
-  return quote.lines.map(line => {
+  return quote.lines.filter(l => !l.isInfoLine).map(line => {
+    const { title, detail } = splitDescription(line.description);
+    return {
+      description: title,
+      detail,
+      discount: line.discount || 0,
+      quantity: line.quantity,
+      unitPrice: line.unitPrice,
+      total: line.total
+    };
+  });
+};
+
+const buildQuoteInfoLines = (quote) => {
+  if (!quote.lines || quote.lines.length === 0) return [];
+  return quote.lines.filter(l => l.isInfoLine).map(line => {
     const { title, detail } = splitDescription(line.description);
     return {
       description: title,
       detail,
       quantity: line.quantity,
-      unitPrice: line.unitPrice,
-      total: line.total
+      unitPrice: line.unitPrice
     };
   });
 };
@@ -355,6 +372,7 @@ export const generateQuotePDF = async (quote, project, settings) => {
       notes: quote.notes || null
     },
     lines: buildQuoteLines(quote),
+    infoLines: buildQuoteInfoLines(quote),
     totals: {
       subtotal: quote.subtotal || 0,
       discountType: quote.discountType || null,

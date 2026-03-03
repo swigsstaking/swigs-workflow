@@ -12,18 +12,26 @@ import { fireInternalTrigger } from '../services/automation/triggerService.js';
 /** Swiss rounding: round to nearest 5 centimes (0.05 CHF) */
 const roundTo5ct = (amount) => Math.round(amount / 0.05) * 0.05;
 
+/** Compute per-line discount amount from type + value */
+const computeLineDiscount = (line) => {
+  const gross = (line.quantity || 1) * (line.unitPrice || 0);
+  if (!line.discountType || !line.discountValue || line.discountValue <= 0) return 0;
+  if (line.discountType === 'percentage') return Math.min(gross, gross * (line.discountValue / 100));
+  return Math.min(line.discountValue, gross);
+};
+
+// Allowed status values for invoices
+const ALLOWED_INVOICE_STATUSES = ['draft', 'sent', 'paid', 'partial', 'cancelled', 'overdue'];
+
 // Helper: Verify project ownership
 const verifyProjectOwnership = async (projectId, userId) => {
-  const query = { _id: projectId };
-  if (userId) {
-    query.userId = userId;
-  }
-  return Project.findOne(query);
+  if (!userId) throw new Error('userId requis pour vérifier l\'appartenance du projet');
+  return Project.findOne({ _id: projectId, userId });
 };
 
 // Helper: Get user's project IDs
 const getUserProjectIds = async (userId) => {
-  if (!userId) return null;
+  if (!userId) return [];
   const projects = await Project.find({ userId }).select('_id');
   return projects.map(p => p._id);
 };
@@ -42,7 +50,7 @@ export const getInvoices = async (req, res, next) => {
 
     let query = { project: req.params.projectId };
 
-    if (status) {
+    if (status && ALLOWED_INVOICE_STATUSES.includes(status)) {
       query.status = status;
     }
 
@@ -72,7 +80,11 @@ export const getAllInvoices = async (req, res, next) => {
     if (projectIds) {
       query.project = { $in: projectIds };
     }
-    if (status) query.status = status;
+    if (status) {
+      const statuses = status.split(',').filter(s => ALLOWED_INVOICE_STATUSES.includes(s));
+      if (statuses.length === 1) query.status = statuses[0];
+      else if (statuses.length > 1) query.status = { $in: statuses };
+    }
 
     const [invoices, total] = await Promise.all([
       Invoice.find(query)
@@ -181,12 +193,18 @@ export const createInvoice = async (req, res, next) => {
       }
 
       // Calculate totals from custom lines
-      const processedLines = customLines.map(line => ({
-        description: line.description,
-        quantity: line.quantity || 1,
-        unitPrice: line.unitPrice,
-        total: (line.quantity || 1) * line.unitPrice
-      }));
+      const processedLines = customLines.map(line => {
+        const discount = computeLineDiscount(line);
+        return {
+          description: line.description,
+          quantity: line.quantity || 1,
+          unitPrice: line.unitPrice,
+          discountType: line.discountType || undefined,
+          discountValue: line.discountValue || undefined,
+          discount,
+          total: Math.max(0, (line.quantity || 1) * line.unitPrice - discount)
+        };
+      });
 
       const subtotal = processedLines.reduce((sum, line) => sum + line.total, 0);
 
@@ -328,6 +346,9 @@ export const createInvoice = async (req, res, next) => {
           description: line.description,
           quantity: line.quantity,
           unitPrice: line.unitPrice,
+          discountType: line.discountType || undefined,
+          discountValue: line.discountValue || undefined,
+          discount: line.discount || 0,
           total: line.total
         })),
         subtotal: quote.subtotal,
@@ -750,7 +771,7 @@ export const updateInvoice = async (req, res, next) => {
 
           addedQuoteSnapshots.push({
             quoteId: quote._id, number: quote.number,
-            lines: quote.lines.map(l => ({ description: l.description, quantity: l.quantity, unitPrice: l.unitPrice, total: l.total })),
+            lines: quote.lines.map(l => ({ description: l.description, quantity: l.quantity, unitPrice: l.unitPrice, discountType: l.discountType || undefined, discountValue: l.discountValue || undefined, discount: l.discount || 0, total: l.total })),
             subtotal: quote.subtotal, invoicedAmount: invoiceNetAmount, isPartial, signedAt: quote.signedAt
           });
 
@@ -837,7 +858,7 @@ export const updateInvoice = async (req, res, next) => {
 
               updatedKeptQuoteSnapshots.push({
                 quoteId: quote._id, number: quote.number,
-                lines: quote.lines.map(l => ({ description: l.description, quantity: l.quantity, unitPrice: l.unitPrice, total: l.total })),
+                lines: quote.lines.map(l => ({ description: l.description, quantity: l.quantity, unitPrice: l.unitPrice, discountType: l.discountType || undefined, discountValue: l.discountValue || undefined, discount: l.discount || 0, total: l.total })),
                 subtotal: quote.subtotal, invoicedAmount: newInvoiceNetAmount, isPartial: isPartialQuote, signedAt: quote.signedAt
               });
               continue;
@@ -898,12 +919,18 @@ export const updateInvoice = async (req, res, next) => {
 
     // Allow editing custom lines on custom invoices
     if (customLines !== undefined && invoice.invoiceType === 'custom') {
-      const processedLines = customLines.map(line => ({
-        description: line.description,
-        quantity: line.quantity || 1,
-        unitPrice: line.unitPrice,
-        total: (line.quantity || 1) * line.unitPrice
-      }));
+      const processedLines = customLines.map(line => {
+        const discount = computeLineDiscount(line);
+        return {
+          description: line.description,
+          quantity: line.quantity || 1,
+          unitPrice: line.unitPrice,
+          discountType: line.discountType || undefined,
+          discountValue: line.discountValue || undefined,
+          discount,
+          total: Math.max(0, (line.quantity || 1) * line.unitPrice - discount)
+        };
+      });
       invoice.customLines = processedLines;
       invoice.subtotal = processedLines.reduce((sum, line) => sum + line.total, 0);
     }
@@ -915,7 +942,11 @@ export const updateInvoice = async (req, res, next) => {
     }
 
     if (vatRate !== undefined) {
-      invoice.vatRate = vatRate;
+      const cleanVatRate = parseFloat(vatRate);
+      if (isNaN(cleanVatRate) || cleanVatRate < 0 || cleanVatRate > 100) {
+        return res.status(400).json({ success: false, error: 'TVA invalide (0-100%)' });
+      }
+      invoice.vatRate = cleanVatRate;
     }
 
     // Recalculate totals with discount

@@ -12,7 +12,7 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   Settings, Plus, Search, Archive, Sun, Moon,
   Calendar, BarChart3, Zap, LogIn, LogOut, Menu, X,
-  Home, Layers,
+  Home, Layers, Calculator,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useUIStore } from '../../stores/uiStore';
@@ -27,6 +27,7 @@ const NAV_ITEMS = [
   { to: '/planning',   label: 'Planning',    icon: Calendar },
   { to: '/analytics',  label: 'Analytics',   icon: BarChart3 },
   { to: '/automations',label: 'Automations', icon: Zap },
+  { to: '/comptabilite',label: 'Comptabilité', icon: Calculator },
 ];
 
 const ACCENT_OPTIONS = [

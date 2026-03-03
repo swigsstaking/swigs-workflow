@@ -1,10 +1,12 @@
 import crypto from 'crypto';
 import BankTransaction from '../models/BankTransaction.js';
 import BankImport from '../models/BankImport.js';
+import BankAccount from '../models/BankAccount.js';
 import Invoice from '../models/Invoice.js';
 import Settings from '../models/Settings.js';
 import { parseCamtXml } from '../services/camtParser.service.js';
 import { reconcileTransaction } from '../services/reconciliation.service.js';
+import { classifyTransaction } from '../services/expenseClassifier.service.js';
 import { historyService } from '../services/historyService.js';
 import { testImapConnection, fetchBankEmails } from '../services/bankImapFetcher.service.js';
 import { decrypt } from '../utils/crypto.js';
@@ -37,12 +39,26 @@ export const importCamt = async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'Aucune transaction trouvée dans le fichier' });
     }
 
+    // Resolve bankAccountId from statement IBAN
+    let bankAccountId = null;
+    if (statementInfo.iban) {
+      const cleanIban = statementInfo.iban.replace(/\s/g, '').toUpperCase();
+      const account = await BankAccount.findOne({ iban: cleanIban, userId });
+      if (account) bankAccountId = account._id;
+    }
+
     // Reconcile each transaction
     const results = { matched: 0, suggested: 0, unmatched: 0 };
     const savedTransactions = [];
 
     for (const tx of transactions) {
       const reconciliation = await reconcileTransaction(tx, userId);
+
+      // Auto-classify DBIT transactions
+      let classification = null;
+      if (tx.creditDebit === 'DBIT') {
+        classification = await classifyTransaction(tx, userId);
+      }
 
       const bankTx = await BankTransaction.create({
         importId,
@@ -60,28 +76,53 @@ export const importCamt = async (req, res, next) => {
         matchMethod: reconciliation.matchMethod,
         matchedInvoice: reconciliation.matchedInvoice,
         matchConfidence: reconciliation.matchConfidence,
+        bankAccountId,
+        ...(classification ? {
+          expenseCategory: classification.expenseCategory,
+          autoClassified: classification.autoClassified
+        } : {}),
         userId
       });
 
-      // Auto-mark invoice as paid if confidence >= 80 (atomic to prevent double-pay)
+      // Record payment if confidence >= 80 (supports partial payments)
       if (reconciliation.matchedInvoice && reconciliation.matchConfidence >= 80) {
-        const paidInvoice = await Invoice.findOneAndUpdate(
-          { _id: reconciliation.matchedInvoice, status: 'sent' },
-          { $set: { status: 'paid', paidAt: tx.bookingDate } },
-          { new: true }
-        ).populate('project');
+        const invoice = await Invoice.findOne({
+          _id: reconciliation.matchedInvoice,
+          status: { $in: ['sent', 'partial'] }
+        }).populate('project');
 
-        if (paidInvoice) {
-          // Log in history
-          try {
-            await historyService.log(
-              paidInvoice.project._id || paidInvoice.project,
-              'bank_reconciled',
-              `Facture ${paidInvoice.number} marquée payée via import bancaire (${reconciliation.matchMethod}, confiance ${reconciliation.matchConfidence}%)`,
-              { importId, txId: tx.txId, amount: tx.amount }
-            );
-          } catch (e) {
-            // Non-blocking
+        if (invoice) {
+          const remaining = invoice.total - (invoice.paidAmount || 0);
+          const paymentAmount = Math.min(Math.abs(tx.amount), remaining);
+
+          if (paymentAmount > 0) {
+            invoice.payments.push({
+              amount: paymentAmount,
+              date: tx.bookingDate || new Date(),
+              method: 'bank_transfer',
+              notes: `Import bancaire auto (${reconciliation.matchMethod}, confiance ${reconciliation.matchConfidence}%)`
+            });
+            invoice.paidAmount = (invoice.paidAmount || 0) + paymentAmount;
+
+            if (invoice.paidAmount >= invoice.total) {
+              invoice.status = 'paid';
+              invoice.paidAt = tx.bookingDate || new Date();
+            } else {
+              invoice.status = 'partial';
+            }
+            await invoice.save();
+
+            try {
+              const statusLabel = invoice.status === 'paid' ? 'marquée payée' : `paiement partiel (${paymentAmount.toFixed(2)} CHF)`;
+              await historyService.log(
+                invoice.project._id || invoice.project,
+                'bank_reconciled',
+                `Facture ${invoice.number} ${statusLabel} via import bancaire (${reconciliation.matchMethod}, confiance ${reconciliation.matchConfidence}%)`,
+                { importId, txId: tx.txId, amount: paymentAmount }
+              );
+            } catch (e) {
+              // Non-blocking
+            }
           }
         }
       }
@@ -103,6 +144,7 @@ export const importCamt = async (req, res, next) => {
       statementOpeningBalance: statementInfo.openingBalance,
       statementClosingBalance: statementInfo.closingBalance,
       statementDate: statementInfo.date,
+      bankAccountId,
       userId
     });
 
@@ -144,7 +186,8 @@ export const getImportTransactions = async (req, res, next) => {
       importId: req.params.importId,
       userId: req.user._id
     };
-    if (req.query.status) {
+    const allowedMatchStatuses = ['matched', 'unmatched', 'partial', 'ignored'];
+    if (req.query.status && allowedMatchStatuses.includes(req.query.status)) {
       filter.matchStatus = req.query.status;
     }
     const transactions = await BankTransaction.find(filter)
@@ -209,23 +252,39 @@ export const matchTransaction = async (req, res, next) => {
     tx.matchStatus = 'matched';
     await tx.save();
 
-    // Atomically mark invoice as paid (only if currently 'sent')
-    const paidInvoice = await Invoice.findOneAndUpdate(
-      { _id: invoiceId, status: 'sent' },
-      { $set: { status: 'paid', paidAt: tx.bookingDate } },
-      { new: true }
-    ).populate('project');
+    // Record payment (supports partial: sent or partial invoices)
+    if (['sent', 'partial'].includes(invoice.status)) {
+      const remaining = invoice.total - (invoice.paidAmount || 0);
+      const paymentAmount = Math.min(Math.abs(tx.amount), remaining);
 
-    if (paidInvoice) {
-      try {
-        await historyService.log(
-          paidInvoice.project._id || paidInvoice.project,
-          'bank_reconciled',
-          `Facture ${paidInvoice.number} rapprochée manuellement via import bancaire`,
-          { txId: tx.txId, amount: tx.amount }
-        );
-      } catch (e) {
-        // Non-blocking
+      if (paymentAmount > 0) {
+        invoice.payments.push({
+          amount: paymentAmount,
+          date: tx.bookingDate || new Date(),
+          method: 'bank_transfer',
+          notes: 'Rapprochement manuel import bancaire'
+        });
+        invoice.paidAmount = (invoice.paidAmount || 0) + paymentAmount;
+
+        if (invoice.paidAmount >= invoice.total) {
+          invoice.status = 'paid';
+          invoice.paidAt = tx.bookingDate || new Date();
+        } else {
+          invoice.status = 'partial';
+        }
+        await invoice.save();
+
+        try {
+          const statusLabel = invoice.status === 'paid' ? 'rapprochée (payée)' : `paiement partiel (${paymentAmount.toFixed(2)} CHF)`;
+          await historyService.log(
+            invoice.project._id || invoice.project,
+            'bank_reconciled',
+            `Facture ${invoice.number} ${statusLabel} via import bancaire`,
+            { txId: tx.txId, amount: paymentAmount }
+          );
+        } catch (e) {
+          // Non-blocking
+        }
       }
     }
 
@@ -330,6 +389,151 @@ export const fetchImapNow = async (req, res, next) => {
     if (msg.includes('ECONNREFUSED') || msg.includes('ETIMEDOUT') || msg.includes('getaddrinfo')) {
       return res.status(400).json({ success: false, error: `Connexion IMAP impossible: ${msg}. Vérifiez l\'hôte et le port.` });
     }
+    next(error);
+  }
+};
+
+/**
+ * GET /api/bank/transactions
+ * List transactions with filters (Compta Plus)
+ */
+export const getTransactions = async (req, res, next) => {
+  try {
+    const filter = { userId: req.user._id };
+    const { account, category, creditDebit, from, to, status } = req.query;
+
+    if (account) filter.bankAccountId = account;
+    if (category) filter.expenseCategory = category;
+    if (creditDebit) filter.creditDebit = creditDebit;
+    if (status) filter.matchStatus = status;
+    if (from || to) {
+      filter.bookingDate = {};
+      if (from) filter.bookingDate.$gte = new Date(from);
+      if (to) filter.bookingDate.$lte = new Date(to);
+    }
+
+    const transactions = await BankTransaction.find(filter)
+      .populate({ path: 'matchedInvoice', select: 'number total status' })
+      .populate({ path: 'expenseCategory', select: 'name icon color accountNumber' })
+      .populate({ path: 'bankAccountId', select: 'name color iban' })
+      .sort({ bookingDate: -1 })
+      .limit(500)
+      .lean();
+
+    res.json({ success: true, data: transactions });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * PATCH /api/bank/transactions/:id/categorize
+ * Assign or change expense category on a DBIT transaction
+ */
+export const categorizeTransaction = async (req, res, next) => {
+  try {
+    const { expenseCategoryId } = req.body;
+    const tx = await BankTransaction.findOne({ _id: req.params.id, userId: req.user._id });
+    if (!tx) {
+      return res.status(404).json({ success: false, error: 'Transaction non trouvée' });
+    }
+
+    tx.expenseCategory = expenseCategoryId || null;
+    tx.autoClassified = false;
+    await tx.save();
+
+    const updated = await BankTransaction.findById(tx._id)
+      .populate({ path: 'expenseCategory', select: 'name icon color accountNumber' })
+      .lean();
+
+    res.json({ success: true, data: updated });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * PATCH /api/bank/transactions/:id/vat
+ * Set VAT info on a transaction
+ */
+export const setTransactionVat = async (req, res, next) => {
+  try {
+    const { vatRate, vatAmount } = req.body;
+    const tx = await BankTransaction.findOne({ _id: req.params.id, userId: req.user._id });
+    if (!tx) {
+      return res.status(404).json({ success: false, error: 'Transaction non trouvée' });
+    }
+
+    if (vatRate !== undefined) tx.vatRate = vatRate;
+    if (vatAmount !== undefined) tx.vatAmount = vatAmount;
+    await tx.save();
+
+    res.json({ success: true, data: tx });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/bank/transactions/:id/attachments
+ * Add attachment to a transaction (base64)
+ */
+export const addAttachment = async (req, res, next) => {
+  try {
+    const tx = await BankTransaction.findOne({ _id: req.params.id, userId: req.user._id });
+    if (!tx) {
+      return res.status(404).json({ success: false, error: 'Transaction non trouvée' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'Fichier requis' });
+    }
+
+    // Validate file
+    const allowedMimes = ['application/pdf', 'image/jpeg', 'image/png'];
+    if (!allowedMimes.includes(req.file.mimetype)) {
+      return res.status(400).json({ success: false, error: 'Format non accepté. PDF, JPG ou PNG uniquement.' });
+    }
+
+    if (req.file.size > 2 * 1024 * 1024) {
+      return res.status(400).json({ success: false, error: 'Fichier trop volumineux (max 2 Mo)' });
+    }
+
+    if ((tx.attachments || []).length >= 5) {
+      return res.status(400).json({ success: false, error: 'Maximum 5 pièces jointes par transaction' });
+    }
+
+    tx.attachments.push({
+      filename: req.file.originalname,
+      mimeType: req.file.mimetype,
+      size: req.file.size,
+      data: req.file.buffer.toString('base64'),
+      uploadedAt: new Date()
+    });
+
+    await tx.save();
+    res.json({ success: true, data: tx });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * DELETE /api/bank/transactions/:id/attachments/:aid
+ * Remove an attachment from a transaction
+ */
+export const removeAttachment = async (req, res, next) => {
+  try {
+    const tx = await BankTransaction.findOne({ _id: req.params.id, userId: req.user._id });
+    if (!tx) {
+      return res.status(404).json({ success: false, error: 'Transaction non trouvée' });
+    }
+
+    tx.attachments = tx.attachments.filter(a => a._id.toString() !== req.params.aid);
+    await tx.save();
+
+    res.json({ success: true, data: tx });
+  } catch (error) {
     next(error);
   }
 };

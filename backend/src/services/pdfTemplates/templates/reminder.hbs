@@ -71,7 +71,8 @@
       <div class="envelope-sender-line">{{company.name}}{{#if company.address}} — {{company.address}}{{/if}}</div>
       <div class="info-block-title">Destinataire</div>
       <div class="info-block-content">
-        <strong>{{client.name}}</strong>
+        {{#if client.company}}<strong>{{client.company}}</strong><br>{{/if}}
+        {{#if client.company}}{{client.name}}{{else}}<strong>{{client.name}}</strong>{{/if}}
         {{#if client.street}}<br>{{client.street}}{{#if client.zip}}<br>{{client.zip}} {{client.city}}{{/if}}{{else}}{{#if client.address}}<br>{{client.address}}{{/if}}{{/if}}
         {{#if client.che}}<br>{{client.che}}{{/if}}
         {{#if client.email}}<br>{{client.email}}{{/if}}
@@ -122,6 +123,7 @@
           <td>
             <span class="line-description">{{this.description}}</span>
             {{#if this.detail}}<div class="line-detail">{{this.detail}}</div>{{/if}}
+            {{#if this.discount}}<div class="line-discount">Rabais: -{{formatCurrency this.discount}}</div>{{/if}}
           </td>
           <td class="text-right">{{this.quantity}}</td>
           <td class="text-right">{{formatCurrency this.unitPrice}}</td>

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { startOfWeek, endOfWeek, addWeeks, subWeeks, startOfDay, addDays } from 'date-fns';
+import { startOfWeek, endOfWeek, addWeeks, subWeeks, startOfDay, addDays, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
 import { planningApi } from '../services/api';
 import { trackFeatureUsed } from '../lib/posthog';
 
@@ -37,11 +37,25 @@ export const usePlanningStore = create(
         currentDate: addDays(state.currentDate, -1)
       })),
 
+      goToNextMonth: () => set(state => ({
+        currentDate: addMonths(state.currentDate, 1)
+      })),
+
+      goToPrevMonth: () => set(state => ({
+        currentDate: subMonths(state.currentDate, 1)
+      })),
+
       setViewMode: (mode) => set({ viewMode: mode }),
 
       // Get date range based on view mode
       getDateRange: () => {
         const { currentDate, viewMode } = get();
+        if (viewMode === 'month') {
+          return {
+            start: startOfMonth(currentDate),
+            end: endOfMonth(currentDate)
+          };
+        }
         if (viewMode === 'week') {
           return {
             start: startOfWeek(currentDate, { weekStartsOn: 1 }),

@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import User from '../models/User.js';
 import Session from '../models/Session.js';
+import { PkceState, AuthCode } from '../models/OAuthState.js';
 import { generateToken, requireAuth } from '../middleware/auth.js';
 
 // Strict rate limiter for the deprecated sso-verify endpoint (5 req/min per IP)
@@ -22,37 +23,15 @@ const HUB_URL = process.env.HUB_URL || 'https://apps.swigs.online';
 const APP_ID = process.env.APP_ID || 'swigs-workflow';
 const APP_SECRET = process.env.APP_SECRET;
 
-// PKCE store (use Redis in production)
-const pkceStore = new Map();
-
-// Auth code store for secure token exchange (one-time use, 30s TTL)
-const authCodeStore = new Map();
-
 // Hash a refresh token with SHA-256
 const hashRefreshToken = (token) =>
   crypto.createHash('sha256').update(token).digest('hex');
-
-// Cleanup expired PKCE codes every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [state, data] of pkceStore) {
-    if (data.expiresAt < now) {
-      pkceStore.delete(state);
-    }
-  }
-  // Also cleanup expired auth codes
-  for (const [code, data] of authCodeStore) {
-    if (data.expiresAt < now) {
-      authCodeStore.delete(code);
-    }
-  }
-}, 5 * 60 * 1000);
 
 /**
  * GET /api/auth/login
  * Start OAuth flow with PKCE
  */
-router.get('/login', (req, res) => {
+router.get('/login', async (req, res) => {
   let returnUrl = req.query.returnUrl || '/';
   // Validate returnUrl: must start with / and not // (open redirect protection)
   if (!returnUrl.startsWith('/') || returnUrl.startsWith('//')) {
@@ -69,11 +48,12 @@ router.get('/login', (req, res) => {
   // Generate state for CSRF protection
   const state = crypto.randomBytes(16).toString('hex');
 
-  // Store verifier (expires in 10 min)
-  pkceStore.set(state, {
+  // Store verifier in MongoDB (expires in 10 min, shared across cluster)
+  await PkceState.create({
+    state,
     codeVerifier,
     returnUrl,
-    expiresAt: Date.now() + 10 * 60 * 1000
+    expiresAt: new Date(Date.now() + 10 * 60 * 1000)
   });
 
   // Build authorization URL
@@ -104,13 +84,14 @@ router.get('/callback', async (req, res) => {
       return res.redirect(`/?auth_error=${encodeURIComponent(error)}`);
     }
 
-    // Validate state and get verifier
-    const pkceData = pkceStore.get(state);
-    if (!pkceData || pkceData.expiresAt < Date.now()) {
-      pkceStore.delete(state);
+    // Validate state and get verifier (atomic findOneAndDelete)
+    const pkceData = await PkceState.findOneAndDelete({
+      state,
+      expiresAt: { $gt: new Date() }
+    });
+    if (!pkceData) {
       return res.redirect('/?auth_error=invalid_state');
     }
-    pkceStore.delete(state);
 
     // Exchange code for tokens
     const redirectUri = `${req.protocol}://${req.get('host')}/api/auth/callback`;
@@ -191,11 +172,12 @@ router.get('/callback', async (req, res) => {
 
     // Generate one-time auth code instead of putting tokens in URL
     const authCode = crypto.randomBytes(32).toString('hex');
-    authCodeStore.set(authCode, {
+    await AuthCode.create({
+      code: authCode,
       accessToken: appAccessToken,
       refreshToken,
       userId: user._id,
-      expiresAt: Date.now() + 30 * 1000 // 30 seconds TTL
+      expiresAt: new Date(Date.now() + 30 * 1000) // 30 seconds TTL
     });
 
     // Redirect with auth code (not raw tokens)
@@ -222,12 +204,13 @@ router.post('/exchange', async (req, res) => {
       return res.status(400).json({ error: 'Auth code requis' });
     }
 
-    const codeData = authCodeStore.get(authCode);
+    // Atomic findOneAndDelete: one-time use, shared across cluster
+    const codeData = await AuthCode.findOneAndDelete({
+      code: authCode,
+      expiresAt: { $gt: new Date() }
+    });
 
-    // One-time use: delete immediately
-    authCodeStore.delete(authCode);
-
-    if (!codeData || codeData.expiresAt < Date.now()) {
+    if (!codeData) {
       return res.status(401).json({ error: 'Code invalide ou expiré' });
     }
 
@@ -429,16 +412,29 @@ router.post('/refresh', async (req, res) => {
 
 /**
  * GET /api/auth/me
- * Retourne l'utilisateur connecte
+ * Retourne l'utilisateur connecte (+ subscription status)
  */
-router.get('/me', requireAuth, (req, res) => {
+router.get('/me', requireAuth, async (req, res) => {
+  // Check Compta Plus subscription via middleware cache
+  let hasComptaPlus = false;
+  try {
+    const { checkComptaPlus } = await import('../middleware/requireComptaPlus.js');
+    await new Promise((resolve) => {
+      checkComptaPlus(req, res, resolve);
+    });
+    hasComptaPlus = !!req.hasComptaPlus;
+  } catch (e) {
+    // non-blocking
+  }
+
   res.json({
     user: {
       id: req.user._id,
       email: req.user.email,
       name: req.user.name,
       avatar: req.user.avatar,
-      preferences: req.user.preferences
+      preferences: req.user.preferences,
+      hasComptaPlus
     }
   });
 });

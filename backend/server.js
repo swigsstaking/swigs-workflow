@@ -17,6 +17,7 @@ import quoteRoutes from './src/routes/quotes.js';
 import settingsRoutes from './src/routes/settings.js';
 import clientRoutes from './src/routes/clients.js';
 import planningRoutes from './src/routes/planning.js';
+import { getIcalFeed as icalFeedHandler } from './src/controllers/planningController.js';
 import analyticsRoutes from './src/routes/analytics.js';
 import serviceRoutes from './src/routes/services.js';
 import serviceCategoryRoutes from './src/routes/serviceCategories.js';
@@ -30,11 +31,16 @@ import exportRoutes from './src/routes/exports.js';
 import reminderRoutes from './src/routes/reminders.js';
 import abaninjaRoutes from './src/routes/abaninja.js';
 import bankRoutes from './src/routes/bank.js';
+import bankAccountRoutes from './src/routes/bankAccounts.js';
+import expenseCategoryRoutes from './src/routes/expenseCategories.js';
+import counterpartyRuleRoutes from './src/routes/counterpartyRules.js';
 import timerRoutes from './src/routes/timer.js';
 import recurringInvoiceRoutes from './src/routes/recurringInvoices.js';
+import quoteTemplateRoutes from './src/routes/quoteTemplates.js';
 import Invoice from './src/models/Invoice.js';
 import { errorHandler } from './src/middleware/errorHandler.js';
 import { requireAuth } from './src/middleware/auth.js';
+import { requireComptaPlus, checkComptaPlus } from './src/middleware/requireComptaPlus.js';
 import { initializeAutomationServices } from './src/services/automation/index.js';
 import { initEventBus, eventBus } from './src/services/eventBus.service.js';
 import { initialize as initReminders } from './src/services/reminder.service.js';
@@ -203,6 +209,8 @@ app.use('/api/quotes', requireAuth, quoteRoutes);
 app.use('/api/settings', requireAuth, settingsRoutes);
 app.use('/api/dashboard', requireAuth, dashboardRoutes);
 app.use('/api/clients', requireAuth, clientRoutes);
+// iCal feed — public (token-authenticated), must be before requireAuth
+app.get('/api/planning/ical/:token', icalFeedHandler);
 app.use('/api/planning', requireAuth, planningRoutes);
 app.use('/api/analytics', requireAuth, analyticsRoutes);
 app.use('/api/services', requireAuth, serviceRoutes);
@@ -225,14 +233,24 @@ app.use('/api/reminders', requireAuth, reminderRoutes);
 // AbaNinja integration routes (protected)
 app.use('/api/abaninja', requireAuth, abaninjaRoutes);
 
-// Bank import routes (protected)
-app.use('/api/bank', requireAuth, bankRoutes);
+// Bank import routes (protected, soft check for Compta Plus features)
+app.use('/api/bank', requireAuth, checkComptaPlus, bankRoutes);
+
+// Bank accounts (Compta Plus required)
+app.use('/api/bank-accounts', requireAuth, requireComptaPlus, bankAccountRoutes);
+
+// Expense categories & counterparty rules (Compta Plus required)
+app.use('/api/expense-categories', requireAuth, requireComptaPlus, expenseCategoryRoutes);
+app.use('/api/counterparty-rules', requireAuth, requireComptaPlus, counterpartyRuleRoutes);
 
 // Timer routes (protected)
 app.use('/api/timer', requireAuth, timerRoutes);
 
 // Recurring invoice routes (protected)
 app.use('/api/recurring-invoices', requireAuth, recurringInvoiceRoutes);
+
+// Quote template routes (protected)
+app.use('/api/quote-templates', requireAuth, quoteTemplateRoutes);
 
 // =============================================================================
 // ERROR HANDLING

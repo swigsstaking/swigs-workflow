@@ -1,11 +1,50 @@
 import mongoose from 'mongoose';
 import Project from '../models/Project.js';
+import Client from '../models/Client.js';
 import Status from '../models/Status.js';
 import Event from '../models/Event.js';
 import Quote from '../models/Quote.js';
 import Invoice from '../models/Invoice.js';
 import { historyService } from '../services/historyService.js';
 import { fireInternalTrigger } from '../services/automation/triggerService.js';
+
+const CLIENT_SYNC_FIELDS = ['name', 'email', 'phone', 'address', 'street', 'zip', 'city', 'country', 'che', 'company', 'siret'];
+
+/**
+ * Find or create a Client document matching the embedded client data.
+ * Returns the Client _id to use as clientRef.
+ */
+async function resolveClientRef(clientData, userId) {
+  if (!clientData?.name) return null;
+
+  // Try to find existing client by name + company (same user)
+  const matchQuery = { userId, name: clientData.name };
+  if (clientData.company) matchQuery.company = clientData.company;
+
+  let client = await Client.findOne(matchQuery);
+
+  if (client) {
+    // Update existing client with any new fields from project
+    const updates = {};
+    for (const field of CLIENT_SYNC_FIELDS) {
+      if (clientData[field] && !client[field]) {
+        updates[field] = clientData[field];
+      }
+    }
+    if (Object.keys(updates).length > 0) {
+      await Client.updateOne({ _id: client._id }, { $set: updates });
+    }
+    return client._id;
+  }
+
+  // Create new client
+  const newClientData = { userId };
+  for (const field of CLIENT_SYNC_FIELDS) {
+    if (clientData[field]) newClientData[field] = clientData[field];
+  }
+  client = await Client.create(newClientData);
+  return client._id;
+}
 
 // @desc    Get all projects (OPTIMIZED - single aggregation query)
 // @route   GET /api/projects
@@ -105,6 +144,28 @@ export const getProjects = async (req, res, next) => {
         }
       },
 
+      // Lookup pending invoices (draft, sent, partial — not paid/cancelled)
+      {
+        $lookup: {
+          from: 'invoices',
+          let: { projectId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$project', '$$projectId'] },
+                    { $in: ['$status', ['draft', 'sent', 'partial']] }
+                  ]
+                }
+              }
+            },
+            { $sort: { createdAt: -1 } }
+          ],
+          as: 'pendingInvoices'
+        }
+      },
+
       // Calculate totals in aggregation
       {
         $addFields: {
@@ -177,8 +238,29 @@ export const getProjects = async (req, res, next) => {
             }
           },
           unbilledQuotesCount: { $size: '$unbilledQuotes' },
+          // Pending invoices total (remaining amount for partial, full for others)
+          pendingInvoicesTotal: {
+            $reduce: {
+              input: '$pendingInvoices',
+              initialValue: 0,
+              in: {
+                $cond: {
+                  if: { $eq: ['$$this.status', 'partial'] },
+                  then: {
+                    $add: [
+                      '$$value',
+                      { $subtract: [{ $ifNull: ['$$this.total', 0] }, { $ifNull: ['$$this.paidAmount', 0] }] }
+                    ]
+                  },
+                  else: { $add: ['$$value', { $ifNull: ['$$this.total', 0] }] }
+                }
+              }
+            }
+          },
+          pendingInvoicesCount: { $size: '$pendingInvoices' },
           recentEvents: { $slice: ['$unbilledEvents', 3] },
-          recentQuotes: { $slice: ['$unbilledQuotes', 3] }
+          recentQuotes: { $slice: ['$unbilledQuotes', 3] },
+          recentInvoices: { $slice: ['$pendingInvoices', 3] }
         }
       },
 
@@ -187,7 +269,8 @@ export const getProjects = async (req, res, next) => {
         $project: {
           statusData: 0,
           unbilledEvents: 0,
-          unbilledQuotes: 0
+          unbilledQuotes: 0,
+          pendingInvoices: 0
         }
       }
     ]);
@@ -390,11 +473,15 @@ export const createProject = async (req, res, next) => {
       statusId = defaultStatus._id;
     }
 
+    // Auto-link to Client collection
+    const clientRef = req.user?._id ? await resolveClientRef(client, req.user._id) : null;
+
     const project = await Project.create({
       userId: req.user?._id,
       name,
       description,
       client,
+      clientRef,
       status: statusId,
       tags,
       notes
@@ -429,14 +516,41 @@ export const updateProject = async (req, res, next) => {
       query.userId = req.user._id;
     }
 
+    // If client data changed, resolve the clientRef
+    let clientRef;
+    if (client && req.user) {
+      const existing = await Project.findOne(query).select('clientRef');
+      if (existing?.clientRef) {
+        clientRef = existing.clientRef;
+      } else {
+        clientRef = await resolveClientRef(client, req.user._id);
+      }
+    }
+
+    const updateData = { name, description, client, tags, notes };
+    if (clientRef) updateData.clientRef = clientRef;
+
     const project = await Project.findOneAndUpdate(
       query,
-      { name, description, client, tags, notes },
+      updateData,
       { new: true, runValidators: true }
     ).populate('status');
 
     if (!project) {
       return res.status(404).json({ success: false, error: 'Projet non trouvé' });
+    }
+
+    // Sync client data back to Client collection
+    if (client && project.clientRef) {
+      const syncData = {};
+      for (const field of CLIENT_SYNC_FIELDS) {
+        if (client[field] !== undefined) {
+          syncData[field] = client[field] || '';
+        }
+      }
+      if (Object.keys(syncData).length > 0) {
+        await Client.updateOne({ _id: project.clientRef }, { $set: syncData });
+      }
     }
 
     // Log history

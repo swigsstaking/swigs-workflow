@@ -1,10 +1,12 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, Calendar, Settings } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Settings, Link2 } from 'lucide-react';
 import { DndContext, DragOverlay, useSensor, useSensors, PointerSensor } from '@dnd-kit/core';
 import DeleteBlockModal from '../components/Planning/DeleteBlockModal';
 import BlockDetailModal from '../components/Planning/BlockDetailModal';
+import MonthGrid from '../components/Planning/MonthGrid';
+import CalendarSyncModal from '../components/Planning/CalendarSyncModal';
 import { usePlanningStore } from '../stores/planningStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useUIStore } from '../stores/uiStore';
@@ -25,8 +27,11 @@ export default function Planning() {
     goToPrevWeek,
     goToNextDay,
     goToPrevDay,
+    goToNextMonth,
+    goToPrevMonth,
     goToToday,
     setViewMode,
+    setCurrentDate,
     createBlock,
     updateBlock,
     deleteBlock
@@ -50,6 +55,9 @@ export default function Planning() {
   // State for detail modal
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedBlock, setSelectedBlock] = useState(null);
+
+  // State for calendar sync modal
+  const [syncModalOpen, setSyncModalOpen] = useState(false);
 
   // Sensors for drag and drop
   const sensors = useSensors(
@@ -88,11 +96,11 @@ export default function Planning() {
     loadBlocks();
   }, [currentDate, viewMode]);
 
-  // Force day view on mobile
+  // Force day view on mobile (not month — month is readable on mobile)
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px)');
     const handler = (e) => {
-      if (e.matches && viewMode !== 'day') {
+      if (e.matches && viewMode === 'week') {
         setViewMode('day');
       }
     };
@@ -252,23 +260,28 @@ export default function Planning() {
 
   // Navigation handlers
   const handlePrev = () => {
-    if (viewMode === 'week') {
-      goToPrevWeek();
-    } else {
-      goToPrevDay();
-    }
+    if (viewMode === 'month') goToPrevMonth();
+    else if (viewMode === 'week') goToPrevWeek();
+    else goToPrevDay();
   };
 
   const handleNext = () => {
-    if (viewMode === 'week') {
-      goToNextWeek();
-    } else {
-      goToNextDay();
-    }
+    if (viewMode === 'month') goToNextMonth();
+    else if (viewMode === 'week') goToNextWeek();
+    else goToNextDay();
+  };
+
+  // Navigate to a specific day from MonthGrid
+  const handleDayClick = (date) => {
+    setCurrentDate(date);
+    setViewMode('day');
   };
 
   // Format header date
   const formatHeaderDate = () => {
+    if (viewMode === 'month') {
+      return format(currentDate, "MMMM yyyy", { locale: fr });
+    }
     if (viewMode === 'week') {
       return format(currentDate, "'Semaine du' d MMMM yyyy", { locale: fr });
     }
@@ -431,21 +444,34 @@ export default function Planning() {
             )}
           </div>
 
+          {/* Sync button */}
+          <button
+            onClick={() => setSyncModalOpen(true)}
+            className="p-1.5 rounded-[6px] text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300 hover:bg-[rgb(var(--swigs-stone)/0.12)] dark:hover:bg-white/[0.05] transition-all"
+            title="Synchroniser avec un calendrier externe"
+          >
+            <Link2 className="w-4 h-4" />
+          </button>
+
           {/* View mode toggle */}
           <div className="flex items-center gap-0.5 p-1 bg-[rgb(var(--swigs-stone)/0.1)] dark:bg-zinc-950/60 rounded-[6px]">
-            {['week', 'day'].map(mode => (
+            {[
+              { key: 'month', label: 'Mois' },
+              { key: 'week', label: 'Semaine' },
+              { key: 'day', label: 'Jour' }
+            ].map(({ key, label }) => (
               <button
-                key={mode}
-                onClick={() => setViewMode(mode)}
+                key={key}
+                onClick={() => setViewMode(key)}
                 className={`
                   px-2.5 py-1 text-[12px] font-medium rounded-[4px] transition-all
-                  ${viewMode === mode
+                  ${viewMode === key
                     ? 'bg-white dark:bg-dark-card text-slate-900 dark:text-white shadow-sm'
                     : 'text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-300'
                   }
                 `}
               >
-                {mode === 'week' ? 'Semaine' : 'Jour'}
+                {label}
               </button>
             ))}
           </div>
@@ -453,7 +479,6 @@ export default function Planning() {
         </div>
 
         {/* Calendar Grid */}
-        {/* REDESIGN P1: empty state moved outside overflow-auto — no longer an absolute overlay */}
         <div className="flex-1 overflow-auto relative">
           {loading && !hasLoadedOnce.current ? (
             /* Planning Grid Skeleton */
@@ -469,7 +494,7 @@ export default function Planning() {
               </div>
               {/* Day columns skeleton */}
               <div className="flex-1 flex">
-                {Array.from({ length: viewMode === 'week' ? 7 : 1 }).map((_, col) => (
+                {Array.from({ length: viewMode === 'week' ? 7 : viewMode === 'month' ? 7 : 1 }).map((_, col) => (
                   <div key={col} className="flex-1 min-w-[100px] border-r border-slate-200 dark:border-dark-border last:border-r-0">
                     {/* Header skeleton */}
                     <div className="h-10 flex flex-col items-center justify-center border-b border-slate-200 dark:border-dark-border bg-white dark:bg-dark-card">
@@ -488,6 +513,13 @@ export default function Planning() {
                 ))}
               </div>
             </div>
+          ) : viewMode === 'month' ? (
+            <MonthGrid
+              currentDate={currentDate}
+              blocks={blocks}
+              onBlockClick={handleBlockClick}
+              onDayClick={handleDayClick}
+            />
           ) : (
             <CalendarGrid
               currentDate={currentDate}
@@ -505,13 +537,15 @@ export default function Planning() {
             <Calendar className="w-3.5 h-3.5 text-[rgb(var(--swigs-stone))] flex-shrink-0" />
             <p className="text-[12.5px] text-slate-500 dark:text-zinc-400">
               <span className="font-medium text-slate-600 dark:text-zinc-300">Aucun bloc planifié</span>
-              {' — '}glissez un projet depuis la liste ci-dessous ↓ pour planifier du temps.
+              {viewMode !== 'month' && <>{' — '}glissez un projet depuis la liste ci-dessous ↓ pour planifier du temps.</>}
             </p>
           </div>
         )}
 
-        {/* Project Tier List */}
-        <ProjectTierList projects={projects.filter(p => !p.archivedAt && !planningHiddenStatuses.includes(p.status?._id))} />
+        {/* Project Tier List — hidden in month view (no drag-and-drop) */}
+        {viewMode !== 'month' && (
+          <ProjectTierList projects={projects.filter(p => !p.archivedAt && !planningHiddenStatuses.includes(p.status?._id))} />
+        )}
       </div>
 
       {/* Drag Overlay */}
@@ -534,6 +568,12 @@ export default function Planning() {
         onClose={handleDetailModalClose}
         onUpdate={updateBlock}
         onDelete={handleDeleteRequest}
+      />
+
+      {/* Calendar Sync Modal */}
+      <CalendarSyncModal
+        isOpen={syncModalOpen}
+        onClose={() => setSyncModalOpen(false)}
       />
     </DndContext>
   );

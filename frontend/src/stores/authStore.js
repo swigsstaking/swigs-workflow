@@ -91,14 +91,17 @@ export const useAuthStore = create(
         }
       },
 
-      // Récupérer le profil utilisateur
+      // Récupérer le profil utilisateur (includes hasComptaPlus)
       fetchUser: async () => {
         try {
           const response = await api.get('/auth/me');
-          set({ user: response.data.user });
-          return response.data.user;
+          const userData = response.data.user;
+          set({ user: userData });
+          return userData;
         } catch (error) {
           console.error('Fetch user failed:', error);
+          // Token invalid/expired — force logout to prevent stale data
+          get().logout();
           return null;
         }
       },
@@ -124,10 +127,16 @@ export const useAuthStore = create(
         });
       },
 
-      // Se connecter via le Hub
+      // Se connecter via le Hub (PKCE OAuth flow)
       loginWithHub: () => {
+        window.location.href = '/api/auth/login';
+      },
+
+      // Créer un compte via le Hub
+      registerWithHub: () => {
         const hubUrl = import.meta.env.VITE_HUB_URL || 'https://apps.swigs.online';
-        window.location.href = hubUrl;
+        const callbackUrl = encodeURIComponent(window.location.origin);
+        window.location.href = `${hubUrl}/register?app=swigs-workflow&callback=${callbackUrl}`;
       }
     }),
     {

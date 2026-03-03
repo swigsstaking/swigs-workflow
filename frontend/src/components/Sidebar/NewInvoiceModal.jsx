@@ -33,14 +33,14 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
 
   // Custom mode state
   const [customLines, setCustomLines] = useState([
-    { description: '', quantity: 1, unitPrice: 0 }
+    { description: '', quantity: 1, unitPrice: 0, discountType: '', discountValue: 0 }
   ]);
   const [notes, setNotes] = useState('');
   const [autoSend, setAutoSend] = useState(false);
 
   // Recurring mode state
   const [recurringForm, setRecurringForm] = useState({
-    lines: [{ description: '', quantity: 1, unitPrice: 0 }],
+    lines: [{ description: '', quantity: 1, unitPrice: 0, discountType: '', discountValue: 0 }],
     frequency: 'monthly',
     dayOfMonth: 1,
     startDate: new Date().toISOString().slice(0, 10),
@@ -75,7 +75,7 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
     setCustomIssueDate('');
     setQuotePartials({});
     setCollapsedSections({});
-    setCustomLines([{ description: '', quantity: 1, unitPrice: 0 }]);
+    setCustomLines([{ description: '', quantity: 1, unitPrice: 0, discountType: '', discountValue: 0 }]);
     setNotes('');
     setAutoSend(false);
     setSkipReminders(false);
@@ -84,7 +84,7 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
     setSelectedEvents([]);
     setSelectedQuotes([]);
     setRecurringForm({
-      lines: [{ description: '', quantity: 1, unitPrice: 0 }],
+      lines: [{ description: '', quantity: 1, unitPrice: 0, discountType: '', discountValue: 0 }],
       frequency: 'monthly',
       dayOfMonth: 1,
       startDate: new Date().toISOString().slice(0, 10),
@@ -104,9 +104,11 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
               ? editInvoice.customLines.map(l => ({
                   description: l.description || '',
                   quantity: l.quantity || 1,
-                  unitPrice: l.unitPrice || 0
+                  unitPrice: l.unitPrice || 0,
+                  discountType: l.discountType || '',
+                  discountValue: l.discountValue || 0
                 }))
-              : [{ description: '', quantity: 1, unitPrice: 0 }]
+              : [{ description: '', quantity: 1, unitPrice: 0, discountType: '', discountValue: 0 }]
           );
           setUnbilledEvents([]);
           setInvoiceableQuotes([]);
@@ -209,7 +211,7 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
 
   // Custom mode handlers
   const addCustomLine = () => {
-    setCustomLines([...customLines, { description: '', quantity: 1, unitPrice: 0 }]);
+    setCustomLines([...customLines, { description: '', quantity: 1, unitPrice: 0, discountType: '', discountValue: 0 }]);
   };
 
   const removeCustomLine = (index) => {
@@ -219,9 +221,11 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
   };
 
   const updateCustomLine = (index, field, value) => {
-    const newLines = [...customLines];
-    newLines[index][field] = value;
-    setCustomLines(newLines);
+    setCustomLines(prev => {
+      const newLines = [...prev];
+      newLines[index] = { ...newLines[index], [field]: value };
+      return newLines;
+    });
   };
 
   // Service line handler (shared for custom & recurring)
@@ -233,7 +237,9 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
       quantity: service.defaultQuantity || 1,
       unitPrice: service.priceType === 'hourly' && service.estimatedHours
         ? service.unitPrice * service.estimatedHours
-        : service.unitPrice
+        : service.unitPrice,
+      discountType: '',
+      discountValue: 0
     };
 
     if (mode === 'recurring') {
@@ -295,7 +301,13 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
     const quantity = parseFloat(line.quantity);
     const unitPrice = parseFloat(line.unitPrice);
     if (isNaN(quantity) || isNaN(unitPrice)) return 0;
-    return quantity * unitPrice;
+    const gross = quantity * unitPrice;
+    const val = parseFloat(line.discountValue) || 0;
+    let discount = 0;
+    if (line.discountType && val > 0) {
+      discount = line.discountType === 'percentage' ? Math.min(gross, gross * (val / 100)) : Math.min(val, gross);
+    }
+    return Math.max(0, gross - discount);
   };
 
   const getCustomTotal = () => {
@@ -346,7 +358,9 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
           payload.customLines = customLines.map(line => ({
             description: line.description,
             quantity: parseFloat(line.quantity) || 1,
-            unitPrice: parseFloat(line.unitPrice) || 0
+            unitPrice: parseFloat(line.unitPrice) || 0,
+            discountType: line.discountType || undefined,
+            discountValue: line.discountValue || undefined
           }));
           payload.discountType = discountType || undefined;
           payload.discountValue = discountValue ? parseFloat(discountValue) : undefined;
@@ -390,6 +404,8 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
             description: l.description,
             quantity: parseFloat(l.quantity) || 1,
             unitPrice: parseFloat(l.unitPrice) || 0,
+            discountType: l.discountType || undefined,
+            discountValue: l.discountValue || undefined,
           })),
           frequency: recurringForm.frequency,
           dayOfMonth: showDayOfMonth ? (parseInt(recurringForm.dayOfMonth) || 1) : undefined,
@@ -414,7 +430,9 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
           customLines: customLines.map(line => ({
             description: line.description,
             quantity: parseFloat(line.quantity) || 1,
-            unitPrice: parseFloat(line.unitPrice) || 0
+            unitPrice: parseFloat(line.unitPrice) || 0,
+            discountType: line.discountType || undefined,
+            discountValue: line.discountValue || undefined
           })),
           discountType: discountType || undefined,
           discountValue: discountValue ? parseFloat(discountValue) : undefined,
@@ -468,7 +486,7 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
     setSelectedEvents([]);
     setSelectedQuotes([]);
     setQuotePartials({});
-    setCustomLines([{ description: '', quantity: 1, unitPrice: 0 }]);
+    setCustomLines([{ description: '', quantity: 1, unitPrice: 0, discountType: '', discountValue: 0 }]);
     setNotes('');
     setAutoSend(false);
     setSkipReminders(false);
@@ -476,7 +494,7 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
     setDiscountValue('');
     setMode('standard');
     setRecurringForm({
-      lines: [{ description: '', quantity: 1, unitPrice: 0 }],
+      lines: [{ description: '', quantity: 1, unitPrice: 0, discountType: '', discountValue: 0 }],
       frequency: 'monthly',
       dayOfMonth: 1,
       startDate: new Date().toISOString().slice(0, 10),

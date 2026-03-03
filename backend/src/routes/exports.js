@@ -2,8 +2,10 @@ import express from 'express';
 import {
   exportJournal,
   exportClients,
-  exportRevenueReport
+  exportRevenueReport,
+  exportFiduciary
 } from '../controllers/exportController.js';
+import { requireComptaPlus } from '../middleware/requireComptaPlus.js';
 
 const router = express.Router();
 
@@ -12,5 +14,6 @@ const router = express.Router();
 router.get('/journal', exportJournal);
 router.get('/clients', exportClients);
 router.get('/revenue-report', exportRevenueReport);
+router.get('/fiduciary', requireComptaPlus, exportFiduciary);
 
 export default router;

@@ -4,6 +4,8 @@ import Quote from '../models/Quote.js';
 import Event from '../models/Event.js';
 import Project from '../models/Project.js';
 import Status from '../models/Status.js';
+import BankTransaction from '../models/BankTransaction.js';
+import ExpenseCategory from '../models/ExpenseCategory.js';
 
 // Helper: Get date range for a month
 const getMonthRange = (year, month) => {
@@ -540,6 +542,324 @@ export const getHoursStats = async (req, res, next) => {
         currentMonth: currentMonthData?.hours || 0,
         monthlyChange: Math.round(monthlyChange * 10) / 10
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// =============================================================================
+// COMPTA PLUS ANALYTICS (require hasComptaPlus)
+// =============================================================================
+
+/**
+ * GET /api/analytics/expenses
+ * Expense breakdown by category + monthly evolution
+ */
+export const getExpenseStats = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const startDate = new Date(currentYear, 0, 1); // Jan 1st
+    const endDate = new Date(currentYear, 11, 31, 23, 59, 59, 999);
+
+    // By category
+    const byCategory = await BankTransaction.aggregate([
+      {
+        $match: {
+          userId,
+          creditDebit: 'DBIT',
+          bookingDate: { $gte: startDate, $lte: endDate }
+        }
+      },
+      {
+        $group: {
+          _id: '$expenseCategory',
+          total: { $sum: '$amount' },
+          count: { $sum: 1 },
+          vatTotal: { $sum: { $ifNull: ['$vatAmount', 0] } }
+        }
+      },
+      {
+        $lookup: {
+          from: 'expensecategories',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'category'
+        }
+      },
+      { $unwind: { path: '$category', preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          categoryId: '$_id',
+          categoryName: { $ifNull: ['$category.name', 'Non catégorisé'] },
+          categoryColor: { $ifNull: ['$category.color', '#94a3b8'] },
+          categoryIcon: '$category.icon',
+          accountNumber: '$category.accountNumber',
+          total: 1,
+          count: 1,
+          vatTotal: 1
+        }
+      },
+      { $sort: { total: -1 } }
+    ]);
+
+    // Monthly evolution (12 months)
+    const monthlyStart = new Date(currentYear, now.getMonth() - 11, 1);
+    const monthly = await BankTransaction.aggregate([
+      {
+        $match: {
+          userId,
+          creditDebit: 'DBIT',
+          bookingDate: { $gte: monthlyStart, $lte: endDate }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            year: { $year: '$bookingDate' },
+            month: { $month: '$bookingDate' },
+            category: '$expenseCategory'
+          },
+          total: { $sum: '$amount' }
+        }
+      },
+      {
+        $lookup: {
+          from: 'expensecategories',
+          localField: '_id.category',
+          foreignField: '_id',
+          as: 'category'
+        }
+      },
+      { $unwind: { path: '$category', preserveNullAndEmptyArrays: true } }
+    ]);
+
+    // Build monthly array
+    const monthlyData = [];
+    for (let i = 11; i >= 0; i--) {
+      let m = now.getMonth() + 1 - i;
+      let y = currentYear;
+      if (m <= 0) { m += 12; y -= 1; }
+
+      const monthEntries = monthly.filter(e => e._id.year === y && e._id.month === m);
+      const totalExpenses = monthEntries.reduce((sum, e) => sum + e.total, 0);
+
+      monthlyData.push({
+        month: monthNames[m - 1],
+        monthNum: m,
+        year: y,
+        total: totalExpenses,
+        byCategory: monthEntries.map(e => ({
+          categoryName: e.category?.name || 'Non catégorisé',
+          categoryColor: e.category?.color || '#94a3b8',
+          total: e.total
+        }))
+      });
+    }
+
+    // Totals
+    const ytd = byCategory.reduce((sum, c) => sum + c.total, 0);
+    const uncategorized = byCategory.find(c => !c.categoryId)?.count || 0;
+    const currentMonthTotal = monthlyData[monthlyData.length - 1]?.total || 0;
+
+    res.json({
+      success: true,
+      data: {
+        ytd,
+        mtd: currentMonthTotal,
+        uncategorized,
+        byCategory,
+        monthly: monthlyData
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/analytics/profitloss
+ * Revenue vs expenses by month = profit
+ */
+export const getProfitLoss = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const startDate = new Date(currentYear, now.getMonth() - 11, 1);
+    const endDate = new Date(currentYear, now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+    // Get project IDs for revenue
+    const projectIds = await getUserProjectIds(userId);
+    const projectFilter = projectIds ? { project: { $in: projectIds } } : {};
+
+    // Revenue by month
+    const revenueData = await Invoice.aggregate([
+      {
+        $match: {
+          ...projectFilter,
+          issueDate: { $gte: startDate, $lte: endDate },
+          status: { $ne: 'cancelled' }
+        }
+      },
+      {
+        $group: {
+          _id: { year: { $year: '$issueDate' }, month: { $month: '$issueDate' } },
+          revenue: { $sum: '$total' },
+          vatCollected: { $sum: '$vatAmount' }
+        }
+      }
+    ]);
+
+    // Expenses by month
+    const expenseData = await BankTransaction.aggregate([
+      {
+        $match: {
+          userId,
+          creditDebit: 'DBIT',
+          bookingDate: { $gte: startDate, $lte: endDate }
+        }
+      },
+      {
+        $group: {
+          _id: { year: { $year: '$bookingDate' }, month: { $month: '$bookingDate' } },
+          expenses: { $sum: '$amount' },
+          vatDeductible: { $sum: { $ifNull: ['$vatAmount', 0] } }
+        }
+      }
+    ]);
+
+    const revenueMap = new Map();
+    revenueData.forEach(r => revenueMap.set(`${r._id.year}-${r._id.month}`, r));
+    const expenseMap = new Map();
+    expenseData.forEach(e => expenseMap.set(`${e._id.year}-${e._id.month}`, e));
+
+    const data = [];
+    for (let i = 11; i >= 0; i--) {
+      let m = now.getMonth() + 1 - i;
+      let y = currentYear;
+      if (m <= 0) { m += 12; y -= 1; }
+
+      const key = `${y}-${m}`;
+      const rev = revenueMap.get(key) || { revenue: 0, vatCollected: 0 };
+      const exp = expenseMap.get(key) || { expenses: 0, vatDeductible: 0 };
+
+      data.push({
+        month: monthNames[m - 1],
+        monthNum: m,
+        year: y,
+        revenue: rev.revenue,
+        expenses: exp.expenses,
+        profit: rev.revenue - exp.expenses,
+        vatCollected: rev.vatCollected,
+        vatDeductible: exp.vatDeductible,
+        vatNet: rev.vatCollected - exp.vatDeductible
+      });
+    }
+
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/analytics/vat-detail
+ * VAT collected - deductible = net, by quarter
+ */
+export const getVatDetail = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+    const startDate = new Date(year, 0, 1);
+    const endDate = new Date(year, 11, 31, 23, 59, 59, 999);
+
+    const projectIds = await getUserProjectIds(userId);
+    const projectFilter = projectIds ? { project: { $in: projectIds } } : {};
+
+    // VAT collected (from invoices)
+    const collected = await Invoice.aggregate([
+      {
+        $match: {
+          ...projectFilter,
+          issueDate: { $gte: startDate, $lte: endDate },
+          status: { $ne: 'cancelled' }
+        }
+      },
+      {
+        $project: {
+          quarter: { $ceil: { $divide: [{ $month: '$issueDate' }, 3] } },
+          vatAmount: 1,
+          total: 1,
+          subtotal: 1
+        }
+      },
+      {
+        $group: {
+          _id: '$quarter',
+          vatCollected: { $sum: '$vatAmount' },
+          revenueHT: { $sum: '$subtotal' },
+          revenueTTC: { $sum: '$total' }
+        }
+      }
+    ]);
+
+    // VAT deductible (from DBIT transactions with vatAmount)
+    const deductible = await BankTransaction.aggregate([
+      {
+        $match: {
+          userId,
+          creditDebit: 'DBIT',
+          bookingDate: { $gte: startDate, $lte: endDate },
+          vatAmount: { $gt: 0 }
+        }
+      },
+      {
+        $project: {
+          quarter: { $ceil: { $divide: [{ $month: '$bookingDate' }, 3] } },
+          vatAmount: 1,
+          amount: 1
+        }
+      },
+      {
+        $group: {
+          _id: '$quarter',
+          vatDeductible: { $sum: '$vatAmount' },
+          expensesTotal: { $sum: '$amount' }
+        }
+      }
+    ]);
+
+    const collectedMap = new Map(collected.map(c => [c._id, c]));
+    const deductibleMap = new Map(deductible.map(d => [d._id, d]));
+
+    const quarters = [1, 2, 3, 4].map(q => {
+      const col = collectedMap.get(q) || { vatCollected: 0, revenueHT: 0, revenueTTC: 0 };
+      const ded = deductibleMap.get(q) || { vatDeductible: 0, expensesTotal: 0 };
+      return {
+        quarter: q,
+        label: `T${q}`,
+        vatCollected: col.vatCollected,
+        vatDeductible: ded.vatDeductible,
+        vatNet: col.vatCollected - ded.vatDeductible,
+        revenueHT: col.revenueHT,
+        expensesTotal: ded.expensesTotal
+      };
+    });
+
+    const totals = quarters.reduce((acc, q) => ({
+      vatCollected: acc.vatCollected + q.vatCollected,
+      vatDeductible: acc.vatDeductible + q.vatDeductible,
+      vatNet: acc.vatNet + q.vatNet,
+      revenueHT: acc.revenueHT + q.revenueHT,
+      expensesTotal: acc.expensesTotal + q.expensesTotal
+    }), { vatCollected: 0, vatDeductible: 0, vatNet: 0, revenueHT: 0, expensesTotal: 0 });
+
+    res.json({
+      success: true,
+      data: { year, quarters, totals }
     });
   } catch (error) {
     next(error);

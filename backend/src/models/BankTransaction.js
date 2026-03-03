@@ -49,6 +49,29 @@ const bankTransactionSchema = new mongoose.Schema({
     max: 100,
     default: 0
   },
+  // --- Compta Plus fields (optional, non-breaking) ---
+  bankAccountId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'BankAccount'
+  },
+  expenseCategory: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'ExpenseCategory'
+  },
+  autoClassified: {
+    type: Boolean,
+    default: false
+  },
+  notes: String,
+  vatAmount: Number,
+  vatRate: Number,
+  attachments: [{
+    filename: { type: String, required: true },
+    mimeType: { type: String, required: true },
+    size: { type: Number, required: true },
+    data: { type: String, required: true }, // base64
+    uploadedAt: { type: Date, default: Date.now }
+  }],
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     index: true,

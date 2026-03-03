@@ -61,14 +61,28 @@ export const generateInvoiceFromRecurring = async (recurring) => {
     throw new Error(`Projet ${recurring.project} introuvable`);
   }
 
+  // Compute per-line discount from type + value
+  const computeLineDiscount = (line) => {
+    const gross = (line.quantity || 1) * (line.unitPrice || 0);
+    if (!line.discountType || !line.discountValue || line.discountValue <= 0) return 0;
+    if (line.discountType === 'percentage') return Math.min(gross, gross * (line.discountValue / 100));
+    return Math.min(line.discountValue, gross);
+  };
+
   // Calculate totals from custom lines
-  const processedLines = recurring.customLines.map(line => ({
-    description: line.description,
-    quantity: line.quantity || 1,
-    unitPrice: line.unitPrice,
-    unit: line.unit || '',
-    total: (line.quantity || 1) * line.unitPrice
-  }));
+  const processedLines = recurring.customLines.map(line => {
+    const discount = computeLineDiscount(line);
+    return {
+      description: line.description,
+      quantity: line.quantity || 1,
+      unitPrice: line.unitPrice,
+      discountType: line.discountType || undefined,
+      discountValue: line.discountValue || undefined,
+      discount,
+      unit: line.unit || '',
+      total: Math.max(0, (line.quantity || 1) * line.unitPrice - discount)
+    };
+  });
 
   const subtotal = processedLines.reduce((sum, line) => sum + line.total, 0);
   const vatAmount = subtotal * (recurring.vatRate / 100);

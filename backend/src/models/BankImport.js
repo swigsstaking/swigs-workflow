@@ -35,6 +35,11 @@ const bankImportSchema = new mongoose.Schema({
   statementOpeningBalance: Number,
   statementClosingBalance: Number,
   statementDate: Date,
+  // --- Compta Plus fields (optional, non-breaking) ---
+  bankAccountId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'BankAccount'
+  },
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     index: true,

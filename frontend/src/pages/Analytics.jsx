@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   DollarSign,
   Clock,
@@ -9,7 +10,8 @@ import {
   ToggleRight,
   Download,
   ChevronDown,
-  Settings
+  Settings,
+  BarChart3
 } from 'lucide-react';
 import { useAnalyticsStore } from '../stores/analyticsStore';
 import { useProjectStore } from '../stores/projectStore';
@@ -22,6 +24,7 @@ import ProjectStatusChart from '../components/Analytics/ProjectStatusChart';
 import QuotePipelineChart from '../components/Analytics/QuotePipelineChart';
 import TopClientsChart from '../components/Analytics/TopClientsChart';
 import HoursChart from '../components/Analytics/HoursChart';
+import EmptyState from '../components/ui/EmptyState';
 import { SkeletonKPI, SkeletonChart } from '../components/ui/Skeleton';
 
 export default function Analytics() {
@@ -40,6 +43,7 @@ export default function Analytics() {
   const { statuses, fetchStatuses } = useProjectStore();
   const { analyticsHiddenStatuses, toggleAnalyticsHiddenStatus, clearAnalyticsHiddenStatuses } = useUIStore();
   const { addToast } = useToastStore();
+  const navigate = useNavigate();
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
 
@@ -294,6 +298,17 @@ export default function Analytics() {
             <SkeletonChart />
           </div>
         </div>
+      )}
+
+      {/* Empty State */}
+      {!loading && !revenue && (
+        <EmptyState
+          icon={BarChart3}
+          title="Pas encore de données"
+          description="Les analytics se remplissent automatiquement avec vos projets, factures et heures. Créez votre premier projet pour commencer."
+          action="Créer un projet"
+          onAction={() => navigate('/workflow')}
+        />
       )}
 
       {/* Content */}

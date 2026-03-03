@@ -1,5 +1,8 @@
 import Invoice from '../models/Invoice.js';
 import Project from '../models/Project.js';
+import BankTransaction from '../models/BankTransaction.js';
+import BankImport from '../models/BankImport.js';
+import ExpenseCategory from '../models/ExpenseCategory.js';
 import {
   generateJournalCSV,
   generateClientListCSV,
@@ -55,8 +58,10 @@ export const exportJournal = async (req, res, next) => {
     // Generate CSV
     const csv = generateJournalCSV(userInvoices, { from: fromDate, to: toDate });
 
-    // Send as downloadable file
-    const filename = `journal_${from}_${to}.csv`;
+    // Send as downloadable file (sanitize filename to prevent header injection)
+    const sanitizedFrom = from.replace(/[^a-zA-Z0-9\-]/g, '');
+    const sanitizedTo = to.replace(/[^a-zA-Z0-9\-]/g, '');
+    const filename = `journal_${sanitizedFrom}_${sanitizedTo}.csv`;
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(csv);
@@ -162,11 +167,160 @@ export const exportRevenueReport = async (req, res, next) => {
       settings
     );
 
-    // Send as downloadable file
-    const filename = `rapport_revenus_${from}_${to}.pdf`;
+    // Send as downloadable file (sanitize filename)
+    const safFrom = from.replace(/[^a-zA-Z0-9\-]/g, '');
+    const safTo = to.replace(/[^a-zA-Z0-9\-]/g, '');
+    const filename = `rapport_revenus_${safFrom}_${safTo}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(pdfBuffer);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Export fiduciaire annuel (CSV)
+ * GET /api/exports/fiduciary?from=YYYY-MM-DD&to=YYYY-MM-DD
+ */
+export const exportFiduciary = async (req, res, next) => {
+  try {
+    const { from, to } = req.query;
+    const userId = req.user._id;
+
+    if (!from || !to) {
+      return res.status(400).json({ success: false, error: 'Les paramètres from et to sont requis' });
+    }
+
+    const fromDate = new Date(from);
+    const toDate = new Date(to + 'T23:59:59.999Z');
+
+    if (isNaN(fromDate) || isNaN(toDate)) {
+      return res.status(400).json({ success: false, error: 'Format de date invalide' });
+    }
+
+    // 1. Revenue: paid invoices
+    const invoices = await Invoice.find({
+      status: { $in: ['paid', 'partial'] },
+      issueDate: { $gte: fromDate, $lte: toDate }
+    })
+      .populate({ path: 'project', match: { userId }, select: 'name client userId' })
+      .sort({ issueDate: 1 })
+      .lean();
+
+    const userInvoices = invoices.filter(inv => inv.project !== null);
+
+    // 2. Expenses by category
+    const expenses = await BankTransaction.find({
+      userId,
+      creditDebit: 'DBIT',
+      bookingDate: { $gte: fromDate, $lte: toDate }
+    })
+      .populate('expenseCategory', 'name accountNumber')
+      .sort({ bookingDate: 1 })
+      .lean();
+
+    // 3. Bank balances
+    const bankImports = await BankImport.find({
+      userId,
+      statementDate: { $gte: fromDate, $lte: toDate }
+    })
+      .sort({ statementDate: 1 })
+      .lean();
+
+    // 4. Expense categories for grouping
+    const categories = await ExpenseCategory.find({ userId }).sort({ order: 1 }).lean();
+    const catMap = new Map(categories.map(c => [c._id.toString(), c]));
+
+    // Build CSV
+    const BOM = '\uFEFF';
+    const lines = [];
+
+    // Header
+    lines.push('=== RAPPORT FIDUCIAIRE ===');
+    lines.push(`Période: ${from} au ${to}`);
+    lines.push('');
+
+    // Section 1: Revenus
+    lines.push('--- REVENUS ---');
+    lines.push('N° Facture;Client;Date;HT;TVA;TTC;Statut');
+    let totalRevenueHT = 0;
+    let totalRevenueVAT = 0;
+    let totalRevenueTTC = 0;
+
+    for (const inv of userInvoices) {
+      const clientName = (inv.project.client?.company || inv.project.client?.name || 'Inconnu').replace(/;/g, ',');
+      const ht = inv.subtotal || 0;
+      const vat = inv.vatAmount || 0;
+      const ttc = inv.total || 0;
+      totalRevenueHT += ht;
+      totalRevenueVAT += vat;
+      totalRevenueTTC += ttc;
+      lines.push(`${inv.number};${clientName};${new Date(inv.issueDate).toLocaleDateString('fr-CH')};${ht.toFixed(2)};${vat.toFixed(2)};${ttc.toFixed(2)};${inv.status}`);
+    }
+    lines.push(`TOTAL REVENUS;;;${totalRevenueHT.toFixed(2)};${totalRevenueVAT.toFixed(2)};${totalRevenueTTC.toFixed(2)}`);
+    lines.push('');
+
+    // Section 2: Dépenses par catégorie
+    lines.push('--- DÉPENSES PAR CATÉGORIE ---');
+    lines.push('Catégorie;N° Comptable;Nombre;Total;TVA déductible');
+
+    // Group expenses by category
+    const expensesByCategory = {};
+    let totalExpenses = 0;
+    let totalExpenseVAT = 0;
+
+    for (const exp of expenses) {
+      const catId = exp.expenseCategory?._id?.toString() || 'uncategorized';
+      if (!expensesByCategory[catId]) {
+        const cat = exp.expenseCategory || { name: 'Non catégorisé', accountNumber: '' };
+        expensesByCategory[catId] = { name: cat.name, accountNumber: cat.accountNumber || '', total: 0, vatTotal: 0, count: 0 };
+      }
+      expensesByCategory[catId].total += exp.amount;
+      expensesByCategory[catId].vatTotal += exp.vatAmount || 0;
+      expensesByCategory[catId].count++;
+      totalExpenses += exp.amount;
+      totalExpenseVAT += exp.vatAmount || 0;
+    }
+
+    for (const [, data] of Object.entries(expensesByCategory)) {
+      lines.push(`${data.name};${data.accountNumber};${data.count};${data.total.toFixed(2)};${data.vatTotal.toFixed(2)}`);
+    }
+    lines.push(`TOTAL DÉPENSES;;;${totalExpenses.toFixed(2)};${totalExpenseVAT.toFixed(2)}`);
+    lines.push('');
+
+    // Section 3: Détail dépenses
+    lines.push('--- DÉTAIL DÉPENSES ---');
+    lines.push('Date;Contrepartie;Catégorie;Montant;TVA;Notes');
+    for (const exp of expenses) {
+      const catName = (exp.expenseCategory?.name || 'Non catégorisé').replace(/;/g, ',');
+      const counterparty = (exp.counterpartyName || '').replace(/;/g, ',');
+      const notes = (exp.notes || '').replace(/;/g, ',').replace(/\n/g, ' ');
+      lines.push(`${new Date(exp.bookingDate).toLocaleDateString('fr-CH')};${counterparty};${catName};${exp.amount.toFixed(2)};${(exp.vatAmount || 0).toFixed(2)};${notes}`);
+    }
+    lines.push('');
+
+    // Section 4: Résumé TVA
+    lines.push('--- RÉSUMÉ TVA ---');
+    lines.push(`TVA collectée (revenus);${totalRevenueVAT.toFixed(2)}`);
+    lines.push(`TVA déductible (dépenses);${totalExpenseVAT.toFixed(2)}`);
+    lines.push(`TVA nette due;${(totalRevenueVAT - totalExpenseVAT).toFixed(2)}`);
+    lines.push('');
+
+    // Section 5: Résultat
+    lines.push('--- RÉSULTAT ---');
+    lines.push(`Revenus HT;${totalRevenueHT.toFixed(2)}`);
+    lines.push(`Dépenses;${totalExpenses.toFixed(2)}`);
+    lines.push(`Résultat (bénéfice/perte);${(totalRevenueHT - totalExpenses).toFixed(2)}`);
+
+    const csv = BOM + lines.join('\n');
+
+    const safFrom = from.replace(/[^a-zA-Z0-9\-]/g, '');
+    const safTo = to.replace(/[^a-zA-Z0-9\-]/g, '');
+    const filename = `fiduciaire_${safFrom}_${safTo}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
   } catch (error) {
     next(error);
   }

@@ -9,6 +9,7 @@ import InvoicingSection from '../components/Settings/sections/InvoicingSection';
 import PersonnalisationTab from '../components/Settings/PersonnalisationTab';
 import ClientsSection from '../components/Settings/sections/ClientsSection';
 import ServicesTab from '../components/Settings/ServicesTab';
+import QuoteTemplatesTab from '../components/Settings/QuoteTemplatesTab';
 import StatusesSection from '../components/Settings/sections/StatusesSection';
 import SmtpSection from '../components/Settings/sections/SmtpSection';
 import EmailsSection from '../components/Settings/sections/EmailsSection';
@@ -18,12 +19,18 @@ import AbaNinjaSection from '../components/Settings/sections/AbaNinjaSection';
 import CmsSection from '../components/Settings/sections/CmsSection';
 import BankSection from '../components/Settings/sections/BankSection';
 import InvoiceDesignTab from '../components/Settings/InvoiceDesignTab';
+import BankAccountsSection from '../components/Settings/sections/BankAccountsSection';
+import ExpenseCategoriesSection from '../components/Settings/sections/ExpenseCategoriesSection';
+import CounterpartyRulesSection from '../components/Settings/sections/CounterpartyRulesSection';
+import UpgradePrompt from '../components/ui/UpgradePrompt';
+import { useAuthStore } from '../stores/authStore';
 
 export default function Settings() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const { addToast } = useToastStore();
+  const { user } = useAuthStore();
 
   const activeSection = searchParams.get('section') || 'company';
 
@@ -82,6 +89,8 @@ export default function Settings() {
         return <ClientsSection />;
       case 'services':
         return <ServicesTab />;
+      case 'quote-templates':
+        return <QuoteTemplatesTab />;
       case 'statuses':
         return <StatusesSection />;
       case 'smtp':
@@ -121,6 +130,12 @@ export default function Settings() {
         );
       case 'bank':
         return <BankSection />;
+      case 'bank-accounts':
+        return user?.hasComptaPlus ? <BankAccountsSection /> : <UpgradePrompt feature="Les comptes bancaires multiples" />;
+      case 'expense-categories':
+        return user?.hasComptaPlus ? <ExpenseCategoriesSection /> : <UpgradePrompt feature="Les catégories de dépenses" />;
+      case 'counterparty-rules':
+        return user?.hasComptaPlus ? <CounterpartyRulesSection /> : <UpgradePrompt feature="Les règles fournisseurs" />;
       default:
         return (
           <div className="text-center py-12">

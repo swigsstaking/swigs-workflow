@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { FolderOpen, Plus } from 'lucide-react';
+import { FolderOpen } from 'lucide-react';
 import { LayoutGroup } from 'framer-motion';
 import {
   DndContext,
@@ -13,12 +13,14 @@ import {
 import {
   SortableContext,
   rectSortingStrategy,
+  verticalListSortingStrategy,
   useSortable,
   arrayMove
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import ProjectCard from './ProjectCard';
-import Button from '../ui/Button';
+import ProjectListRow from './ProjectListRow';
+import EmptyState from '../ui/EmptyState';
 import { useUIStore } from '../../stores/uiStore';
 
 const gridConfig = {
@@ -27,7 +29,8 @@ const gridConfig = {
   large: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'
 };
 
-function SortableProjectCard({ project, cardStyle, cardSize, onProjectClick, isAnyDragging, showArchived }) {
+
+function SortableProjectCard({ project, cardStyle, cardSize, onProjectClick, onInvoiceClick, isAnyDragging, showArchived }) {
   const {
     attributes,
     listeners,
@@ -55,6 +58,7 @@ function SortableProjectCard({ project, cardStyle, cardSize, onProjectClick, isA
       <ProjectCard
         project={project}
         onClick={() => !isDragging && !isAnyDragging && onProjectClick(project)}
+        onInvoiceClick={onInvoiceClick}
         cardStyle={cardStyle}
         cardSize={cardSize}
         isDragging={isDragging}
@@ -64,8 +68,43 @@ function SortableProjectCard({ project, cardStyle, cardSize, onProjectClick, isA
   );
 }
 
-export default function WorkflowGrid({ projects, onProjectClick, onPositionsChange, showArchived }) {
-  const { toggleNewProjectModal, cardStyle: uiCardStyle, cardSize: uiCardSize } = useUIStore();
+function SortableProjectListRow({ project, cardStyle, onProjectClick, isAnyDragging }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: project._id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition: transition || 'transform 200ms ease',
+    opacity: isDragging ? 0.4 : 1,
+    zIndex: isDragging ? 50 : 'auto',
+    cursor: isAnyDragging ? 'grabbing' : 'grab'
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+    >
+      <ProjectListRow
+        project={project}
+        onClick={() => !isDragging && !isAnyDragging && onProjectClick(project)}
+        cardStyle={cardStyle}
+        isDragging={isDragging}
+      />
+    </div>
+  );
+}
+
+export default function WorkflowGrid({ projects, onProjectClick, onInvoiceClick, onPositionsChange, showArchived }) {
+  const { toggleNewProjectModal, cardStyle: uiCardStyle, cardSize: uiCardSize, viewMode } = useUIStore();
   const [activeId, setActiveId] = useState(null);
   // Local state for optimistic reordering during drag
   const [localProjects, setLocalProjects] = useState(projects);
@@ -79,6 +118,7 @@ export default function WorkflowGrid({ projects, onProjectClick, onPositionsChan
 
   const cardStyle = uiCardStyle || 'left-border';
   const cardSize = uiCardSize || 'medium';
+  const mode = viewMode || 'grid';
 
   // Configure sensors for both mouse and touch
   const sensors = useSensors(
@@ -139,16 +179,22 @@ export default function WorkflowGrid({ projects, onProjectClick, onPositionsChan
 
   if (localProjects.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-20">
-        <FolderOpen className="w-16 h-16 mb-4 text-slate-400" />
-        <p className="text-lg font-medium text-slate-600 dark:text-slate-300 mb-2">Aucun projet</p>
-        <p className="text-sm text-slate-400 mb-6">Créez votre premier projet pour commencer</p>
-        <Button icon={Plus} onClick={toggleNewProjectModal}>
-          Créer mon premier projet
-        </Button>
-      </div>
+      <EmptyState
+        icon={FolderOpen}
+        title="Créez votre premier projet"
+        description="Un projet regroupe vos devis, factures et heures pour un client. Commencez par en créer un pour organiser votre activité."
+        action="Nouveau projet"
+        onAction={toggleNewProjectModal}
+      />
     );
   }
+
+  const sortingStrategy = mode === 'list' ? verticalListSortingStrategy : rectSortingStrategy;
+
+  const getGridClassName = () => {
+    if (mode === 'list') return 'flex flex-col gap-1';
+    return `grid gap-4 ${gridConfig[cardSize] || gridConfig.medium}`;
+  };
 
   return (
     <DndContext
@@ -160,23 +206,49 @@ export default function WorkflowGrid({ projects, onProjectClick, onPositionsChan
     >
       <SortableContext
         items={localProjects.map(p => p._id)}
-        strategy={rectSortingStrategy}
+        strategy={sortingStrategy}
       >
-        <LayoutGroup>
-          <div className={`grid gap-4 ${gridConfig[cardSize] || gridConfig.medium}`}>
-            {localProjects.map(project => (
-              <SortableProjectCard
-                key={project._id}
-                project={project}
-                cardStyle={cardStyle}
-                cardSize={cardSize}
-                onProjectClick={onProjectClick}
-                isAnyDragging={!!activeId}
-                showArchived={showArchived}
-              />
-            ))}
-          </div>
-        </LayoutGroup>
+        {mode === 'list' ? (
+          <>
+            {/* Column headers */}
+            <div className="hidden sm:grid grid-cols-[1fr_120px_80px_100px_100px_100px] gap-x-4 px-4 py-2 text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-1">
+              <span>Projet</span>
+              <span>Non facturé</span>
+              <span>Heures</span>
+              <span>Devis</span>
+              <span>Factures</span>
+              <span className="text-right">Statut</span>
+            </div>
+            <div className={getGridClassName()}>
+              {localProjects.map(project => (
+                <SortableProjectListRow
+                  key={project._id}
+                  project={project}
+                  cardStyle={cardStyle}
+                  onProjectClick={onProjectClick}
+                  isAnyDragging={!!activeId}
+                />
+              ))}
+            </div>
+          </>
+        ) : (
+          <LayoutGroup>
+            <div className={getGridClassName()}>
+              {localProjects.map(project => (
+                <SortableProjectCard
+                  key={project._id}
+                  project={project}
+                  cardStyle={cardStyle}
+                  cardSize={cardSize}
+                  onProjectClick={onProjectClick}
+                  onInvoiceClick={onInvoiceClick}
+                  isAnyDragging={!!activeId}
+                  showArchived={showArchived}
+                />
+              ))}
+            </div>
+          </LayoutGroup>
+        )}
       </SortableContext>
 
       <DragOverlay
@@ -188,12 +260,20 @@ export default function WorkflowGrid({ projects, onProjectClick, onPositionsChan
       >
         {activeProject && (
           <div style={{ cursor: 'grabbing', transform: 'scale(1.02)' }}>
-            <ProjectCard
-              project={activeProject}
-              cardStyle={cardStyle}
-              cardSize={cardSize}
-              isDragging
-            />
+            {mode === 'list' ? (
+              <ProjectListRow
+                project={activeProject}
+                cardStyle={cardStyle}
+                isDragging
+              />
+            ) : (
+              <ProjectCard
+                project={activeProject}
+                cardStyle={cardStyle}
+                cardSize={cardSize}
+                isDragging
+              />
+            )}
           </div>
         )}
       </DragOverlay>

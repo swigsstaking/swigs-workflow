@@ -18,11 +18,11 @@ const logoUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 500 * 1024 },
   fileFilter: (req, file, cb) => {
-    const allowed = ['image/jpeg', 'image/png', 'image/svg+xml'];
+    const allowed = ['image/jpeg', 'image/png'];
     if (allowed.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Format non supporté. Utilisez JPG, PNG ou SVG.'));
+      cb(new Error('Format non supporté. Utilisez JPG ou PNG.'));
     }
   }
 });

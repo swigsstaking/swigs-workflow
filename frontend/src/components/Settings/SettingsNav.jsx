@@ -1,4 +1,4 @@
-import { Building2, Receipt, Palette, Paintbrush, Users, Package, Tag, Server, Mail, Bell, Link2, Landmark, RefreshCw } from 'lucide-react';
+import { Building2, Receipt, Palette, Paintbrush, Users, Package, Tag, Server, Mail, Bell, Link2, Landmark, RefreshCw, FileText, FolderOpen, Crown } from 'lucide-react';
 
 const settingsNav = [
   {
@@ -16,6 +16,7 @@ const settingsNav = [
     items: [
       { id: 'clients', label: 'Clients', icon: Users },
       { id: 'services', label: 'Services', icon: Package },
+      { id: 'quote-templates', label: 'Modèles devis', icon: FileText },
       { id: 'statuses', label: 'Statuts', icon: Tag },
     ]
   },
@@ -33,6 +34,14 @@ const settingsNav = [
       { id: 'abaninja', label: 'AbaNinja', icon: Link2 },
       { id: 'cms', label: 'CMS E-commerce', icon: Link2 },
       { id: 'bank', label: 'Import bancaire', icon: Landmark },
+    ]
+  },
+  {
+    category: 'Compta Plus',
+    items: [
+      { id: 'bank-accounts', label: 'Comptes bancaires', icon: Landmark },
+      { id: 'expense-categories', label: 'Catégories dépenses', icon: FolderOpen },
+      { id: 'counterparty-rules', label: 'Règles fournisseurs', icon: Users },
     ]
   }
 ];

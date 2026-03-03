@@ -16,7 +16,7 @@ export default function RecurringInvoiceForm({
 }) {
   const showDayOfMonth = ['monthly', 'quarterly', 'yearly'].includes(form.frequency);
 
-  const addLine = () => setForm(f => ({ ...f, lines: [...f.lines, { description: '', quantity: 1, unitPrice: 0 }] }));
+  const addLine = () => setForm(f => ({ ...f, lines: [...f.lines, { description: '', quantity: 1, unitPrice: 0, discountType: '', discountValue: 0 }] }));
   const removeLine = (i) => {
     if (form.lines.length === 1) return;
     setForm(f => ({ ...f, lines: f.lines.filter((_, idx) => idx !== i) }));

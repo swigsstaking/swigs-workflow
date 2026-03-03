@@ -30,6 +30,7 @@ export const getAll = async (req, res, next) => {
 
     const recurrings = await RecurringInvoice.find(query)
       .populate('project', 'name client')
+      .populate('generatedInvoices', 'number status total issueDate dueDate')
       .sort('-createdAt');
 
     res.json({ success: true, data: recurrings });
@@ -45,7 +46,9 @@ export const getById = async (req, res, next) => {
     const recurring = await RecurringInvoice.findOne({
       _id: req.params.id,
       userId: req.user._id
-    }).populate('project', 'name client');
+    })
+      .populate('project', 'name client')
+      .populate('generatedInvoices', 'number status total issueDate dueDate');
 
     if (!recurring) {
       return res.status(404).json({ success: false, error: 'Facturation récurrente non trouvée' });

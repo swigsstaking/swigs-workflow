@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, Euro, User, FileText, ChevronDown, Receipt, ArchiveRestore } from 'lucide-react';
+import { Clock, User, FileText, ChevronDown, Receipt, ArchiveRestore, CreditCard } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useUIStore } from '../../stores/uiStore';
@@ -37,6 +37,7 @@ const sizeConfig = {
 export default function ProjectCard({
   project,
   onClick,
+  onInvoiceClick,
   cardStyle = 'left-border',
   cardSize = 'medium',
   isDragging = false,
@@ -53,7 +54,8 @@ export default function ProjectCard({
   // Check if there's expandable content
   const hasExpandableContent =
     (project.recentEvents && project.recentEvents.length > 0) ||
-    (project.recentQuotes && project.recentQuotes.length > 0);
+    (project.recentQuotes && project.recentQuotes.length > 0) ||
+    (project.recentInvoices && project.recentInvoices.length > 0);
 
   const isTopGradient = cardStyle === 'top-gradient';
 
@@ -155,7 +157,6 @@ export default function ProjectCard({
             {/* Unbilled Total */}
             {project.unbilledTotal > 0 && (
               <div className={`flex items-center ${size.gap} text-amber-600 dark:text-amber-400`}>
-                <Euro className={size.iconSize} />
                 <span className="font-medium">
                   {formatCurrency(project.unbilledTotal)}
                 </span>
@@ -182,6 +183,45 @@ export default function ProjectCard({
             {project.unbilledQuotesCount > 1 && (
               <span className="text-xs opacity-70">({project.unbilledQuotesCount} devis)</span>
             )}
+          </div>
+        )}
+
+        {/* Stats - Line 3: Pending Invoices with status badges */}
+        {project.recentInvoices && project.recentInvoices.length > 0 && (
+          <div className="space-y-1">
+            <div className={`flex items-center ${size.gap} ${size.textSize} text-emerald-600 dark:text-emerald-400`}>
+              <Receipt className={size.iconSize} />
+              <span className="font-medium">
+                {formatCurrency(project.pendingInvoicesTotal)}
+              </span>
+              {project.pendingInvoicesCount > 1 && (
+                <span className="text-xs opacity-70">({project.pendingInvoicesCount} factures)</span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1 ml-0.5">
+              {project.recentInvoices.map((inv) => {
+                const label = inv.status === 'paid' ? 'Payée'
+                  : inv.status === 'partial' ? 'Partiel'
+                  : inv.status === 'sent' && inv.reminderCount >= 2 ? `${inv.reminderCount}e rappel`
+                  : inv.status === 'sent' && inv.reminderCount === 1 ? '1er rappel'
+                  : inv.status === 'sent' ? 'Envoyée'
+                  : 'Brouillon';
+                const color = inv.status === 'paid' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                  : inv.status === 'partial' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                  : inv.reminderCount > 0 ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                  : inv.status === 'sent' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                  : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400';
+                return (
+                  <button
+                    key={inv._id}
+                    onClick={(e) => { e.stopPropagation(); onInvoiceClick?.(project); }}
+                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer hover:opacity-75 transition-opacity ${color}`}
+                  >
+                    {inv.number?.replace('FAC-', '') || '—'} · {label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
 
@@ -313,6 +353,46 @@ export default function ProjectCard({
                         </div>
                         <span className="text-violet-600 dark:text-violet-400 font-medium ml-2">
                           {formatCurrency(quote.total)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Recent Invoices */}
+              {project.recentInvoices && project.recentInvoices.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+                    <Receipt className="w-3 h-3" />
+                    Factures en cours
+                  </div>
+                  <div className="space-y-1.5">
+                    {project.recentInvoices.map((invoice) => (
+                      <div
+                        key={invoice._id}
+                        className="flex items-center justify-between text-xs bg-emerald-50 dark:bg-emerald-900/20 rounded-lg px-2.5 py-2"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-slate-700 dark:text-slate-300 font-medium">
+                            {invoice.number}
+                          </p>
+                          <p className="text-slate-400 dark:text-slate-500 text-[10px]">
+                            {format(new Date(invoice.issueDate), 'dd MMM', { locale: fr })}
+                            {' • '}
+                            <span className={`
+                              ${invoice.status === 'sent' ? 'text-blue-500' : ''}
+                              ${invoice.status === 'draft' ? 'text-slate-400' : ''}
+                              ${invoice.status === 'partial' ? 'text-amber-500' : ''}
+                            `}>
+                              {invoice.status === 'sent' && 'Envoyée'}
+                              {invoice.status === 'draft' && 'Brouillon'}
+                              {invoice.status === 'partial' && 'Partiel'}
+                            </span>
+                          </p>
+                        </div>
+                        <span className="text-emerald-600 dark:text-emerald-400 font-medium ml-2">
+                          {formatCurrency(invoice.total)}
                         </span>
                       </div>
                     ))}

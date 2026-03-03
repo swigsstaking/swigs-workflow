@@ -30,6 +30,19 @@ const customLineSchema = new mongoose.Schema({
     required: true,
     min: 0
   },
+  discountType: {
+    type: String,
+    enum: ['percentage', 'fixed']
+  },
+  discountValue: {
+    type: Number,
+    min: 0
+  },
+  discount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
   total: {
     type: Number,
     required: true,
@@ -41,6 +54,9 @@ const invoiceQuoteLineSchema = new mongoose.Schema({
   description: String,
   quantity: Number,
   unitPrice: Number,
+  discountType: String,
+  discountValue: Number,
+  discount: { type: Number, default: 0 },
   total: Number
 }, { _id: false });
 

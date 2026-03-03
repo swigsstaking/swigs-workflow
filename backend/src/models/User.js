@@ -31,6 +31,11 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  calendarToken: {
+    type: String,
+    unique: true,
+    sparse: true
+  },
   preferences: {
     theme: {
       type: String,

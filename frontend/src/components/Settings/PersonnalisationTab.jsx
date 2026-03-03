@@ -1,4 +1,4 @@
-import { Square, RectangleHorizontal, Maximize2, User } from 'lucide-react';
+import { Square, RectangleHorizontal, Maximize2, User, LayoutGrid, List } from 'lucide-react';
 import { useUIStore } from '../../stores/uiStore';
 
 const cardStyles = [
@@ -23,6 +23,21 @@ const cardSizes = [
   { id: 'small', label: 'Petit', icon: Square },
   { id: 'medium', label: 'Moyen', icon: RectangleHorizontal },
   { id: 'large', label: 'Grand', icon: Maximize2 }
+];
+
+const viewModes = [
+  {
+    id: 'grid',
+    label: 'Grille',
+    description: 'Cartes en grille responsive',
+    icon: LayoutGrid
+  },
+  {
+    id: 'list',
+    label: 'Liste',
+    description: 'Lignes avec colonnes d\'info',
+    icon: List
+  }
 ];
 
 function CardPreview({ style, size }) {
@@ -83,14 +98,116 @@ function CardPreview({ style, size }) {
   );
 }
 
+function ViewModePreview({ mode, style }) {
+  if (mode === 'grid') {
+    return (
+      <div className="grid grid-cols-3 gap-2">
+        {[1, 2, 3].map(i => (
+          <CardPreview key={i} style={style} size="small" />
+        ))}
+      </div>
+    );
+  }
+
+  if (mode === 'list') {
+    return (
+      <div className="flex flex-col gap-1">
+        {[
+          { name: 'Site e-commerce', amount: 'CHF 2\'400', status: 'En cours' },
+          { name: 'App mobile', amount: 'CHF 800', status: 'En attente' },
+          { name: 'Refonte logo', amount: 'CHF 350', status: 'Terminé' }
+        ].map((item, i) => (
+          <div
+            key={i}
+            className="flex items-center justify-between bg-white dark:bg-dark-card rounded-lg px-3 py-2 border border-slate-200 dark:border-dark-border shadow-sm"
+            style={style === 'left-border' ? { borderLeftColor: '#3B82F6', borderLeftWidth: '4px' } : {}}
+          >
+            <span className="text-xs font-medium text-slate-900 dark:text-white">{item.name}</span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">{item.amount}</span>
+              <span
+                className="px-1.5 py-0.5 rounded-full text-[10px] font-medium"
+                style={{ backgroundColor: '#3B82F620', color: '#3B82F6' }}
+              >
+                {item.status}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // compact
+  return (
+    <div className="grid grid-cols-4 gap-1.5">
+      {[1, 2, 3, 4].map(i => (
+        <CardPreview key={i} style={style} size="small" />
+      ))}
+    </div>
+  );
+}
+
 export default function PersonnalisationTab() {
-  const { cardStyle, cardSize, setCardStyle, setCardSize } = useUIStore();
+  const { cardStyle, cardSize, viewMode, setCardStyle, setCardSize, setViewMode } = useUIStore();
 
   const currentStyle = cardStyle || 'left-border';
   const currentSize = cardSize || 'medium';
+  const currentViewMode = viewMode || 'grid';
 
   return (
     <div className="space-y-8">
+      {/* View Mode Selection */}
+      <div className="bg-white dark:bg-dark-card rounded-xl border border-slate-200 dark:border-dark-border p-6">
+        <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+          Mode d'affichage
+        </h3>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+          Choisissez comment les projets sont affichés dans le workflow.
+        </p>
+
+        <div className="flex gap-4 mb-6">
+          {viewModes.map(mode => {
+            const Icon = mode.icon;
+            return (
+              <button
+                key={mode.id}
+                onClick={() => setViewMode(mode.id)}
+                className={`
+                  flex-1 flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all
+                  ${currentViewMode === mode.id
+                    ? 'border-primary-600 bg-primary-50 dark:bg-primary-900/20'
+                    : 'border-slate-200 dark:border-dark-border hover:border-slate-300 dark:hover:border-dark-hover'
+                  }
+                `}
+              >
+                <Icon className={`w-7 h-7 ${
+                  currentViewMode === mode.id ? 'text-primary-600' : 'text-slate-400 dark:text-slate-500'
+                }`} />
+                <div className="text-center">
+                  <div className={`text-sm font-medium ${
+                    currentViewMode === mode.id ? 'text-primary-600' : 'text-slate-600 dark:text-slate-400'
+                  }`}>
+                    {mode.label}
+                  </div>
+                  <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                    {mode.description}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Preview */}
+        <div className="bg-slate-50 dark:bg-dark-bg rounded-lg p-6">
+          <p className="text-xs text-slate-400 dark:text-slate-500 mb-3 uppercase tracking-wide">
+            Aperçu
+          </p>
+          <ViewModePreview mode={currentViewMode} style={currentStyle} />
+        </div>
+      </div>
+
       {/* Card Style Selection */}
       <div className="bg-white dark:bg-dark-card rounded-xl border border-slate-200 dark:border-dark-border p-6">
         <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
@@ -139,9 +256,14 @@ export default function PersonnalisationTab() {
         <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
           Taille des cartes
         </h3>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
           Ajustez la taille des cartes selon vos préférences.
         </p>
+        {currentViewMode === 'list' && (
+          <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2 mb-4">
+            La taille des cartes ne s'applique pas au mode liste.
+          </p>
+        )}
 
         <div className="flex gap-4">
           {cardSizes.map(size => {
