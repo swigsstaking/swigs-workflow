@@ -19,13 +19,11 @@ async function getComptaPlusStatus(hubUserId) {
   if (cached && cached.expiresAt > Date.now()) return cached.result;
 
   try {
-    const res = await fetch(`${HUB_URL}/api/subscriptions/check`, {
-      method: 'POST',
+    const params = new URLSearchParams({ userId: hubUserId, productSlug: 'compta-plus' });
+    const res = await fetch(`${HUB_URL}/api/subscriptions/check?${params}`, {
       headers: {
-        'Content-Type': 'application/json',
         'X-App-Secret': APP_SECRET
-      },
-      body: JSON.stringify({ hubUserId, slug: 'compta-plus' })
+      }
     });
 
     if (!res.ok) {
