@@ -35,7 +35,7 @@
         </div>
       {{/if}}
       <div class="company-meta">
-        {{#if design.showSiret}}{{#if company.siret}}<span>IDE/SIRET: {{company.siret}}</span>{{/if}}{{/if}}
+        {{#if design.showSiret}}{{#if company.siret}}<span>N° IDE: {{company.siret}}</span>{{/if}}{{/if}}
         {{#if design.showVatNumber}}{{#if company.vatNumber}}<span>N° TVA: {{company.vatNumber}}</span>{{/if}}{{/if}}
         {{#if design.showIban}}{{#if company.iban}}<span>IBAN: {{company.iban}}</span>{{/if}}{{/if}}
       </div>
@@ -54,7 +54,7 @@
     <div class="reminder-notice-title">{{document.reminderLabel}}</div>
     <div class="reminder-notice-text">
       Malgré notre relance, la facture <strong>{{document.originalNumber}}</strong> d'un montant de
-      <strong>{{formatCurrency totals.total}}</strong> reste impayée.
+      <strong>{{formatCurrency totals.outstandingAmount}}</strong> reste impayée.
       Elle était due le <strong>{{formatDate document.originalDueDate}}</strong>,
       soit un retard de <strong>{{document.daysOverdue}} jours</strong>.
     </div>
@@ -147,9 +147,25 @@
         <span class="value">{{formatCurrency totals.vatAmount}}</span>
       </div>
       {{/if}}
-      <div class="totals-row total-final">
-        <span class="label">{{#if totals.vatRate}}Total TTC{{else}}Total{{/if}}</span>
+      <div class="totals-row">
+        <span class="label">{{#if totals.vatRate}}Total TTC facture{{else}}Total facture{{/if}}</span>
         <span class="value">{{formatCurrency totals.total}}</span>
+      </div>
+      {{#if totals.paidAmount}}
+      <div class="totals-row">
+        <span class="label">Déjà payé</span>
+        <span class="value">- {{formatCurrency totals.paidAmount}}</span>
+      </div>
+      {{/if}}
+      {{#if totals.moratoireInterest}}
+      <div class="totals-row">
+        <span class="label">Intérêts moratoires 5% ({{document.daysOverdue}} j., art. 104 CO)</span>
+        <span class="value">{{formatCurrency totals.moratoireInterest}}</span>
+      </div>
+      {{/if}}
+      <div class="totals-row total-final">
+        <span class="label">Montant dû</span>
+        <span class="value">{{formatCurrency totals.totalWithInterest}}</span>
       </div>
     </div>
   </div>

@@ -23,9 +23,6 @@ import serviceRoutes from './src/routes/services.js';
 import serviceCategoryRoutes from './src/routes/serviceCategories.js';
 import authRoutes from './src/routes/auth.js';
 import dashboardRoutes from './src/routes/dashboard.js';
-import automationRoutes from './src/routes/automations.js';
-import automationRunRoutes from './src/routes/automationRuns.js';
-import emailTemplateRoutes from './src/routes/emailTemplates.js';
 import portalRoutes from './src/routes/portal.js';
 import exportRoutes from './src/routes/exports.js';
 import reminderRoutes from './src/routes/reminders.js';
@@ -41,7 +38,6 @@ import Invoice from './src/models/Invoice.js';
 import { errorHandler } from './src/middleware/errorHandler.js';
 import { requireAuth } from './src/middleware/auth.js';
 import { requireComptaPlus, checkComptaPlus } from './src/middleware/requireComptaPlus.js';
-import { initializeAutomationServices } from './src/services/automation/index.js';
 import { initEventBus, eventBus } from './src/services/eventBus.service.js';
 import { initialize as initReminders } from './src/services/reminder.service.js';
 import { initBankImapCron } from './src/services/bankImapFetcher.service.js';
@@ -216,11 +212,6 @@ app.use('/api/analytics', requireAuth, analyticsRoutes);
 app.use('/api/services', requireAuth, serviceRoutes);
 app.use('/api/service-categories', requireAuth, serviceCategoryRoutes);
 
-// Automation routes (protected)
-app.use('/api/automations', requireAuth, automationRoutes);
-app.use('/api/automation-runs', requireAuth, automationRunRoutes);
-app.use('/api/email-templates', requireAuth, emailTemplateRoutes);
-
 // Portal routes (mix of public and private routes)
 app.use('/api/portal', portalRoutes);
 
@@ -285,9 +276,6 @@ mongoose.connect(process.env.MONGODB_URI, mongoOptions)
 
     // Sync invoice counter (migrates per-user counters to global)
     await Invoice.syncCounter();
-
-    // Initialize automation services after DB connection
-    initializeAutomationServices();
 
     // Initialize Event Bus connection to Hub
     await initEventBus();

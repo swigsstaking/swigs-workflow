@@ -3,8 +3,23 @@ import { XMLParser } from 'fast-xml-parser';
 const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: '@_',
-  isArray: (name) => ['Ntry', 'TxDtls', 'Stmt', 'Ntfctn'].includes(name)
+  isArray: (name) => ['Ntry', 'TxDtls', 'Stmt', 'Ntfctn', 'Bal'].includes(name)
 });
+
+/**
+ * Safely extract a numeric amount from a camt Amt field.
+ * Handles: plain number, string, or { '#text': ..., '@_Ccy': ... } object.
+ */
+function parseAmt(amt) {
+  if (amt == null) return 0;
+  if (typeof amt === 'number') return amt;
+  if (typeof amt === 'string') return parseFloat(amt) || 0;
+  if (typeof amt === 'object') {
+    const text = amt['#text'] ?? amt['#text:'] ?? Object.values(amt).find(v => typeof v === 'string' || typeof v === 'number');
+    return parseFloat(text) || 0;
+  }
+  return 0;
+}
 
 /**
  * Parse camt.053 or camt.054 XML buffer
@@ -63,7 +78,7 @@ function extractStatementInfo(stmt, fileType) {
     const balances = Array.isArray(stmt.Bal) ? stmt.Bal : [stmt.Bal];
     for (const bal of balances) {
       const type = bal.Tp?.CdOrPrtry?.Cd;
-      const amount = parseFloat(bal.Amt?.['#text'] || bal.Amt || 0);
+      const amount = parseAmt(bal.Amt);
       const creditDebit = bal.CdtDbtInd;
       const value = creditDebit === 'DBIT' ? -amount : amount;
 
@@ -81,7 +96,7 @@ function extractStatementInfo(stmt, fileType) {
 }
 
 function extractTransaction(entry) {
-  const amount = parseFloat(entry.Amt?.['#text'] || entry.Amt || 0);
+  const amount = parseAmt(entry.Amt);
   if (!amount) return null;
 
   const creditDebit = entry.CdtDbtInd; // CRDT or DBIT
@@ -94,8 +109,9 @@ function extractTransaction(entry) {
   const txDtls = entry.NtryDtls?.TxDtls;
   const detail = Array.isArray(txDtls) ? txDtls[0] : txDtls;
 
-  // Transaction ID
-  const txId = detail?.Refs?.EndToEndId || detail?.Refs?.InstrId || entry.NtryRef || null;
+  // Transaction ID — filter out placeholder values
+  const rawTxId = detail?.Refs?.EndToEndId || detail?.Refs?.InstrId || entry.NtryRef || null;
+  const txId = rawTxId && rawTxId !== 'NOTPROVIDED' ? rawTxId : `${bookingDate}_${amount}_${creditDebit}_${Date.now()}`;
 
   // Counterparty
   let counterpartyName = null;

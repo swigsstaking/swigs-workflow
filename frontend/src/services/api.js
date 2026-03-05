@@ -92,7 +92,9 @@ export const invoicesApi = {
   send: (id) => api.post(`/invoices/${id}/send`),
   getPdf: (id) => api.get(`/invoices/${id}/pdf`, { responseType: 'blob' }),
   recordPayment: (id, data) => api.post(`/invoices/${id}/payments`, data),
-  getEditData: (id) => api.get(`/invoices/${id}/edit-data`)
+  getEditData: (id) => api.get(`/invoices/${id}/edit-data`),
+  getHash: (id) => api.get(`/invoices/${id}/hash`),
+  createCreditNote: (id, data) => api.post(`/invoices/${id}/credit-note`, data)
 };
 
 // Quotes
@@ -167,7 +169,11 @@ export const analyticsApi = {
   // Compta Plus
   getExpenses: (params) => api.get('/analytics/expenses', { params }),
   getProfitLoss: (params) => api.get('/analytics/profitloss', { params }),
-  getVatDetail: (params) => api.get('/analytics/vat-detail', { params })
+  getVatDetail: (params) => api.get('/analytics/vat-detail', { params }),
+  // Drill-down detail endpoints
+  getProfitLossDetail: (year, month, params) => api.get(`/analytics/profitloss/${year}/${month}/detail`, { params }),
+  getExpenseCategoryDetail: (categoryId, params) => api.get(`/analytics/expenses/${categoryId}/detail`, { params }),
+  getVatQuarterDetail: (quarter, params) => api.get(`/analytics/vat-detail/${quarter}/detail`, { params })
 };
 
 // Services

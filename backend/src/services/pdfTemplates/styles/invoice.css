@@ -1693,6 +1693,10 @@ body.template-envelope {
   --radius: 0px;
 }
 
+body.template-envelope .page {
+  position: relative;
+}
+
 /* Header: company on the RIGHT, doc title on the LEFT */
 body.template-envelope .doc-header {
   flex-direction: row-reverse;
@@ -1752,21 +1756,18 @@ body.template-envelope .doc-status {
   display: none;
 }
 
-/* Sender return line — visible in envelope template */
+/* Sender return line — hidden in envelope template */
 body.template-envelope .envelope-sender-line {
-  display: block;
-  font-size: 6.5pt;
-  color: #888;
-  text-decoration: underline;
-  margin-bottom: 2mm;
-  line-height: 1.2;
+  display: none;
 }
 
-/* Info row — client LEFT (envelope window zone) + dates RIGHT */
+/* Info row — client positioned for envelope window, dates RIGHT */
 body.template-envelope .info-row {
   margin-bottom: 8mm;
   border-bottom: 1px solid #e8e8e8;
   padding-bottom: 5mm;
+  justify-content: flex-end;
+  min-height: 35mm;
 }
 
 body.template-envelope .info-block {
@@ -1777,11 +1778,16 @@ body.template-envelope .info-block {
   border-radius: 0;
 }
 
-/* Client block: fixed 90mm (Swiss envelope window width) */
+/* Client block: absolute position for Swiss DL/C5 envelope window (SN 010130) */
+/* Window: ~50mm from paper top, ~20mm from paper left, ~90mm wide */
 body.template-envelope .info-block:first-child {
-  flex: none !important;
-  width: 90mm;
+  position: absolute;
+  top: 35mm;
+  left: 8mm;
+  width: 85mm;
   min-height: 25mm;
+  z-index: 1;
+  background: #ffffff;
 }
 
 /* Hide "Destinataire" title for envelope — address speaks for itself */
@@ -1795,9 +1801,10 @@ body.template-envelope .info-block-content {
   line-height: 1.7;
 }
 
-/* Dates block (second info-block) */
+/* Dates block — in flow on the right */
 body.template-envelope .info-block:last-child {
-  padding-top: 6mm;
+  flex: 0 0 auto;
+  padding-top: 0;
 }
 
 body.template-envelope .info-block-title {

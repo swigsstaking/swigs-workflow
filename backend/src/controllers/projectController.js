@@ -6,7 +6,8 @@ import Event from '../models/Event.js';
 import Quote from '../models/Quote.js';
 import Invoice from '../models/Invoice.js';
 import { historyService } from '../services/historyService.js';
-import { fireInternalTrigger } from '../services/automation/triggerService.js';
+
+import { eventBus } from '../services/eventBus.service.js';
 
 const CLIENT_SYNC_FIELDS = ['name', 'email', 'phone', 'address', 'street', 'zip', 'city', 'country', 'che', 'company', 'siret'];
 
@@ -492,12 +493,13 @@ export const createProject = async (req, res, next) => {
     // Log history
     await historyService.projectCreated(project._id, name);
 
-    // Fire automation trigger (non-blocking)
-    fireInternalTrigger('project.created', {
+    // Publish to Hub Event Bus for cross-app automations
+    eventBus.publish('project.created', {
       projectId: project._id.toString(),
       projectName: project.name,
-      client: project.client
-    }, req.user?._id).catch(() => {});
+      client: project.client,
+      hubUserId: req.user?.hubUserId || null
+    }).catch(() => {});
 
     res.status(201).json({ success: true, data: project });
   } catch (error) {
@@ -594,15 +596,6 @@ export const changeStatus = async (req, res, next) => {
     // Log history
     await historyService.statusChanged(project._id, oldStatusName, newStatus.name);
 
-    // Fire automation trigger (non-blocking)
-    fireInternalTrigger('project.status_changed', {
-      projectId: project._id.toString(),
-      projectName: project.name,
-      oldStatus: oldStatusName,
-      newStatus: newStatus.name,
-      client: project.client
-    }, req.user?._id).catch(() => {});
-
     res.json({ success: true, data: project });
   } catch (error) {
     next(error);
@@ -630,13 +623,6 @@ export const archiveProject = async (req, res, next) => {
 
     // Log history
     await historyService.projectArchived(project._id);
-
-    // Fire automation trigger (non-blocking)
-    fireInternalTrigger('project.archived', {
-      projectId: project._id.toString(),
-      projectName: project.name,
-      client: project.client
-    }, req.user?._id).catch(() => {});
 
     res.json({ success: true, data: project });
   } catch (error) {

@@ -8,11 +8,11 @@ const bankImportSchema = new mongoose.Schema({
   },
   filename: {
     type: String,
-    required: true
+    default: ''
   },
   fileType: {
     type: String,
-    enum: ['camt.053', 'camt.054', 'email_notification'],
+    enum: ['camt.053', 'camt.054', 'email_notification', 'manual', 'csv'],
     required: true
   },
   totalTransactions: {

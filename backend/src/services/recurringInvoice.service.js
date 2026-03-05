@@ -5,7 +5,8 @@ import Project from '../models/Project.js';
 import Settings from '../models/Settings.js';
 import { generateInvoicePDF } from './pdf.service.js';
 import { sendInvoiceEmail } from './email.service.js';
-import { fireInternalTrigger } from './automation/triggerService.js';
+
+import { eventBus } from './eventBus.service.js';
 
 /**
  * Calculate the next generation date based on frequency and dayOfMonth
@@ -148,27 +149,30 @@ export const generateInvoiceFromRecurring = async (recurring) => {
     }
   }
 
-  // Fire automation trigger (non-blocking)
-  fireInternalTrigger('invoice.created', {
+  // Publish to Hub Event Bus for cross-app automations
+  eventBus.publish('invoice.created', {
     invoiceId: invoice._id.toString(),
     invoiceNumber: invoice.number,
     projectId: project._id.toString(),
     projectName: project.name,
     total: invoice.total,
     client: project.client,
-    isRecurring: true
-  }, recurring.userId).catch(() => {});
+    isRecurring: true,
+    hubUserId: null
+  }).catch(() => {});
 
   if (recurring.autoSend && invoice.status === 'sent') {
-    fireInternalTrigger('invoice.sent', {
+    // Publish to Hub Event Bus for cross-app automations
+    eventBus.publish('invoice.sent', {
       invoiceId: invoice._id.toString(),
       invoiceNumber: invoice.number,
       projectId: project._id.toString(),
       projectName: project.name,
       total: invoice.total,
       client: project.client,
-      isAutoSent: true
-    }, recurring.userId).catch(() => {});
+      isAutoSent: true,
+      hubUserId: null
+    }).catch(() => {});
   }
 
   return invoice;
@@ -219,24 +223,39 @@ export const processRecurringInvoices = async () => {
   }
 };
 
-let isRunning = false;
-
 /**
- * Initialize recurring invoice cron job
+ * Initialize recurring invoice cron job.
+ * Uses MongoDB atomic lock so only one PM2 instance runs the generation.
  */
 export const initRecurringInvoices = () => {
-  // Run every day at 6:00 AM
   cron.schedule('0 6 * * *', async () => {
-    if (isRunning) {
-      console.log('[RecurringInvoice] Skipping — previous run still active');
-      return;
-    }
-    isRunning = true;
+    const lockId = 'recurring-invoice-cron';
+    const lockExpiry = 10 * 60 * 1000; // 10 min max
+
     try {
+      const lock = await Settings.findOneAndUpdate(
+        {
+          _lockId: lockId,
+          $or: [
+            { _lockExpiresAt: { $exists: false } },
+            { _lockExpiresAt: { $lt: new Date() } }
+          ]
+        },
+        { $set: { _lockId: lockId, _lockExpiresAt: new Date(Date.now() + lockExpiry) } },
+        { upsert: true, returnDocument: 'after' }
+      ).catch(() => null);
+
+      if (!lock) {
+        console.log('[RecurringInvoice] Skipping — another instance holds the lock');
+        return;
+      }
+
       console.log('Running daily recurring invoice generation at 6:00 AM');
       await processRecurringInvoices();
+    } catch (err) {
+      console.error('[RecurringInvoice] Cron error:', err.message);
     } finally {
-      isRunning = false;
+      await Settings.deleteOne({ _lockId: lockId }).catch(() => {});
     }
   });
 

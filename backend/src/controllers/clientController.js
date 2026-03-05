@@ -1,6 +1,7 @@
 import Client from '../models/Client.js';
 import Project from '../models/Project.js';
-import { fireInternalTrigger } from '../services/automation/triggerService.js';
+
+import { eventBus } from '../services/eventBus.service.js';
 
 // Fields to sync between Client and Project.client embedded
 const CLIENT_SYNC_FIELDS = ['name', 'email', 'phone', 'address', 'street', 'zip', 'city', 'country', 'che', 'company', 'siret'];
@@ -72,13 +73,14 @@ export const createClient = async (req, res, next) => {
       notes
     });
 
-    // Fire automation trigger (non-blocking)
-    fireInternalTrigger('client.created', {
+    // Publish to Hub Event Bus for cross-app automations
+    eventBus.publish('client.created', {
       clientId: client._id.toString(),
       clientName: client.name,
       email: client.email,
-      company: client.company || client.name
-    }, req.user?._id).catch(() => {});
+      company: client.company || client.name,
+      hubUserId: req.user?.hubUserId || null
+    }).catch(() => {});
 
     res.status(201).json({ success: true, data: client });
   } catch (error) {
@@ -121,13 +123,14 @@ export const updateClient = async (req, res, next) => {
       );
     }
 
-    // Fire automation trigger (non-blocking)
-    fireInternalTrigger('client.updated', {
+    // Publish to Hub Event Bus for cross-app automations
+    eventBus.publish('client.updated', {
       clientId: client._id.toString(),
       clientName: client.name,
       email: client.email,
-      changedFields: Object.keys(req.body)
-    }, req.user?._id).catch(() => {});
+      changedFields: Object.keys(req.body),
+      hubUserId: req.user?.hubUserId || null
+    }).catch(() => {});
 
     res.json({ success: true, data: client });
   } catch (error) {

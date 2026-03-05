@@ -761,7 +761,7 @@ export default function InvoiceDesignTab({ settings, onSettingsUpdate }) {
                   <ToggleItem label="Adresse"          checked={formData.showCompanyAddress} onChange={(v) => updateField('showCompanyAddress', v)} />
                   <ToggleItem label="Email / Téléphone" checked={formData.showCompanyContact} onChange={(v) => updateField('showCompanyContact', v)} />
                   <ToggleItem label="Numéro TVA"       checked={formData.showVatNumber}      onChange={(v) => updateField('showVatNumber', v)} />
-                  <ToggleItem label="Numéro IDE / SIRET" checked={formData.showSiret}        onChange={(v) => updateField('showSiret', v)} />
+                  <ToggleItem label="N° IDE" checked={formData.showSiret}        onChange={(v) => updateField('showSiret', v)} />
                   <ToggleItem label="IBAN"             checked={formData.showIban}           onChange={(v) => updateField('showIban', v)} />
                 </div>
               </div>

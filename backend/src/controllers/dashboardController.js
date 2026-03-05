@@ -3,6 +3,10 @@ import Quote from '../models/Quote.js';
 import Event from '../models/Event.js';
 import Project from '../models/Project.js';
 import Settings from '../models/Settings.js';
+import BankTransaction from '../models/BankTransaction.js';
+import BankImport from '../models/BankImport.js';
+import ExpenseCategory from '../models/ExpenseCategory.js';
+import RecurringCharge from '../models/RecurringCharge.js';
 
 // Helper: Get user's project IDs
 const getUserProjectIds = async (userId) => {
@@ -99,6 +103,111 @@ export const getDashboard = async (req, res, next) => {
         { $group: { _id: null, total: { $sum: '$vatAmount' } } }
       ])
     ]);
+
+    // --- Compta Plus: conditional accounting queries ---
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const yearStart = new Date(now.getFullYear(), 0, 1);
+    const userId = req.user._id;
+
+    let accountingData = null;
+    if (req.hasComptaPlus) {
+      const [expenseAgg, revenueAgg, uncategorizedAgg, budgetCategories, lastImport, expensesYtdAgg, revenueYtdAgg, activeRecurring] = await Promise.all([
+        // Expenses MTD
+        BankTransaction.aggregate([
+          { $match: { userId, creditDebit: 'DBIT', bookingDate: { $gte: monthStart } } },
+          { $group: { _id: null, total: { $sum: '$amount' } } }
+        ]),
+        // Revenue MTD (paid invoices this month)
+        Invoice.aggregate([
+          { $match: { ...projectFilter, status: { $nin: ['cancelled'] }, paidAt: { $gte: monthStart } } },
+          { $group: { _id: null, total: { $sum: '$total' } } }
+        ]),
+        // Uncategorized DBIT count
+        BankTransaction.countDocuments({ userId, creditDebit: 'DBIT', expenseCategory: null }),
+        // Categories with budgets
+        ExpenseCategory.find({ userId, budgetMonthly: { $gt: 0 } }).lean(),
+        // Last bank import
+        BankImport.findOne({ userId }).sort({ createdAt: -1 }).lean(),
+        // Expenses YTD
+        BankTransaction.aggregate([
+          { $match: { userId, creditDebit: 'DBIT', bookingDate: { $gte: yearStart } } },
+          { $group: { _id: null, total: { $sum: '$amount' } } }
+        ]),
+        // Revenue YTD (paid invoices this year)
+        Invoice.aggregate([
+          { $match: { ...projectFilter, status: { $nin: ['cancelled'] }, paidAt: { $gte: yearStart } } },
+          { $group: { _id: null, total: { $sum: '$total' } } }
+        ]),
+        // Active recurring charges
+        RecurringCharge.find({ userId, isActive: true })
+          .populate({ path: 'expenseCategory', select: 'name color' })
+          .sort({ expectedAmount: -1 })
+          .lean()
+      ]);
+
+      const expensesMtd = expenseAgg[0]?.total || 0;
+      const revenueMtd = revenueAgg[0]?.total || 0;
+      const expensesYtd = expensesYtdAgg[0]?.total || 0;
+      const revenueYtd = revenueYtdAgg[0]?.total || 0;
+      const profitMtd = revenueMtd - expensesMtd;
+      const profitMarginYtd = revenueYtd > 0
+        ? Math.round((revenueYtd - expensesYtd) / revenueYtd * 1000) / 10
+        : null;
+
+      // Budget alerts: query spend per category this month
+      let budgetAlerts = [];
+      if (budgetCategories.length > 0) {
+        const categoryIds = budgetCategories.map(c => c._id);
+        const spendByCat = await BankTransaction.aggregate([
+          { $match: { userId, creditDebit: 'DBIT', bookingDate: { $gte: monthStart }, expenseCategory: { $in: categoryIds } } },
+          { $group: { _id: '$expenseCategory', spent: { $sum: '$amount' } } }
+        ]);
+        const spendMap = new Map(spendByCat.map(s => [String(s._id), s.spent]));
+        budgetAlerts = budgetCategories
+          .map(cat => {
+            const spent = spendMap.get(String(cat._id)) || 0;
+            const percent = Math.round(spent / cat.budgetMonthly * 100);
+            return { categoryName: cat.name, categoryColor: cat.color, spent, budget: cat.budgetMonthly, percent };
+          })
+          .filter(a => a.percent >= 80)
+          .sort((a, b) => b.percent - a.percent);
+      }
+
+      // Recurring charges summary
+      const recurringEstimatedMonthly = activeRecurring.reduce((sum, c) => {
+        if (c.frequency === 'monthly') return sum + c.expectedAmount;
+        if (c.frequency === 'quarterly') return sum + c.expectedAmount / 3;
+        if (c.frequency === 'yearly') return sum + c.expectedAmount / 12;
+        return sum;
+      }, 0);
+
+      accountingData = {
+        expensesMtd,
+        expensesYtd,
+        revenueMtd,
+        revenueYtd,
+        profitMtd,
+        profitMarginYtd,
+        uncategorizedCount: uncategorizedAgg,
+        budgetAlerts,
+        lastBankBalance: lastImport ? {
+          amount: lastImport.statementClosingBalance,
+          iban: lastImport.statementIban,
+          date: lastImport.createdAt
+        } : null,
+        recurringCharges: {
+          count: activeRecurring.length,
+          estimatedMonthly: Math.round(recurringEstimatedMonthly * 100) / 100,
+          topCharges: activeRecurring.slice(0, 5).map(c => ({
+            name: c.counterpartyName,
+            amount: c.expectedAmount,
+            frequency: c.frequency,
+            categoryName: c.expenseCategory?.name || null,
+            categoryColor: c.expenseCategory?.color || null
+          }))
+        }
+      };
+    }
 
     // --- Compute dashboard sections ---
 
@@ -332,8 +441,8 @@ export const getDashboard = async (req, res, next) => {
     }
     recentReminders.sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt));
 
-    // 10. Overdue totals
-    const totalOverdue = overdueInvoices.reduce((sum, inv) => sum + inv.total, 0);
+    // 10. Overdue totals (subtract partial payments)
+    const totalOverdue = overdueInvoices.reduce((sum, inv) => sum + (inv.total - (inv.paidAmount || 0)), 0);
     const overdueCount = overdueInvoices.length;
 
     res.json({
@@ -349,7 +458,14 @@ export const getDashboard = async (req, res, next) => {
           pendingQuotesTotal: pendingQuotes.reduce((sum, q) => sum + q.total, 0),
           globalAvgPaymentDays,
           vatCollected: vatAgg[0]?.total || 0,
-          vatQuarter: quarterLabel
+          vatQuarter: quarterLabel,
+          ...(accountingData ? {
+            expensesMtd: accountingData.expensesMtd,
+            expensesYtd: accountingData.expensesYtd,
+            uncategorizedCount: accountingData.uncategorizedCount,
+            profitMtd: accountingData.profitMtd,
+            revenueMtd: accountingData.revenueMtd,
+          } : {})
         },
         criticalOverdue: criticalOverdue.slice(0, 10).map(inv => ({
           _id: inv._id,
@@ -388,7 +504,15 @@ export const getDashboard = async (req, res, next) => {
           company: q.project?.client?.company || '',
           sentAt: q.updatedAt,
           projectId: q.project?._id || null
-        }))
+        })),
+        accounting: accountingData ? {
+          budgetAlerts: accountingData.budgetAlerts,
+          lastBankBalance: accountingData.lastBankBalance,
+          profitMarginYtd: accountingData.profitMarginYtd,
+          revenueYtd: accountingData.revenueYtd,
+          expensesYtd: accountingData.expensesYtd,
+          recurringCharges: accountingData.recurringCharges,
+        } : null
       }
     });
   } catch (error) {

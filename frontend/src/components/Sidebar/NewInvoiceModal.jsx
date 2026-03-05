@@ -106,7 +106,8 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
                   quantity: l.quantity || 1,
                   unitPrice: l.unitPrice || 0,
                   discountType: l.discountType || '',
-                  discountValue: l.discountValue || 0
+                  discountValue: l.discountValue || 0,
+                  vatRate: l.vatRate != null ? l.vatRate : null
                 }))
               : [{ description: '', quantity: 1, unitPrice: 0, discountType: '', discountValue: 0 }]
           );
@@ -360,7 +361,8 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
             quantity: parseFloat(line.quantity) || 1,
             unitPrice: parseFloat(line.unitPrice) || 0,
             discountType: line.discountType || undefined,
-            discountValue: line.discountValue || undefined
+            discountValue: line.discountValue || undefined,
+            vatRate: line.vatRate != null ? line.vatRate : undefined
           }));
           payload.discountType = discountType || undefined;
           payload.discountValue = discountValue ? parseFloat(discountValue) : undefined;
@@ -432,7 +434,8 @@ export default function NewInvoiceModal({ project, isOpen, onClose, preselectedQ
             quantity: parseFloat(line.quantity) || 1,
             unitPrice: parseFloat(line.unitPrice) || 0,
             discountType: line.discountType || undefined,
-            discountValue: line.discountValue || undefined
+            discountValue: line.discountValue || undefined,
+            vatRate: line.vatRate != null ? line.vatRate : undefined
           })),
           discountType: discountType || undefined,
           discountValue: discountValue ? parseFloat(discountValue) : undefined,

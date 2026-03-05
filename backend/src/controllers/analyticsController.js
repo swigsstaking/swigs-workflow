@@ -6,6 +6,7 @@ import Project from '../models/Project.js';
 import Status from '../models/Status.js';
 import BankTransaction from '../models/BankTransaction.js';
 import ExpenseCategory from '../models/ExpenseCategory.js';
+import { projectCharges } from '../services/chargeProjection.service.js';
 
 // Helper: Get date range for a month
 const getMonthRange = (year, month) => {
@@ -24,13 +25,78 @@ const getYearRange = (year) => {
 // Helper: French month names
 const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
 
+/**
+ * Helper: compute date range from `period` query param.
+ * - 'year' (default) → Jan 1 to Dec 31 of current year
+ * - 'rolling'        → 12 months rolling window
+ */
+function getAnalyticsPeriod(period) {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  if (period === 'rolling') {
+    return {
+      start: new Date(currentYear, now.getMonth() - 11, 1),
+      end: new Date(currentYear, now.getMonth() + 1, 0, 23, 59, 59, 999),
+      label: '12 derniers mois'
+    };
+  }
+  // Default: current year
+  return {
+    start: new Date(currentYear, 0, 1),
+    end: new Date(currentYear, 11, 31, 23, 59, 59, 999),
+    label: `${currentYear}`
+  };
+}
+
+/**
+ * Helper: get the revenue date field and match filter based on revenueMode.
+ * - 'invoiced' (default) → issueDate, status != cancelled
+ * - 'paid'               → paidAt, status = paid
+ */
+function getRevenueMode(mode) {
+  if (mode === 'paid') {
+    return {
+      dateField: 'paidAt',
+      matchStatus: { status: { $in: ['paid', 'partial'] } },
+      amountField: '_revAmount',
+      isPaid: true
+    };
+  }
+  return {
+    dateField: 'issueDate',
+    matchStatus: { status: { $ne: 'cancelled' } },
+    amountField: 'total',
+    isPaid: false
+  };
+}
+
+/**
+ * For paid mode: compute effective revenue date and amount.
+ * - _revDate: paidAt → latest payment date → issueDate (fallback for partial invoices)
+ * - _revAmount: paidAmount if > 0, else total (fallback for old invoices without paidAmount)
+ */
+const PAID_MODE_ADD_FIELDS = {
+  $addFields: {
+    _revDate: { $ifNull: ['$paidAt', { $ifNull: [{ $max: '$payments.date' }, '$issueDate'] }] },
+    _revAmount: {
+      $cond: [
+        { $gt: [{ $ifNull: ['$paidAmount', 0] }, 0] },
+        '$paidAmount',
+        '$total'
+      ]
+    }
+  }
+};
+
 // Helper: Get user's project IDs (with optional status exclusion)
 const getUserProjectIds = async (userId, excludeStatuses = []) => {
   if (!userId) return null;
   const query = { userId };
   if (excludeStatuses.length > 0) {
-    const statusIds = excludeStatuses.map(id => new mongoose.Types.ObjectId(id));
-    query.status = { $nin: statusIds };
+    const statusIds = excludeStatuses
+      .filter(id => mongoose.Types.ObjectId.isValid(id))
+      .map(id => new mongoose.Types.ObjectId(id));
+    if (statusIds.length > 0) query.status = { $nin: statusIds };
   }
   const projects = await Project.find(query).select('_id');
   return projects.map(p => p._id);
@@ -48,8 +114,9 @@ export const getRevenueStats = async (req, res, next) => {
     const lastMonth = currentMonth === 1 ? 12 : currentMonth - 1;
     const lastMonthYear = currentMonth === 1 ? currentYear - 1 : currentYear;
 
-    // Parse excluded statuses
+    // Parse params
     const excludeStatuses = req.query.excludeStatuses ? req.query.excludeStatuses.split(',').filter(Boolean) : [];
+    const { dateField, matchStatus, amountField, isPaid } = getRevenueMode(req.query.revenueMode);
 
     // Get user's projects for filtering invoices
     const projectIds = await getUserProjectIds(req.user?._id, excludeStatuses);
@@ -62,60 +129,46 @@ export const getRevenueStats = async (req, res, next) => {
     const lastYearYtdEnd = new Date(currentYear - 1, currentMonth - 1, now.getDate(), 23, 59, 59, 999);
     const lastYearYtdStart = new Date(currentYear - 1, 0, 1);
 
+    // Build pipeline — in paid mode, compute fallback date for partial invoices
+    const pipeline = [{ $match: projectFilter }];
+    if (isPaid) pipeline.push(PAID_MODE_ADD_FIELDS);
+    const dField = isPaid ? '_revDate' : dateField;
+    // Credit notes subtract from revenue (multiplier: -1 for credit_note, +1 otherwise)
+    const cnMultiplier = { $cond: [{ $eq: ['$documentType', 'credit_note'] }, -1, 1] };
+    const sumExpr = { $multiply: [cnMultiplier, isPaid ? '$_revAmount' : '$total'] };
+
     // Use $facet to run all aggregations in parallel
-    const [result] = await Invoice.aggregate([
-      { $match: projectFilter },
-      {
-        $facet: {
-          ytd: [
-            {
-              $match: {
-                issueDate: { $gte: ytdRange.start, $lte: ytdRange.end },
-                status: { $ne: 'cancelled' }
-              }
-            },
-            { $group: { _id: null, total: { $sum: '$total' } } }
-          ],
-          mtd: [
-            {
-              $match: {
-                issueDate: { $gte: mtdRange.start, $lte: mtdRange.end },
-                status: { $ne: 'cancelled' }
-              }
-            },
-            { $group: { _id: null, total: { $sum: '$total' } } }
-          ],
-          lastMonth: [
-            {
-              $match: {
-                issueDate: { $gte: lastMonthRange.start, $lte: lastMonthRange.end },
-                status: { $ne: 'cancelled' }
-              }
-            },
-            { $group: { _id: null, total: { $sum: '$total' } } }
-          ],
-          lastYearYtd: [
-            {
-              $match: {
-                issueDate: { $gte: lastYearYtdStart, $lte: lastYearYtdEnd },
-                status: { $ne: 'cancelled' }
-              }
-            },
-            { $group: { _id: null, total: { $sum: '$total' } } }
-          ],
-          pending: [
-            { $match: { status: { $in: ['sent', 'partial'] } } },
-            {
-              $group: {
-                _id: null,
-                total: { $sum: '$total' },
-                count: { $sum: 1 }
-              }
+    pipeline.push({
+      $facet: {
+        ytd: [
+          { $match: { [dField]: { $gte: ytdRange.start, $lte: ytdRange.end }, ...matchStatus } },
+          { $group: { _id: null, total: { $sum: sumExpr } } }
+        ],
+        mtd: [
+          { $match: { [dField]: { $gte: mtdRange.start, $lte: mtdRange.end }, ...matchStatus } },
+          { $group: { _id: null, total: { $sum: sumExpr } } }
+        ],
+        lastMonth: [
+          { $match: { [dField]: { $gte: lastMonthRange.start, $lte: lastMonthRange.end }, ...matchStatus } },
+          { $group: { _id: null, total: { $sum: sumExpr } } }
+        ],
+        lastYearYtd: [
+          { $match: { [dField]: { $gte: lastYearYtdStart, $lte: lastYearYtdEnd }, ...matchStatus } },
+          { $group: { _id: null, total: { $sum: sumExpr } } }
+        ],
+        pending: [
+          { $match: { status: { $in: ['sent', 'partial'] }, documentType: { $ne: 'credit_note' } } },
+          {
+            $group: {
+              _id: null,
+              total: { $sum: { $subtract: ['$total', { $ifNull: ['$paidAmount', 0] }] } },
+              count: { $sum: 1 }
             }
-          ]
-        }
+          }
+        ]
       }
-    ]);
+    });
+    const [result] = await Invoice.aggregate(pipeline);
 
     // Extract values
     const ytd = result.ytd[0]?.total || 0;
@@ -142,6 +195,7 @@ export const getRevenueStats = async (req, res, next) => {
         pendingCount,
         lastMonth: lastMonthTotal,
         lastYearYtd,
+        revenueMode: req.query.revenueMode || 'invoiced',
         growth: {
           monthly: Math.round(monthlyGrowth * 10) / 10,
           yearly: Math.round(yearlyGrowth * 10) / 10
@@ -166,6 +220,7 @@ export const getMonthlyEvolution = async (req, res, next) => {
 
     // Parse excluded statuses
     const excludeStatuses = req.query.excludeStatuses ? req.query.excludeStatuses.split(',').filter(Boolean) : [];
+    const { dateField, matchStatus, amountField, isPaid } = getRevenueMode(req.query.revenueMode);
 
     // Get user's projects for filtering invoices
     const projectIds = await getUserProjectIds(req.user?._id, excludeStatuses);
@@ -176,36 +231,41 @@ export const getMonthlyEvolution = async (req, res, next) => {
     const endDate = new Date(currentYear, currentMonth, 0, 23, 59, 59, 999);
 
     // Build aggregation pipeline
-    const matchStage = {
-      ...projectFilter,
-      issueDate: { $gte: startDate, $lte: endDate },
-      status: { $ne: 'cancelled' }
-    };
+    const pipeline = [
+      { $match: { ...projectFilter, ...matchStatus } }
+    ];
 
-    // For includeLastYear, extend the date range
-    if (includeLastYear === 'true') {
-      matchStage.issueDate = {
-        $gte: new Date(currentYear - 1, currentMonth - 12, 1),
-        $lte: endDate
-      };
-    }
+    // For paid mode: compute fallback date for partial invoices
+    if (isPaid) pipeline.push(PAID_MODE_ADD_FIELDS);
+    const dField = isPaid ? '_revDate' : dateField;
 
-    const invoices = await Invoice.aggregate([
-      { $match: matchStage },
+    // Date range filter
+    const dateFilter = includeLastYear === 'true'
+      ? { $gte: new Date(currentYear - 1, currentMonth - 12, 1), $lte: endDate }
+      : { $gte: startDate, $lte: endDate };
+
+    // Credit notes subtract from revenue
+    const cnMul = { $cond: [{ $eq: ['$documentType', 'credit_note'] }, -1, 1] };
+    const revExpr = { $multiply: [cnMul, `$${amountField}`] };
+
+    pipeline.push(
+      { $match: { [dField]: dateFilter } },
       {
         $project: {
-          total: 1,
-          year: { $year: '$issueDate' },
-          month: { $month: '$issueDate' }
+          _revValue: revExpr,
+          year: { $year: `$${dField}` },
+          month: { $month: `$${dField}` }
         }
       },
       {
         $group: {
           _id: { year: '$year', month: '$month' },
-          revenue: { $sum: '$total' }
+          revenue: { $sum: '$_revValue' }
         }
       }
-    ]);
+    );
+
+    const invoices = await Invoice.aggregate(pipeline);
 
     // Create map for quick lookup
     const revenueMap = new Map();
@@ -414,8 +474,8 @@ export const getTopClients = async (req, res, next) => {
           },
           clientName: { $first: '$projectData.client.name' },
           company: { $first: '$projectData.client.company' },
-          totalRevenue: { $sum: '$total' },
-          invoiceCount: { $sum: 1 }
+          totalRevenue: { $sum: { $cond: [{ $eq: ['$documentType', 'credit_note'] }, { $multiply: ['$total', -1] }, '$total'] } },
+          invoiceCount: { $sum: { $cond: [{ $eq: ['$documentType', 'credit_note'] }, 0, 1] } }
         }
       },
       { $sort: { totalRevenue: -1 } },
@@ -561,8 +621,7 @@ export const getExpenseStats = async (req, res, next) => {
     const userId = req.user._id;
     const now = new Date();
     const currentYear = now.getFullYear();
-    const startDate = new Date(currentYear, 0, 1); // Jan 1st
-    const endDate = new Date(currentYear, 11, 31, 23, 59, 59, 999);
+    const { start: startDate, end: endDate } = getAnalyticsPeriod(req.query.period);
 
     // By category
     const byCategory = await BankTransaction.aggregate([
@@ -688,30 +747,39 @@ export const getProfitLoss = async (req, res, next) => {
     const userId = req.user._id;
     const now = new Date();
     const currentYear = now.getFullYear();
-    const startDate = new Date(currentYear, now.getMonth() - 11, 1);
-    const endDate = new Date(currentYear, now.getMonth() + 1, 0, 23, 59, 59, 999);
+    const { dateField, matchStatus, amountField, isPaid } = getRevenueMode(req.query.revenueMode);
+    const { start: startDate, end: endDate } = getAnalyticsPeriod(req.query.period);
 
     // Get project IDs for revenue
     const projectIds = await getUserProjectIds(userId);
     const projectFilter = projectIds ? { project: { $in: projectIds } } : {};
 
-    // Revenue by month
-    const revenueData = await Invoice.aggregate([
-      {
-        $match: {
-          ...projectFilter,
-          issueDate: { $gte: startDate, $lte: endDate },
-          status: { $ne: 'cancelled' }
-        }
-      },
+    // Revenue by month (credit notes subtract from revenue via multiplier)
+    const revPipeline = [
+      { $match: { ...projectFilter, ...matchStatus } }
+    ];
+    if (isPaid) revPipeline.push(PAID_MODE_ADD_FIELDS);
+    const dField = isPaid ? '_revDate' : dateField;
+    // Credit note multiplier: -1 for credit_note, +1 otherwise
+    const cnMul = { $cond: [{ $eq: ['$documentType', 'credit_note'] }, -1, 1] };
+    // For paid mode, prorate vatAmount based on _revAmount/total ratio
+    const vatExpr = isPaid
+      ? { $multiply: [cnMul, '$vatAmount', { $cond: [{ $gt: ['$total', 0] }, { $divide: ['$_revAmount', '$total'] }, 0] }] }
+      : { $multiply: [cnMul, '$vatAmount'] };
+    const revExpr = isPaid
+      ? { $multiply: [cnMul, '$_revAmount'] }
+      : { $multiply: [cnMul, '$total'] };
+    revPipeline.push(
+      { $match: { [dField]: { $gte: startDate, $lte: endDate } } },
       {
         $group: {
-          _id: { year: { $year: '$issueDate' }, month: { $month: '$issueDate' } },
-          revenue: { $sum: '$total' },
-          vatCollected: { $sum: '$vatAmount' }
+          _id: { year: { $year: `$${dField}` }, month: { $month: `$${dField}` } },
+          revenue: { $sum: revExpr },
+          vatCollected: { $sum: vatExpr }
         }
       }
-    ]);
+    );
+    const revenueData = await Invoice.aggregate(revPipeline);
 
     // Expenses by month
     const expenseData = await BankTransaction.aggregate([
@@ -736,30 +804,61 @@ export const getProfitLoss = async (req, res, next) => {
     const expenseMap = new Map();
     expenseData.forEach(e => expenseMap.set(`${e._id.year}-${e._id.month}`, e));
 
+    // Build month array based on period
     const data = [];
-    for (let i = 11; i >= 0; i--) {
-      let m = now.getMonth() + 1 - i;
-      let y = currentYear;
-      if (m <= 0) { m += 12; y -= 1; }
-
-      const key = `${y}-${m}`;
-      const rev = revenueMap.get(key) || { revenue: 0, vatCollected: 0 };
-      const exp = expenseMap.get(key) || { expenses: 0, vatDeductible: 0 };
-
-      data.push({
-        month: monthNames[m - 1],
-        monthNum: m,
-        year: y,
-        revenue: rev.revenue,
-        expenses: exp.expenses,
-        profit: rev.revenue - exp.expenses,
-        vatCollected: rev.vatCollected,
-        vatDeductible: exp.vatDeductible,
-        vatNet: rev.vatCollected - exp.vatDeductible
-      });
+    const period = req.query.period || 'rolling';
+    if (period === 'year') {
+      // Jan → Dec of current year
+      for (let m = 1; m <= 12; m++) {
+        const key = `${currentYear}-${m}`;
+        const rev = revenueMap.get(key) || { revenue: 0, vatCollected: 0 };
+        const exp = expenseMap.get(key) || { expenses: 0, vatDeductible: 0 };
+        data.push({
+          month: monthNames[m - 1], monthNum: m, year: currentYear,
+          revenue: rev.revenue, expenses: exp.expenses, profit: rev.revenue - exp.expenses,
+          vatCollected: rev.vatCollected, vatDeductible: exp.vatDeductible, vatNet: rev.vatCollected - exp.vatDeductible
+        });
+      }
+    } else {
+      // Last 12 rolling months
+      for (let i = 11; i >= 0; i--) {
+        let m = now.getMonth() + 1 - i;
+        let y = currentYear;
+        if (m <= 0) { m += 12; y -= 1; }
+        const key = `${y}-${m}`;
+        const rev = revenueMap.get(key) || { revenue: 0, vatCollected: 0 };
+        const exp = expenseMap.get(key) || { expenses: 0, vatDeductible: 0 };
+        data.push({
+          month: monthNames[m - 1], monthNum: m, year: y,
+          revenue: rev.revenue, expenses: exp.expenses, profit: rev.revenue - exp.expenses,
+          vatCollected: rev.vatCollected, vatDeductible: exp.vatDeductible, vatNet: rev.vatCollected - exp.vatDeductible
+        });
+      }
     }
 
-    res.json({ success: true, data });
+    // Merge projection data if requested
+    if (req.query.projection === 'true') {
+      const projectionMap = await projectCharges(userId, startDate, endDate);
+      for (const m of data) {
+        const key = `${m.year}-${m.monthNum}`;
+        const proj = projectionMap.get(key);
+        m.projectedExpenses = proj ? Math.round(proj.projectedExpenses * 100) / 100 : 0;
+        m.projectedCharges = proj ? proj.charges : [];
+      }
+    }
+
+    // LTVA art. 10: Annual revenue threshold check (CHF 100'000)
+    const annualRevenue = data.reduce((sum, m) => sum + (m.revenue || 0), 0);
+    let vatThresholdWarning = null;
+    if (annualRevenue >= 100000) {
+      vatThresholdWarning = 'critical';
+    } else if (annualRevenue >= 90000) {
+      vatThresholdWarning = 'warning';
+    } else if (annualRevenue >= 80000) {
+      vatThresholdWarning = 'info';
+    }
+
+    res.json({ success: true, data, period, revenueMode: req.query.revenueMode || 'invoiced', annualRevenue, vatThresholdWarning });
   } catch (error) {
     next(error);
   }
@@ -775,36 +874,45 @@ export const getVatDetail = async (req, res, next) => {
     const year = parseInt(req.query.year) || new Date().getFullYear();
     const startDate = new Date(year, 0, 1);
     const endDate = new Date(year, 11, 31, 23, 59, 59, 999);
+    const { dateField, matchStatus, amountField, isPaid } = getRevenueMode(req.query.revenueMode);
 
     const projectIds = await getUserProjectIds(userId);
     const projectFilter = projectIds ? { project: { $in: projectIds } } : {};
 
-    // VAT collected (from invoices)
-    const collected = await Invoice.aggregate([
-      {
-        $match: {
-          ...projectFilter,
-          issueDate: { $gte: startDate, $lte: endDate },
-          status: { $ne: 'cancelled' }
-        }
-      },
+    // VAT collected (credit notes subtract via multiplier)
+    const vatPipeline = [
+      { $match: { ...projectFilter, ...matchStatus } }
+    ];
+    if (isPaid) vatPipeline.push(PAID_MODE_ADD_FIELDS);
+    const dField = isPaid ? '_revDate' : dateField;
+    // Credit note multiplier: -1 for credit_note, +1 otherwise
+    const cnMul = { $cond: [{ $eq: ['$documentType', 'credit_note'] }, -1, 1] };
+    // For paid mode, prorate amounts based on _revAmount/total ratio
+    const payRatio = { $cond: [{ $gt: ['$total', 0] }, { $divide: ['$_revAmount', '$total'] }, 0] };
+    const vatExpr = isPaid ? { $multiply: [cnMul, '$vatAmount', payRatio] } : { $multiply: [cnMul, '$vatAmount'] };
+    const subtotalExpr = isPaid ? { $multiply: [cnMul, '$subtotal', payRatio] } : { $multiply: [cnMul, '$subtotal'] };
+    const totalExpr = isPaid ? { $multiply: [cnMul, '$_revAmount'] } : { $multiply: [cnMul, '$total'] };
+
+    vatPipeline.push(
+      { $match: { [dField]: { $gte: startDate, $lte: endDate } } },
       {
         $project: {
-          quarter: { $ceil: { $divide: [{ $month: '$issueDate' }, 3] } },
-          vatAmount: 1,
-          total: 1,
-          subtotal: 1
+          quarter: { $ceil: { $divide: [{ $month: `$${dField}` }, 3] } },
+          _vatAmt: vatExpr,
+          _total: totalExpr,
+          _subtotal: subtotalExpr
         }
       },
       {
         $group: {
           _id: '$quarter',
-          vatCollected: { $sum: '$vatAmount' },
-          revenueHT: { $sum: '$subtotal' },
-          revenueTTC: { $sum: '$total' }
+          vatCollected: { $sum: '$_vatAmt' },
+          revenueHT: { $sum: '$_subtotal' },
+          revenueTTC: { $sum: '$_total' }
         }
       }
-    ]);
+    );
+    const collected = await Invoice.aggregate(vatPipeline);
 
     // VAT deductible (from DBIT transactions with vatAmount)
     const deductible = await BankTransaction.aggregate([
@@ -866,116 +974,86 @@ export const getVatDetail = async (req, res, next) => {
   }
 };
 
+// =============================================================================
+// DRILL-DOWN DETAIL ENDPOINTS
+// =============================================================================
+
 /**
- * POST /api/analytics/seed-test-data
- * Seeds test invoice data for testing analytics charts
- * TEMPORARY - Remove after testing
+ * GET /api/analytics/profitloss/:year/:month/detail
+ * Returns individual invoices (revenue) and transactions (expenses) for a given month.
  */
-export const seedTestData = async (req, res, next) => {
+export const getProfitLossDetail = async (req, res, next) => {
   try {
-    if (process.env.NODE_ENV === 'production') {
-      return res.status(403).json({ success: false, error: 'Non disponible en production' });
+    const userId = req.user._id;
+    const year = parseInt(req.params.year);
+    const month = parseInt(req.params.month);
+    const { dateField, matchStatus, isPaid } = getRevenueMode(req.query.revenueMode);
+    const { start, end } = getMonthRange(year, month);
+
+    const projectIds = await getUserProjectIds(userId);
+    const projectFilter = projectIds ? { project: { $in: projectIds } } : {};
+
+    // In paid mode, also find partial invoices where a payment falls in the date range
+    const invoiceFilter = { ...projectFilter, ...matchStatus };
+    if (isPaid) {
+      invoiceFilter.$or = [
+        { paidAt: { $gte: start, $lte: end } },
+        { status: 'partial', 'payments.date': { $gte: start, $lte: end } }
+      ];
+    } else {
+      invoiceFilter[dateField] = { $gte: start, $lte: end };
     }
 
-    // Filter by user
-    const userQuery = {};
-    if (req.user) {
-      userQuery.userId = req.user._id;
-    }
-
-    // Get project IDs from database (user's projects only)
-    const projects = await Project.find(userQuery).limit(7);
-
-    if (projects.length < 3) {
-      return res.status(400).json({
-        success: false,
-        error: 'Not enough projects in database to seed test data'
-      });
-    }
-
-    // Delete existing test invoices for user's projects
-    const projectIds = projects.map(p => p._id);
-    const deleted = await Invoice.deleteMany({
-      number: /^TEST-/,
-      project: { $in: projectIds }
-    });
-
-    const vatRate = 8.1;
-    const testInvoices = [
-      // August 2025
-      { projectIdx: 0, number: 'TEST-2025-001', subtotal: 4500, status: 'paid', issueDate: new Date('2025-08-15'), paidAt: new Date('2025-08-28'), desc: 'Développement Phase 1' },
-      { projectIdx: 1, number: 'TEST-2025-002', subtotal: 3200, status: 'paid', issueDate: new Date('2025-08-22'), paidAt: new Date('2025-09-05'), desc: 'Création site web' },
-
-      // September 2025
-      { projectIdx: 2, number: 'TEST-2025-003', subtotal: 5800, status: 'paid', issueDate: new Date('2025-09-10'), paidAt: new Date('2025-09-25'), desc: 'Développement site' },
-      { projectIdx: Math.min(3, projects.length - 1), number: 'TEST-2025-004', subtotal: 2100, status: 'paid', issueDate: new Date('2025-09-18'), paidAt: new Date('2025-10-02'), desc: 'Maintenance mensuelle' },
-      { projectIdx: 0, number: 'TEST-2025-005', subtotal: 1500, status: 'paid', issueDate: new Date('2025-09-28'), paidAt: new Date('2025-10-10'), desc: 'Support technique' },
-
-      // October 2025
-      { projectIdx: Math.min(4, projects.length - 1), number: 'TEST-2025-006', subtotal: 6200, status: 'paid', issueDate: new Date('2025-10-05'), paidAt: new Date('2025-10-20'), desc: 'Développement e-commerce' },
-      { projectIdx: Math.min(5, projects.length - 1), number: 'TEST-2025-007', subtotal: 4800, status: 'paid', issueDate: new Date('2025-10-12'), paidAt: new Date('2025-10-28'), desc: 'Site corporate' },
-      { projectIdx: 2, number: 'TEST-2025-008', subtotal: 3500, status: 'paid', issueDate: new Date('2025-10-20'), paidAt: new Date('2025-11-05'), desc: 'Phase 2' },
-      { projectIdx: Math.min(3, projects.length - 1), number: 'TEST-2025-009', subtotal: 2100, status: 'paid', issueDate: new Date('2025-10-28'), paidAt: new Date('2025-11-10'), desc: 'Maintenance' },
-
-      // November 2025
-      { projectIdx: Math.min(6, projects.length - 1), number: 'TEST-2025-010', subtotal: 7500, status: 'paid', issueDate: new Date('2025-11-08'), paidAt: new Date('2025-11-22'), desc: 'Refonte complète' },
-      { projectIdx: 0, number: 'TEST-2025-011', subtotal: 2800, status: 'paid', issueDate: new Date('2025-11-15'), paidAt: new Date('2025-11-30'), desc: 'Évolutions' },
-      { projectIdx: 1, number: 'TEST-2025-012', subtotal: 1800, status: 'paid', issueDate: new Date('2025-11-25'), paidAt: new Date('2025-12-10'), desc: 'SEO' },
-
-      // December 2025
-      { projectIdx: 2, number: 'TEST-2025-013', subtotal: 4200, status: 'paid', issueDate: new Date('2025-12-05'), paidAt: new Date('2025-12-20'), desc: 'Phase finale' },
-      { projectIdx: Math.min(4, projects.length - 1), number: 'TEST-2025-014', subtotal: 3100, status: 'paid', issueDate: new Date('2025-12-10'), paidAt: new Date('2025-12-28'), desc: 'E-commerce v2' },
-      { projectIdx: Math.min(3, projects.length - 1), number: 'TEST-2025-015', subtotal: 2100, status: 'paid', issueDate: new Date('2025-12-18'), paidAt: new Date('2026-01-05'), desc: 'Maintenance' },
-      { projectIdx: Math.min(5, projects.length - 1), number: 'TEST-2025-016', subtotal: 2500, status: 'paid', issueDate: new Date('2025-12-22'), paidAt: new Date('2026-01-08'), desc: 'Corrections' },
-
-      // January 2026 (current month)
-      { projectIdx: 0, number: 'TEST-2026-001', subtotal: 5500, status: 'paid', issueDate: new Date('2026-01-10'), paidAt: new Date('2026-01-25'), desc: 'Nouveau module' },
-      { projectIdx: Math.min(6, projects.length - 1), number: 'TEST-2026-002', subtotal: 3800, status: 'sent', issueDate: new Date('2026-01-18'), paidAt: null, desc: 'Maintenance' },
-      { projectIdx: 1, number: 'TEST-2026-003', subtotal: 2200, status: 'sent', issueDate: new Date('2026-01-25'), paidAt: null, desc: 'Nouvelle saison' },
-    ];
-
-    const created = [];
-
-    for (const inv of testInvoices) {
-      const vatAmount = Math.round(inv.subtotal * vatRate) / 100;
-      const total = inv.subtotal + vatAmount;
-      const dueDate = new Date(inv.issueDate);
-      dueDate.setDate(dueDate.getDate() + 30);
-
-      const invoice = new Invoice({
-        project: projects[inv.projectIdx]._id,
-        number: inv.number,
-        events: [{
-          description: inv.desc,
-          type: 'hours',
-          hours: Math.round(inv.subtotal / 120),
-          hourlyRate: 120,
-          amount: inv.subtotal,
-          date: inv.issueDate
-        }],
-        quotes: [],
-        subtotal: inv.subtotal,
-        vatRate: vatRate,
-        vatAmount: vatAmount,
-        total: total,
-        status: inv.status,
-        issueDate: inv.issueDate,
-        dueDate: dueDate,
-        paidAt: inv.paidAt,
-        notes: `Test invoice for ${projects[inv.projectIdx].client?.company || projects[inv.projectIdx].client?.name || 'Unknown'}`
-      });
-
-      await invoice.save();
-      created.push({ number: inv.number, total, status: inv.status });
-    }
+    const [invoices, transactions] = await Promise.all([
+      Invoice.find(invoiceFilter)
+        .populate({ path: 'project', select: 'client name' })
+        .select('number total vatAmount subtotal status issueDate paidAt paidAmount payments')
+        .sort({ [dateField]: -1 })
+        .lean(),
+      BankTransaction.find({
+        userId,
+        creditDebit: 'DBIT',
+        bookingDate: { $gte: start, $lte: end }
+      })
+        .populate({ path: 'expenseCategory', select: 'name color' })
+        .select('bookingDate amount counterpartyName expenseCategory vatAmount')
+        .sort({ bookingDate: -1 })
+        .lean()
+    ]);
 
     res.json({
       success: true,
-      message: `Created ${created.length} test invoices`,
       data: {
-        deleted: deleted.deletedCount,
-        created: created.length,
-        invoices: created
+        invoices: invoices.map(inv => {
+          // In paid mode, show paidAmount and effective date
+          const effectiveDate = isPaid
+            ? (inv.paidAt || (inv.payments?.length ? new Date(Math.max(...inv.payments.map(p => new Date(p.date)))) : inv.issueDate))
+            : inv[dateField];
+          const displayAmount = isPaid ? ((inv.paidAmount || 0) > 0 ? inv.paidAmount : inv.total) : inv.total;
+          return {
+            _id: inv._id,
+            number: inv.number,
+            clientName: inv.project?.client?.name || 'Inconnu',
+            company: inv.project?.client?.company || '',
+            projectName: inv.project?.name || '',
+            total: displayAmount,
+            subtotal: inv.subtotal,
+            vatAmount: inv.vatAmount,
+            status: inv.status,
+            date: effectiveDate,
+            paidAmount: inv.paidAmount || 0,
+            invoiceTotal: inv.total
+          };
+        }),
+        transactions: transactions.map(tx => ({
+          _id: tx._id,
+          date: tx.bookingDate,
+          counterpartyName: tx.counterpartyName,
+          amount: tx.amount,
+          vatAmount: tx.vatAmount,
+          categoryName: tx.expenseCategory?.name || null,
+          categoryColor: tx.expenseCategory?.color || null
+        }))
       }
     });
   } catch (error) {
@@ -984,26 +1062,138 @@ export const seedTestData = async (req, res, next) => {
 };
 
 /**
- * DELETE /api/analytics/seed-test-data
- * Removes all test invoice data
+ * GET /api/analytics/expenses/:categoryId/detail
+ * Returns individual transactions for a given expense category.
  */
-export const deleteTestData = async (req, res, next) => {
+export const getExpenseCategoryDetail = async (req, res, next) => {
   try {
-    // Get user's projects for filtering
-    const projectIds = await getUserProjectIds(req.user?._id);
-    const projectFilter = projectIds ? { project: { $in: projectIds } } : {};
+    const userId = req.user._id;
+    const { categoryId } = req.params;
+    const { start: startDate, end: endDate } = getAnalyticsPeriod(req.query.period);
 
-    const deleted = await Invoice.deleteMany({
-      ...projectFilter,
-      number: /^TEST-/
-    });
+    const filter = {
+      userId,
+      creditDebit: 'DBIT',
+      bookingDate: { $gte: startDate, $lte: endDate }
+    };
+
+    if (categoryId === 'uncategorized') {
+      filter.expenseCategory = null;
+    } else if (mongoose.Types.ObjectId.isValid(categoryId)) {
+      filter.expenseCategory = new mongoose.Types.ObjectId(categoryId);
+    } else {
+      return res.status(400).json({ success: false, error: 'categoryId invalide' });
+    }
+
+    const transactions = await BankTransaction.find(filter)
+      .select('bookingDate amount counterpartyName vatAmount vatRate reference notes attachments')
+      .sort({ bookingDate: -1 })
+      .limit(200)
+      .lean();
 
     res.json({
       success: true,
-      message: `Deleted ${deleted.deletedCount} test invoices`,
-      data: { deleted: deleted.deletedCount }
+      data: transactions.map(tx => ({
+        _id: tx._id,
+        date: tx.bookingDate,
+        counterpartyName: tx.counterpartyName,
+        amount: tx.amount,
+        vatAmount: tx.vatAmount,
+        vatRate: tx.vatRate,
+        reference: tx.reference,
+        notes: tx.notes || '',
+        attachmentCount: tx.attachments?.length || 0
+      }))
     });
   } catch (error) {
     next(error);
   }
 };
+
+/**
+ * GET /api/analytics/vat-detail/:quarter/detail
+ * Returns individual invoices and transactions for a given quarter.
+ */
+export const getVatQuarterDetail = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+    const quarter = parseInt(req.params.quarter);
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+    const { dateField, matchStatus, isPaid } = getRevenueMode(req.query.revenueMode);
+
+    const startMonth = (quarter - 1) * 3;
+    const start = new Date(year, startMonth, 1);
+    const end = new Date(year, startMonth + 3, 0, 23, 59, 59, 999);
+
+    const projectIds = await getUserProjectIds(userId);
+    const projectFilter = projectIds ? { project: { $in: projectIds } } : {};
+
+    // In paid mode, also find partial invoices where a payment falls in the date range
+    const invoiceFilter = { ...projectFilter, ...matchStatus };
+    if (isPaid) {
+      invoiceFilter.$or = [
+        { paidAt: { $gte: start, $lte: end } },
+        { status: 'partial', 'payments.date': { $gte: start, $lte: end } }
+      ];
+    } else {
+      invoiceFilter[dateField] = { $gte: start, $lte: end };
+    }
+
+    const [invoices, transactions] = await Promise.all([
+      Invoice.find(invoiceFilter)
+        .populate({ path: 'project', select: 'client name' })
+        .select('number total vatAmount subtotal status issueDate paidAt paidAmount payments')
+        .sort({ [dateField]: -1 })
+        .lean(),
+      BankTransaction.find({
+        userId,
+        creditDebit: 'DBIT',
+        bookingDate: { $gte: start, $lte: end },
+        vatAmount: { $gt: 0 }
+      })
+        .populate({ path: 'expenseCategory', select: 'name color' })
+        .select('bookingDate amount counterpartyName expenseCategory vatAmount vatRate')
+        .sort({ bookingDate: -1 })
+        .lean()
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        invoices: invoices.map(inv => {
+          const effectiveDate = isPaid
+            ? (inv.paidAt || (inv.payments?.length ? new Date(Math.max(...inv.payments.map(p => new Date(p.date)))) : inv.issueDate))
+            : inv[dateField];
+          const displayAmount = isPaid ? ((inv.paidAmount || 0) > 0 ? inv.paidAmount : inv.total) : inv.total;
+          const ratio = isPaid && inv.total > 0 ? (displayAmount / inv.total) : 1;
+          return {
+            _id: inv._id,
+            number: inv.number,
+            clientName: inv.project?.client?.name || 'Inconnu',
+            company: inv.project?.client?.company || '',
+            total: displayAmount,
+            subtotal: Math.round((inv.subtotal * ratio) * 100) / 100,
+            vatAmount: Math.round((inv.vatAmount * ratio) * 100) / 100,
+            status: inv.status,
+            date: effectiveDate,
+            paidAmount: inv.paidAmount || 0,
+            invoiceTotal: inv.total
+          };
+        }),
+        transactions: transactions.map(tx => ({
+          _id: tx._id,
+          date: tx.bookingDate,
+          counterpartyName: tx.counterpartyName,
+          amount: tx.amount,
+          vatAmount: tx.vatAmount,
+          vatRate: tx.vatRate,
+          categoryName: tx.expenseCategory?.name || null,
+          categoryColor: tx.expenseCategory?.color || null
+        }))
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

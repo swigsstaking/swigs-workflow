@@ -32,26 +32,72 @@ function isQRIBAN(iban) {
 }
 
 /**
+ * Parse a Swiss legacy address string into structured components.
+ * Handles formats like:
+ *   "Chemin de l'Alouette Lulu 24 1955 St-Pierre-de-Clages"
+ *   "rue de la Drague 18 1950 sion"
+ *   "Rue de Lausanne 15, 1950 Sion"
+ *   "Route de Saclentse 385, CH-1996 Saclentse"
+ * Returns { street, zip, city } or null if parsing fails.
+ */
+function parseSwissAddress(addressStr) {
+  if (!addressStr || !addressStr.trim()) return null;
+  const addr = addressStr.trim().replace(/,/g, ' ');
+  // Swiss postal codes are 4 digits, optionally prefixed with CH- or CH
+  const match = addr.match(/^(.+?)\s+(?:CH[- ]?)?(\d{4})\s+(.+)$/i);
+  if (match) {
+    return {
+      street: match[1].trim(),
+      zip: match[2],
+      city: match[3].trim()
+    };
+  }
+  return null;
+}
+
+/**
+ * Resolve address fields: use structured (street/zip/city) if available,
+ * otherwise parse the legacy address string.
+ * Swiss QR-Bill requires non-empty zip + city for a valid structured address.
+ */
+function resolveAddress(entity) {
+  const street = entity.street?.trim() || '';
+  const zip = entity.zip?.toString().trim() || '';
+  const city = entity.city?.trim() || '';
+
+  if (zip && city) {
+    return { address: street, zip, city };
+  }
+
+  // Try parsing legacy address field
+  const legacy = entity.address?.trim() || '';
+  const parsed = parseSwissAddress(legacy);
+  if (parsed) {
+    return { address: parsed.street, zip: parsed.zip, city: parsed.city };
+  }
+
+  // Last resort: put entire legacy address as street, use placeholder zip/city
+  // A QR-Bill with empty zip/city will not scan — use "0000" / "-" as minimal fallback
+  if (legacy) {
+    return { address: legacy, zip: '0000', city: '-' };
+  }
+
+  return { address: street || '-', zip: zip || '0000', city: city || '-' };
+}
+
+/**
  * Build common QR-Bill data object from invoice + settings.
  * Conforms to Swiss QR-Bill standard (SIX Payment Services).
  */
 const buildQRBillData = (invoice, project, settings) => {
   const company = settings.company || {};
   const client = project.client || {};
-  const iban = company.qrIban || company.iban || '';
+  const iban = (company.qrIban || company.iban || '').replace(/\s/g, '');
 
-  // --- Creditor address ---
-  // Prefer decomposed fields (street/zip/city), fall back to parsing legacy address string
-  const creditorAddress = company.street || company.address?.split(',')[0]?.trim() || '';
-  const creditorZip = company.zip || '';
-  const creditorCity = company.city || '';
+  // --- Resolve addresses (structured fields or parsed from legacy string) ---
+  const creditor = resolveAddress(company);
+  const debtor = resolveAddress(client);
   const creditorCountry = company.country || 'CH';
-
-  // --- Debtor address ---
-  // Prefer decomposed fields on client, fall back to parsing legacy address string
-  const clientAddress = client.street || client.address || '';
-  const clientZip = client.zip || '';
-  const clientCity = client.city || '';
   const clientCountry = client.country || 'CH';
 
   // --- Reference ---
@@ -68,17 +114,17 @@ const buildQRBillData = (invoice, project, settings) => {
     amount: invoice.total,
     creditor: {
       name: (company.name || 'SWIGS').substring(0, 70),
-      address: creditorAddress.substring(0, 70),
-      zip: creditorZip,
-      city: creditorCity.substring(0, 35),
+      address: creditor.address.substring(0, 70),
+      zip: creditor.zip,
+      city: creditor.city.substring(0, 35),
       country: creditorCountry,
       account: iban
     },
     debtor: {
       name: (client.name || client.company || '').substring(0, 70),
-      address: clientAddress.substring(0, 70),
-      zip: clientZip,
-      city: clientCity.substring(0, 35),
+      address: debtor.address.substring(0, 70),
+      zip: debtor.zip,
+      city: debtor.city.substring(0, 35),
       country: clientCountry
     },
     additionalInformation: `Facture ${invoice.number}`.substring(0, 140)

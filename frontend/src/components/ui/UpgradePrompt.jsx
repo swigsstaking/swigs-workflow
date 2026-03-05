@@ -6,7 +6,7 @@ import { Crown, ArrowRight } from 'lucide-react';
  */
 export default function UpgradePrompt({ feature, inline = false }) {
   const hubUrl = import.meta.env.VITE_HUB_URL || 'https://apps.swigs.online';
-  const upgradeUrl = `${hubUrl}/marketplace/compta-plus`;
+  const upgradeUrl = `${hubUrl}/marketplace/swigs-workflow#compta-plus`;
 
   if (inline) {
     return (
@@ -14,10 +14,10 @@ export default function UpgradePrompt({ feature, inline = false }) {
         <Crown className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
         <div className="flex-1">
           <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-            {feature || 'Cette fonctionnalité'} nécessite Compta Plus
+            {feature || 'Cette fonctionnalité'} nécessite le module Compta Plus
           </p>
           <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
-            10 CHF/mois — Catégories de dépenses, multi-banque, export fiduciaire et plus.
+            Option à 10 CHF/mois — Multi-banque, catégories de dépenses, export fiduciaire et plus.
           </p>
         </div>
         <a
@@ -39,10 +39,10 @@ export default function UpgradePrompt({ feature, inline = false }) {
         <Crown className="w-8 h-8 text-amber-600 dark:text-amber-400" />
       </div>
       <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
-        Compta Plus
+        Module Compta Plus
       </h2>
       <p className="text-slate-600 dark:text-slate-400 max-w-md mb-2">
-        {feature || 'Cette fonctionnalité'} fait partie du module Compta Plus.
+        {feature || 'Cette fonctionnalité'} fait partie du module Compta Plus pour Swigs Pro.
       </p>
       <p className="text-sm text-slate-500 dark:text-slate-500 max-w-md mb-8">
         Multi-banque, catégories de dépenses, classification auto des fournisseurs,

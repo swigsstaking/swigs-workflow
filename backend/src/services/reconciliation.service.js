@@ -17,20 +17,20 @@ export async function reconcileTransaction(tx, userId) {
   const projects = await Project.find({ userId }).select('_id client');
   const projectIds = projects.map(p => p._id);
 
-  // Unpaid sent invoices only
-  const sentInvoices = await Invoice.find({
+  // Unpaid invoices (sent or partially paid)
+  const unpaidInvoices = await Invoice.find({
     project: { $in: projectIds },
-    status: 'sent'
+    status: { $in: ['sent', 'partial'] }
   }).populate({ path: 'project', select: 'client name' }).lean();
 
-  if (sentInvoices.length === 0) {
+  if (unpaidInvoices.length === 0) {
     return { matchedInvoice: null, matchMethod: null, matchConfidence: 0, matchStatus: 'unmatched' };
   }
 
   // Strategy 1: QR structured reference — full digits (confidence 100)
   if (tx.reference) {
     const refDigits = tx.reference.replace(/[^0-9]/g, '');
-    for (const inv of sentInvoices) {
+    for (const inv of unpaidInvoices) {
       const invoiceDigits = inv.number.replace(/[^0-9]/g, '');
       if (refDigits && invoiceDigits && refDigits.includes(invoiceDigits)) {
         return {
@@ -49,7 +49,7 @@ export async function reconcileTransaction(tx, userId) {
     if (facMatches) {
       for (const fac of facMatches) {
         const facNumber = fac.toUpperCase();
-        const inv = sentInvoices.find(i => i.number === facNumber);
+        const inv = unpaidInvoices.find(i => i.number === facNumber);
         if (inv) {
           return {
             matchedInvoice: inv._id,
@@ -71,12 +71,13 @@ export async function reconcileTransaction(tx, userId) {
     if (shortRefs) {
       for (const shortRef of shortRefs) {
         const shortDigits = shortRef.replace(/[^0-9]/g, '');
-        for (const inv of sentInvoices) {
+        for (const inv of unpaidInvoices) {
           // Extract trailing number from invoice: FAC-2026-0010 → "0010"
           const trailingMatch = inv.number.match(/-(\d{3,})$/);
           if (trailingMatch && trailingMatch[1] === shortDigits) {
-            // Confirm with amount match for extra confidence
-            const amountOk = Math.abs(inv.total - tx.amount) < 0.01;
+            // Confirm with amount match for extra confidence (account for partial payments)
+            const remaining = inv.total - (inv.paidAmount || 0);
+            const amountOk = Math.abs(remaining - tx.amount) < 0.01;
             return {
               matchedInvoice: inv._id,
               matchMethod: 'qr_reference',
@@ -90,9 +91,11 @@ export async function reconcileTransaction(tx, userId) {
   }
 
   // Strategy 2: Amount + client name fuzzy match (confidence 60-85)
-  const amountMatches = sentInvoices.filter(inv =>
-    Math.abs(inv.total - tx.amount) < 0.01
-  );
+  // For partial invoices, compare against remaining balance (total - paidAmount)
+  const amountMatches = unpaidInvoices.filter(inv => {
+    const remaining = inv.total - (inv.paidAmount || 0);
+    return Math.abs(remaining - tx.amount) < 0.01;
+  });
 
   if (amountMatches.length === 1) {
     // Single amount match — check client name

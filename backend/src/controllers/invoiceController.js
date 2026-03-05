@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import Invoice from '../models/Invoice.js';
 import Event from '../models/Event.js';
 import Quote from '../models/Quote.js';
@@ -7,7 +8,13 @@ import { historyService } from '../services/historyService.js';
 import { generateInvoicePDF } from '../services/pdf.service.js';
 import { sendInvoiceEmail } from '../services/email.service.js';
 import { decrypt } from '../utils/crypto.js';
-import { fireInternalTrigger } from '../services/automation/triggerService.js';
+
+import { eventBus } from '../services/eventBus.service.js';
+
+/** Safe non-blocking event publish (never throws) */
+const safePublish = (event, payload) => {
+  try { eventBus.publish(event, payload); } catch (_) { /* ignore */ }
+};
 
 /** Swiss rounding: round to nearest 5 centimes (0.05 CHF) */
 const roundTo5ct = (amount) => Math.round(amount / 0.05) * 0.05;
@@ -195,6 +202,7 @@ export const createInvoice = async (req, res, next) => {
       // Calculate totals from custom lines
       const processedLines = customLines.map(line => {
         const discount = computeLineDiscount(line);
+        const lineVatRate = line.vatRate != null ? line.vatRate : null;
         return {
           description: line.description,
           quantity: line.quantity || 1,
@@ -202,6 +210,7 @@ export const createInvoice = async (req, res, next) => {
           discountType: line.discountType || undefined,
           discountValue: line.discountValue || undefined,
           discount,
+          vatRate: lineVatRate,
           total: Math.max(0, (line.quantity || 1) * line.unitPrice - discount)
         };
       });
@@ -217,7 +226,39 @@ export const createInvoice = async (req, res, next) => {
       }
 
       const netTotal = subtotal - discountAmt;
-      const vatAmount = netTotal * (vatRate / 100);
+
+      // LTVA art. 25: Per-line VAT if any line has a custom rate, else global rate
+      const hasPerLineVat = processedLines.some(l => l.vatRate != null);
+      let vatAmount;
+      let vatBreakdown = [];
+
+      if (hasPerLineVat) {
+        // Group lines by VAT rate and compute per-rate breakdown
+        const discountRatio = subtotal > 0 ? (subtotal - discountAmt) / subtotal : 0;
+        const vatMap = new Map();
+        for (const line of processedLines) {
+          const rate = line.vatRate != null ? line.vatRate : vatRate;
+          const adjustedBase = line.total * discountRatio;
+          if (!vatMap.has(rate)) vatMap.set(rate, { base: 0, amount: 0 });
+          const entry = vatMap.get(rate);
+          entry.base += adjustedBase;
+          entry.amount += adjustedBase * (rate / 100);
+        }
+        vatBreakdown = [...vatMap.entries()]
+          .map(([rate, { base, amount }]) => ({
+            rate,
+            base: Math.round(base * 100) / 100,
+            amount: Math.round(amount * 100) / 100
+          }))
+          .sort((a, b) => b.rate - a.rate);
+        vatAmount = vatBreakdown.reduce((sum, v) => sum + v.amount, 0);
+      } else {
+        vatAmount = netTotal * (vatRate / 100);
+        if (vatRate > 0) {
+          vatBreakdown = [{ rate: vatRate, base: Math.round(netTotal * 100) / 100, amount: Math.round(vatAmount * 100) / 100 }];
+        }
+      }
+
       const total = roundTo5ct(netTotal + vatAmount);
 
       // Create custom invoice
@@ -234,6 +275,7 @@ export const createInvoice = async (req, res, next) => {
         discountAmount: discountAmt,
         vatRate,
         vatAmount,
+        vatBreakdown,
         total,
         issueDate: finalIssueDate,
         dueDate: finalDueDate,
@@ -244,15 +286,16 @@ export const createInvoice = async (req, res, next) => {
       // Log history
       await historyService.invoiceCreated(project._id, number, total);
 
-      // Fire automation trigger (non-blocking)
-      fireInternalTrigger('invoice.created', {
+      // Publish to Hub Event Bus for cross-app automations
+      safePublish('invoice.created', {
         invoiceId: invoice._id.toString(),
         invoiceNumber: invoice.number,
         projectId: project._id.toString(),
         projectName: project.name,
         total: invoice.total,
-        client: project.client
-      }, req.user?._id).catch(() => {});
+        client: project.client,
+        hubUserId: req.user?.hubUserId || null
+      });
 
       return res.status(201).json({ success: true, data: invoice });
     }
@@ -364,6 +407,11 @@ export const createInvoice = async (req, res, next) => {
     const vatAmount = netAmount * (vatRate / 100);
     const total = roundTo5ct(netAmount + vatAmount);
 
+    // LTVA art. 25: vatBreakdown (single rate for standard invoices)
+    const vatBreakdown = vatRate > 0
+      ? [{ rate: vatRate, base: Math.round(netAmount * 100) / 100, amount: Math.round(vatAmount * 100) / 100 }]
+      : [];
+
     // Step 1: Create the invoice document
     invoice = await Invoice.create({
       project: req.params.projectId,
@@ -378,6 +426,7 @@ export const createInvoice = async (req, res, next) => {
       discountAmount,
       vatRate,
       vatAmount,
+      vatBreakdown,
       total,
       issueDate: finalIssueDate,
       dueDate: finalDueDate,
@@ -423,15 +472,16 @@ export const createInvoice = async (req, res, next) => {
     // Log history
     await historyService.invoiceCreated(project._id, number, total);
 
-    // Fire automation trigger (non-blocking)
-    fireInternalTrigger('invoice.created', {
+    // Publish to Hub Event Bus for cross-app automations
+    safePublish('invoice.created', {
       invoiceId: invoice._id.toString(),
       invoiceNumber: invoice.number,
       projectId: project._id.toString(),
       projectName: project.name,
       total: invoice.total,
-      client: project.client
-    }, req.user?._id).catch(() => {});
+      client: project.client,
+      hubUserId: req.user?.hubUserId || null
+    });
 
     res.status(201).json({ success: true, data: invoice });
   } catch (error) {
@@ -881,6 +931,9 @@ export const updateInvoice = async (req, res, next) => {
         invoice.discountValue = discountAmount > 0 ? discountAmount : undefined;
         invoice.discountAmount = discountAmount;
         invoice.vatAmount = vatAmt;
+        invoice.vatBreakdown = invoice.vatRate > 0
+          ? [{ rate: invoice.vatRate, base: Math.round(netAmount * 100) / 100, amount: Math.round(vatAmt * 100) / 100 }]
+          : [];
         invoice.total = total;
 
         await invoice.save();
@@ -1087,26 +1140,28 @@ export const changeInvoiceStatus = async (req, res, next) => {
 
     await invoice.save();
 
-    // Fire automation triggers (non-blocking)
+    // Publish to Hub Event Bus for cross-app automations
     if (status === 'paid') {
-      fireInternalTrigger('invoice.paid', {
+      safePublish('invoice.paid', {
         invoiceId: invoice._id.toString(),
         invoiceNumber: invoice.number,
         projectId: invoice.project._id.toString(),
         projectName: invoice.project.name,
         total: invoice.total,
         paidAt: invoice.paidAt,
-        client: invoice.project.client
-      }, req.user?._id).catch(() => {});
+        client: invoice.project.client,
+        hubUserId: req.user?.hubUserId || null
+      });
     } else if (status === 'sent') {
-      fireInternalTrigger('invoice.sent', {
+      safePublish('invoice.sent', {
         invoiceId: invoice._id.toString(),
         invoiceNumber: invoice.number,
         projectId: invoice.project._id.toString(),
         projectName: invoice.project.name,
         total: invoice.total,
-        client: invoice.project.client
-      }, req.user?._id).catch(() => {});
+        client: invoice.project.client,
+        hubUserId: req.user?.hubUserId || null
+      });
     }
 
     // Auto-sync AbaNinja (non-blocking)
@@ -1221,17 +1276,18 @@ export const recordPayment = async (req, res, next) => {
       await historyService.invoicePaid(invoice.project._id, invoice.number);
     }
 
-    // Fire automation trigger if fully paid (non-blocking)
+    // Publish to Hub Event Bus if fully paid
     if (invoice.status === 'paid') {
-      fireInternalTrigger('invoice.paid', {
+      safePublish('invoice.paid', {
         invoiceId: invoice._id.toString(),
         invoiceNumber: invoice.number,
         projectId: invoice.project._id.toString(),
         projectName: invoice.project.name,
         total: invoice.total,
         paidAt: invoice.paidAt,
-        client: invoice.project.client
-      }, req.user?._id).catch(() => {});
+        client: invoice.project.client,
+        hubUserId: req.user?.hubUserId || null
+      });
     }
 
     res.json({ success: true, data: invoice });
@@ -1365,12 +1421,19 @@ export const getInvoicePDF = async (req, res, next) => {
     // Get settings
     const settings = await Settings.getSettings(req.user?._id);
 
+    // For credit notes, resolve the original invoice number
+    if (invoice.documentType === 'credit_note' && invoice.creditNoteRef) {
+      const origInvoice = await Invoice.findById(invoice.creditNoteRef).select('number').lean();
+      invoice._creditNoteRefNumber = origInvoice?.number || '';
+    }
+
     // Generate PDF
     const pdfBuffer = await generateInvoicePDF(invoice, invoice.project, settings);
 
     // Set response headers
+    const filePrefix = invoice.documentType === 'credit_note' ? 'Avoir' : 'Facture';
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="Facture-${invoice.number}.pdf"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${filePrefix}-${invoice.number}.pdf"`);
     res.setHeader('Content-Length', pdfBuffer.length);
 
     res.send(pdfBuffer);
@@ -1422,8 +1485,18 @@ export const sendInvoice = async (req, res, next) => {
       });
     }
 
+    // For credit notes, resolve the original invoice number
+    if (invoice.documentType === 'credit_note' && invoice.creditNoteRef) {
+      const origInvoice = await Invoice.findById(invoice.creditNoteRef).select('number').lean();
+      invoice._creditNoteRefNumber = origInvoice?.number || '';
+    }
+
     // Generate PDF
     const pdfBuffer = await generateInvoicePDF(invoice, invoice.project, settings);
+
+    // CO art. 958f: Compute SHA-256 hash for document integrity verification
+    const pdfHash = createHash('sha256').update(pdfBuffer).digest('hex');
+    invoice.pdfHash = pdfHash;
 
     // Send email
     try {
@@ -1444,22 +1517,161 @@ export const sendInvoice = async (req, res, next) => {
       invoice.status = 'sent';
       await invoice.save();
       await historyService.invoiceSent(invoice.project._id, invoice.number);
+    } else if (invoice.isModified('pdfHash')) {
+      // Save hash even on resend
+      await invoice.save();
     }
 
-    // Fire automation trigger (non-blocking)
-    fireInternalTrigger('invoice.sent', {
+    // Publish to Hub Event Bus for cross-app automations
+    safePublish('invoice.sent', {
       invoiceId: invoice._id.toString(),
       invoiceNumber: invoice.number,
       projectId: invoice.project._id.toString(),
       projectName: invoice.project.name,
       total: invoice.total,
-      client: invoice.project.client
-    }, req.user?._id).catch(() => {});
+      client: invoice.project.client,
+      hubUserId: req.user?.hubUserId || null
+    });
 
     res.json({
       success: true,
       message: `Facture ${invoice.number} envoyée à ${invoice.project.client.email}`,
       data: invoice
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Create a credit note (avoir) for an invoice — CO 957a, LTVA art. 33
+// @route   POST /api/invoices/:id/credit-note
+export const createCreditNote = async (req, res, next) => {
+  try {
+    const originalInvoice = await Invoice.findById(req.params.id)
+      .populate({ path: 'project', select: 'name client userId' });
+
+    if (!originalInvoice) {
+      return res.status(404).json({ success: false, error: 'Facture non trouvée' });
+    }
+
+    if (req.user && originalInvoice.project?.userId?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, error: 'Accès refusé' });
+    }
+
+    // Only allow credit notes for sent/paid/partial invoices
+    if (!['sent', 'paid', 'partial'].includes(originalInvoice.status)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Un avoir ne peut être créé que pour une facture envoyée, payée ou partiellement payée'
+      });
+    }
+
+    // Check if a credit note already exists for this invoice
+    const existingCreditNote = await Invoice.findOne({
+      creditNoteRef: originalInvoice._id,
+      documentType: 'credit_note'
+    });
+    if (existingCreditNote) {
+      return res.status(400).json({
+        success: false,
+        error: `Un avoir (${existingCreditNote.number}) existe déjà pour cette facture`
+      });
+    }
+
+    const { reason, amount: partialAmount } = req.body;
+
+    // Determine credit note amount (full or partial)
+    const creditAmount = partialAmount && partialAmount > 0 && partialAmount < originalInvoice.total
+      ? partialAmount
+      : originalInvoice.total;
+
+    const ratio = creditAmount / originalInvoice.total;
+    const creditSubtotal = Math.round((originalInvoice.subtotal || 0) * ratio * 100) / 100;
+    const creditVatAmount = Math.round((originalInvoice.vatAmount || 0) * ratio * 100) / 100;
+    const creditTotal = roundTo5ct(creditAmount);
+
+    // Generate credit note number
+    const number = await Invoice.generateCreditNoteNumber();
+
+    // Build credit note lines from original invoice
+    let creditLines = [];
+    if (originalInvoice.customLines?.length > 0) {
+      creditLines = originalInvoice.customLines.map(line => ({
+        description: line.description,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        vatRate: line.vatRate,
+        discount: line.discount || 0,
+        total: Math.round(line.total * ratio * 100) / 100
+      }));
+    }
+
+    // Build vatBreakdown for credit note
+    const creditVatBreakdown = (originalInvoice.vatBreakdown || []).map(v => ({
+      rate: v.rate,
+      base: Math.round(v.base * ratio * 100) / 100,
+      amount: Math.round(v.amount * ratio * 100) / 100
+    }));
+
+    const creditNote = await Invoice.create({
+      project: originalInvoice.project._id,
+      number,
+      documentType: 'credit_note',
+      creditNoteRef: originalInvoice._id,
+      invoiceType: 'custom',
+      customLines: creditLines,
+      subtotal: creditSubtotal,
+      vatRate: originalInvoice.vatRate,
+      vatAmount: creditVatAmount,
+      vatBreakdown: creditVatBreakdown,
+      total: creditTotal,
+      issueDate: new Date(),
+      dueDate: new Date(),
+      status: 'sent',
+      notes: reason || `Avoir pour facture ${originalInvoice.number}`
+    });
+
+    // Log history
+    await historyService.log(
+      originalInvoice.project._id,
+      'invoice_created',
+      `Avoir ${number} créé pour facture ${originalInvoice.number} (${formatCurrencyBackend(creditTotal)})`,
+      { invoiceNumber: number, originalInvoice: originalInvoice.number, creditAmount: creditTotal }
+    );
+
+    res.status(201).json({ success: true, data: creditNote });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/** Format currency for backend logs */
+const formatCurrencyBackend = (amount) =>
+  new Intl.NumberFormat('fr-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount || 0) + ' CHF';
+
+// @desc    Get invoice PDF hash (CO art. 958f integrity verification)
+// @route   GET /api/invoices/:id/hash
+export const getInvoiceHash = async (req, res, next) => {
+  try {
+    const invoice = await Invoice.findById(req.params.id)
+      .populate({ path: 'project', select: 'userId' });
+
+    if (!invoice) {
+      return res.status(404).json({ success: false, error: 'Facture non trouvée' });
+    }
+
+    if (req.user && invoice.project?.userId?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, error: 'Accès refusé' });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        invoiceNumber: invoice.number,
+        pdfHash: invoice.pdfHash || null,
+        algorithm: 'SHA-256',
+        hashDate: invoice.pdfHash ? invoice.updatedAt : null
+      }
     });
   } catch (error) {
     next(error);

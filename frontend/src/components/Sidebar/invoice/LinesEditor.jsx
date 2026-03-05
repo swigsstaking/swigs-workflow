@@ -90,13 +90,22 @@ function AutoTextarea({ value, onChange, placeholder, disabled, className, ariaL
   );
 }
 
+const VAT_RATES = [
+  { value: '', label: 'Défaut' },
+  { value: '8.1', label: '8.1%' },
+  { value: '2.6', label: '2.6%' },
+  { value: '3.8', label: '3.8%' },
+  { value: '0', label: '0%' }
+];
+
 export default function LinesEditor({
   lines,
   updateLine,
   removeLine,
   addLine,
   disabled = false,
-  showInfoToggle = false
+  showInfoToggle = false,
+  showVatRate = false
 }) {
   const handleTitleChange = (index, newTitle) => {
     const { detail } = splitDescription(lines[index].description);
@@ -276,6 +285,22 @@ export default function LinesEditor({
                     </div>
                   )
                 )}
+              </div>
+            )}
+
+            {/* Per-line VAT rate selector */}
+            {showVatRate && !disabled && !isInfo && (
+              <div className="mt-1 flex items-center gap-2">
+                <span className="text-xs text-slate-400">TVA:</span>
+                <select
+                  value={line.vatRate != null ? line.vatRate : ''}
+                  onChange={(e) => updateLine(index, 'vatRate', e.target.value === '' ? null : parseFloat(e.target.value))}
+                  className="px-1.5 py-0.5 text-xs border border-slate-200 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+                >
+                  {VAT_RATES.map(r => (
+                    <option key={r.value} value={r.value}>{r.label}</option>
+                  ))}
+                </select>
               </div>
             )}
 

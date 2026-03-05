@@ -5,7 +5,8 @@ import Settings from '../models/Settings.js';
 import { createTransporter, textToHtml } from './email.service.js';
 import { generateReminderPDF } from './pdf.service.js';
 import { historyService } from './historyService.js';
-import { fireInternalTrigger } from './automation/triggerService.js';
+
+import { eventBus } from './eventBus.service.js';
 
 /**
  * Reminder Service for automatic invoice reminders
@@ -194,8 +195,8 @@ export const sendReminder = async (invoice, project, settings, scheduleItem) => 
 
     console.log(`Reminder sent for invoice ${invoice.number} (${scheduleItem.type})`);
 
-    // Fire automation trigger (non-blocking)
-    fireInternalTrigger('reminder.sent', {
+    // Publish to Hub Event Bus for cross-app automations
+    eventBus.publish('reminder.sent', {
       invoiceId: invoice._id.toString(),
       invoiceNumber: invoice.number,
       projectId: project._id.toString(),
@@ -203,8 +204,9 @@ export const sendReminder = async (invoice, project, settings, scheduleItem) => 
       reminderType: scheduleItem.type,
       daysOverdue,
       total: invoice.total,
-      client: project.client
-    }, project.userId).catch(() => {});
+      client: project.client,
+      hubUserId: null
+    }).catch(() => {});
 
     return { success: true };
   } catch (error) {
@@ -452,24 +454,39 @@ export const sendManualReminder = async (invoiceId, userId) => {
   }
 };
 
-let isRunning = false;
-
 /**
- * Initialize reminder service with cron job
+ * Initialize reminder service with cron job.
+ * Uses MongoDB atomic lock so only one PM2 instance runs the check.
  */
 export const initialize = () => {
-  // Run every day at 8:00 AM
   cron.schedule('0 8 * * *', async () => {
-    if (isRunning) {
-      console.log('[Reminder] Skipping — previous run still active');
-      return;
-    }
-    isRunning = true;
+    const lockId = 'reminder-cron';
+    const lockExpiry = 10 * 60 * 1000; // 10 min max
+
     try {
+      const lock = await Settings.findOneAndUpdate(
+        {
+          _lockId: lockId,
+          $or: [
+            { _lockExpiresAt: { $exists: false } },
+            { _lockExpiresAt: { $lt: new Date() } }
+          ]
+        },
+        { $set: { _lockId: lockId, _lockExpiresAt: new Date(Date.now() + lockExpiry) } },
+        { upsert: true, returnDocument: 'after' }
+      ).catch(() => null);
+
+      if (!lock) {
+        console.log('[Reminder] Skipping — another instance holds the lock');
+        return;
+      }
+
       console.log('Running daily reminder check at 8:00 AM');
       await checkOverdueInvoices();
+    } catch (err) {
+      console.error('[Reminder] Cron error:', err.message);
     } finally {
-      isRunning = false;
+      await Settings.deleteOne({ _lockId: lockId }).catch(() => {});
     }
   });
 

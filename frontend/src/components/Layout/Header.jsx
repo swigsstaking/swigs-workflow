@@ -11,7 +11,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   Settings, Plus, Search, Archive, Sun, Moon,
-  Calendar, BarChart3, Zap, LogIn, LogOut, Menu, X,
+  Calendar, BarChart3, LogIn, LogOut, Menu, X,
   Home, Layers, Calculator,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -26,7 +26,6 @@ const NAV_ITEMS = [
   { to: '/workflow',    label: 'Projets',     icon: Layers },
   { to: '/planning',   label: 'Planning',    icon: Calendar },
   { to: '/analytics',  label: 'Analytics',   icon: BarChart3 },
-  { to: '/automations',label: 'Automations', icon: Zap },
   { to: '/comptabilite',label: 'Comptabilité', icon: Calculator },
 ];
 

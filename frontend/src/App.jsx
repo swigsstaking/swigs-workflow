@@ -1,6 +1,6 @@
 import { useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
-import { Loader2, Briefcase, ArrowRight, Clock, FileText, PenLine, Zap, CalendarDays, CheckCircle } from 'lucide-react';
+import { Loader2, Briefcase, ArrowRight, Clock, FileText, PenLine, CalendarDays, CheckCircle } from 'lucide-react';
 import { useUIStore } from './stores/uiStore';
 import { useAuthStore } from './stores/authStore';
 import Layout from './components/Layout/Layout';
@@ -14,7 +14,6 @@ import { initPostHog, identifyUser, resetUser, trackPageView } from './lib/posth
 const Secretary = lazy(() => import('./pages/Secretary'));
 const Planning = lazy(() => import('./pages/Planning'));
 const Analytics = lazy(() => import('./pages/Analytics'));
-const Automations = lazy(() => import('./pages/Automations'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Comptabilite = lazy(() => import('./pages/Comptabilite'));
 const PortalView = lazy(() => import('./pages/PortalView'));
@@ -120,11 +119,6 @@ function App() {
               <Analytics />
             </Suspense>
           } />
-          <Route path="automations" element={
-            <Suspense fallback={suspenseFallback}>
-              <Automations />
-            </Suspense>
-          } />
           <Route path="comptabilite" element={
             <Suspense fallback={suspenseFallback}>
               <Comptabilite />
@@ -167,11 +161,6 @@ const landingFeatures = [
     icon: PenLine,
     title: 'Devis & signatures',
     description: 'Créez des devis professionnels, envoyez-les à vos clients et suivez les signatures.',
-  },
-  {
-    icon: Zap,
-    title: 'Automations',
-    description: 'Créez des workflows automatisés : emails de relance, notifications et actions sur événements.',
   },
   {
     icon: CalendarDays,

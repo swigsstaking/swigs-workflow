@@ -19,7 +19,7 @@ export const getAll = async (req, res, next) => {
  */
 export const create = async (req, res, next) => {
   try {
-    const { name, icon, color, accountNumber, budgetMonthly } = req.body;
+    const { name, icon, color, accountNumber, budgetMonthly, vatRate } = req.body;
 
     if (!name) {
       return res.status(400).json({ success: false, error: 'Nom requis' });
@@ -37,6 +37,7 @@ export const create = async (req, res, next) => {
       color: color || '#6366f1',
       accountNumber,
       budgetMonthly,
+      vatRate: vatRate !== undefined ? vatRate : 8.1,
       order: (maxOrder?.order ?? -1) + 1,
       userId: req.user._id
     });
@@ -57,12 +58,13 @@ export const update = async (req, res, next) => {
       return res.status(404).json({ success: false, error: 'Catégorie non trouvée' });
     }
 
-    const { name, icon, color, accountNumber, budgetMonthly } = req.body;
+    const { name, icon, color, accountNumber, budgetMonthly, vatRate } = req.body;
     if (name) category.name = name;
     if (icon) category.icon = icon;
     if (color) category.color = color;
     if (accountNumber !== undefined) category.accountNumber = accountNumber;
     if (budgetMonthly !== undefined) category.budgetMonthly = budgetMonthly;
+    if (vatRate !== undefined) category.vatRate = vatRate;
 
     await category.save();
     res.json({ success: true, data: category });

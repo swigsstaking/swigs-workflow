@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 const companySchema = new mongoose.Schema({
   name: {
     type: String,
-    default: 'SWIGS'
+    default: ''
   },
   address: {
     type: String,

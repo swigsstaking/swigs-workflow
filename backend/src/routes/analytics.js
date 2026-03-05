@@ -8,9 +8,12 @@ import {
   getHoursStats,
   getExpenseStats,
   getProfitLoss,
-  getVatDetail
+  getVatDetail,
+  getProfitLossDetail,
+  getExpenseCategoryDetail,
+  getVatQuarterDetail
 } from '../controllers/analyticsController.js';
-import { checkComptaPlus } from '../middleware/requireComptaPlus.js';
+import { requireComptaPlus } from '../middleware/requireComptaPlus.js';
 
 const router = express.Router();
 
@@ -32,9 +35,14 @@ router.get('/clients', getTopClients);
 // GET /api/analytics/hours - Hours worked statistics
 router.get('/hours', getHoursStats);
 
-// Compta Plus analytics
-router.get('/expenses', checkComptaPlus, getExpenseStats);
-router.get('/profitloss', checkComptaPlus, getProfitLoss);
-router.get('/vat-detail', checkComptaPlus, getVatDetail);
+// Compta Plus analytics — hard gate (403 if no subscription)
+router.get('/expenses', requireComptaPlus, getExpenseStats);
+router.get('/profitloss', requireComptaPlus, getProfitLoss);
+router.get('/vat-detail', requireComptaPlus, getVatDetail);
+
+// Drill-down detail endpoints
+router.get('/profitloss/:year/:month/detail', requireComptaPlus, getProfitLossDetail);
+router.get('/expenses/:categoryId/detail', requireComptaPlus, getExpenseCategoryDetail);
+router.get('/vat-detail/:quarter/detail', requireComptaPlus, getVatQuarterDetail);
 
 export default router;

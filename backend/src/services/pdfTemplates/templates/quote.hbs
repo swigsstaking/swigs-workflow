@@ -35,7 +35,7 @@
         </div>
       {{/if}}
       <div class="company-meta">
-        {{#if design.showSiret}}{{#if company.siret}}<span>IDE/SIRET: {{company.siret}}</span>{{/if}}{{/if}}
+        {{#if design.showSiret}}{{#if company.siret}}<span>N° IDE: {{company.siret}}</span>{{/if}}{{/if}}
         {{#if design.showVatNumber}}{{#if company.vatNumber}}<span>N° TVA: {{company.vatNumber}}</span>{{/if}}{{/if}}
       </div>
     </div>
@@ -154,7 +154,7 @@
   <div class="totals-section">
     <div class="totals-box">
       <div class="totals-row">
-        <span class="label">{{#if totals.vatRate}}Sous-total HT{{else}}Sous-total{{/if}}</span>
+        <span class="label">{{#if totals.vatAmount}}Sous-total HT{{else}}Sous-total{{/if}}</span>
         <span class="value">{{formatCurrency totals.subtotal}}</span>
       </div>
       {{#if totals.discountAmount}}
@@ -163,14 +163,14 @@
         <span class="value" style="color: var(--success-color);">-{{formatCurrency totals.discountAmount}}</span>
       </div>
       {{/if}}
-      {{#if totals.vatRate}}
+      {{#if totals.vatAmount}}
       <div class="totals-row">
         <span class="label">TVA ({{totals.vatRate}}%)</span>
         <span class="value">{{formatCurrency totals.vatAmount}}</span>
       </div>
       {{/if}}
       <div class="totals-row total-final">
-        <span class="label">{{#if totals.vatRate}}Total TTC{{else}}Total{{/if}}</span>
+        <span class="label">{{#if totals.vatAmount}}Total TTC{{else}}Total{{/if}}</span>
         <span class="value">{{formatCurrency totals.total}}</span>
       </div>
     </div>

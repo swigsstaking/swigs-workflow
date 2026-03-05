@@ -221,8 +221,8 @@ async function processXmlBuffer(buffer, filename, userId) {
     suggestedCount: results.suggested,
     unmatchedCount: results.unmatched,
     statementIban: statementInfo.iban,
-    statementOpeningBalance: statementInfo.openingBalance,
-    statementClosingBalance: statementInfo.closingBalance,
+    statementOpeningBalance: Number.isFinite(statementInfo.openingBalance) ? statementInfo.openingBalance : undefined,
+    statementClosingBalance: Number.isFinite(statementInfo.closingBalance) ? statementInfo.closingBalance : undefined,
     statementDate: statementInfo.date,
     bankAccountId,
     userId
@@ -362,23 +362,42 @@ async function checkAllUsers() {
   }
 }
 
-let isRunning = false;
-
 /**
- * Initialize cron job — runs every hour at minute 30
+ * Initialize cron job — runs every hour at minute 30.
+ * Uses MongoDB atomic findOneAndUpdate as a distributed lock
+ * so only one PM2 instance runs the check at a time.
  */
 export function initBankImapCron() {
   cron.schedule('30 * * * *', async () => {
-    if (isRunning) {
-      console.log('[BankIMAP] Skipping — previous run still active');
-      return;
-    }
-    isRunning = true;
+    const lockId = 'bank-imap-cron';
+    const lockExpiry = 10 * 60 * 1000; // 10 min max lock duration
+
     try {
+      // Atomic lock: only one instance wins
+      const lock = await Settings.findOneAndUpdate(
+        {
+          _lockId: lockId,
+          $or: [
+            { _lockExpiresAt: { $exists: false } },
+            { _lockExpiresAt: { $lt: new Date() } }
+          ]
+        },
+        { $set: { _lockId: lockId, _lockExpiresAt: new Date(Date.now() + lockExpiry) } },
+        { upsert: true, returnDocument: 'after' }
+      ).catch(() => null);
+
+      if (!lock) {
+        console.log('[BankIMAP] Skipping — another instance holds the lock');
+        return;
+      }
+
       console.log('[BankIMAP] Running hourly check...');
       await checkAllUsers();
+    } catch (err) {
+      console.error('[BankIMAP] Cron error:', err.message);
     } finally {
-      isRunning = false;
+      // Release lock
+      await Settings.deleteOne({ _lockId: lockId }).catch(() => {});
     }
   });
 

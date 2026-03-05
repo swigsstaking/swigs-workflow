@@ -153,29 +153,34 @@ class EventBusService extends EventEmitter {
    * @param {Object} payload - Event data
    */
   publish(event, payload) {
-    const timestamp = new Date().toISOString();
-    const signature = this.signMessage(payload, timestamp);
+    try {
+      const timestamp = new Date().toISOString();
+      const signature = this.signMessage(payload, timestamp);
 
-    const message = {
-      action: 'publish',
-      event,
-      payload,
-      timestamp,
-      signature
-    };
+      const message = {
+        action: 'publish',
+        event,
+        payload,
+        timestamp,
+        signature
+      };
 
-    if (this.connected && this.ws) {
-      this.ws.send(JSON.stringify(message));
-    } else {
-      // Queue for later (max 1000)
-      if (this.pendingEvents.length >= 1000) {
-        console.warn('[EventBus] Pending events queue full, dropping event');
-        return false;
+      if (this.connected && this.ws) {
+        this.ws.send(JSON.stringify(message));
+      } else {
+        // Queue for later (max 1000)
+        if (this.pendingEvents.length >= 1000) {
+          console.warn('[EventBus] Pending events queue full, dropping event');
+          return { catch: () => {} };
+        }
+        this.pendingEvents.push(message);
       }
-      this.pendingEvents.push(message);
+    } catch (err) {
+      console.warn('[EventBus] Publish error:', err.message);
     }
 
-    return true;
+    // Return thenable-like object so callers can safely do .catch(() => {})
+    return { catch: () => {} };
   }
 
   /**
@@ -238,45 +243,35 @@ class EventBusService extends EventEmitter {
 export const eventBus = new EventBusService();
 
 /**
- * Initialize Event Bus and set up automation triggers
+ * Initialize Event Bus connection
  */
 export const initEventBus = async () => {
-  // Lazy import to avoid circular dependency
-  const { fireTrigger } = await import('./automation/triggerService.js');
-
   try {
     await eventBus.connect();
 
-    // CMS events to subscribe and trigger automations
-    const cmsEvents = [
-      'order.created',
-      'order.paid',
-      'order.shipped',
-      'order.delivered',
-      'customer.created',
-      'customer.updated'
-    ];
-
-    // Subscribe to CMS events
-    eventBus.subscribe(cmsEvents);
+    // Subscribe to automation record update events (from swigs-automation)
+    eventBus.subscribe(['automation.record.update']);
 
     // Log all incoming events
     eventBus.on('*', (event) => {
       console.log(`[EventBus] Received: ${event.event} from ${event.source}`);
     });
 
-    // Connect CMS events to automation triggers
-    cmsEvents.forEach(eventType => {
-      eventBus.on(eventType, async (event) => {
-        try {
-          console.log(`[EventBus] Triggering automations for: ${eventType}`);
-          await fireTrigger(eventType, event.payload, {
-            siteId: event.payload?.siteId
-          });
-        } catch (err) {
-          console.error(`[EventBus] Failed to trigger automation for ${eventType}:`, err);
+    // Handle record updates from swigs-automation
+    eventBus.on('automation.record.update', async (event) => {
+      try {
+        const { recordType, recordId, field, value } = event.payload || {};
+        if (!recordType || !recordId || !field) return;
+
+        const mongoose = (await import('mongoose')).default;
+        const model = mongoose.model(recordType);
+        if (model) {
+          await model.findByIdAndUpdate(recordId, { [field]: value });
+          console.log(`[EventBus] Updated ${recordType}/${recordId}: ${field}=${value}`);
         }
-      });
+      } catch (err) {
+        console.error('[EventBus] Failed to handle automation.record.update:', err);
+      }
     });
 
     console.log('[EventBus] Initialized and listening for events');

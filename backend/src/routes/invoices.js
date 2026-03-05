@@ -9,7 +9,9 @@ import {
   getInvoicePDF,
   sendInvoice,
   recordPayment,
-  getInvoiceEditData
+  getInvoiceEditData,
+  getInvoiceHash,
+  createCreditNote
 } from '../controllers/invoiceController.js';
 import { validate } from '../middleware/validate.js';
 
@@ -48,5 +50,11 @@ router.route('/:id/pdf')
 
 router.route('/:id/send')
   .post(sendInvoice);
+
+router.route('/:id/hash')
+  .get(getInvoiceHash);
+
+router.route('/:id/credit-note')
+  .post(createCreditNote);
 
 export default router;

@@ -2,7 +2,8 @@ import Event from '../models/Event.js';
 import Project from '../models/Project.js';
 import Settings from '../models/Settings.js';
 import { historyService } from '../services/historyService.js';
-import { fireInternalTrigger } from '../services/automation/triggerService.js';
+
+import { eventBus } from '../services/eventBus.service.js';
 
 // Helper: Verify project ownership
 const verifyProjectOwnership = async (projectId, userId) => {
@@ -78,15 +79,16 @@ export const createEvent = async (req, res, next) => {
     // Log history
     await historyService.eventAdded(project._id, type, description);
 
-    // Fire automation trigger (non-blocking)
-    fireInternalTrigger('event.created', {
+    // Publish to Hub Event Bus for cross-app automations
+    eventBus.publish('event.created', {
       eventId: event._id.toString(),
       projectId: project._id.toString(),
       projectName: project.name,
       eventType: event.type,
       description: event.description,
-      amount: event.type === 'hours' ? (event.hours * event.hourlyRate) : event.amount
-    }, req.user?._id).catch(() => {});
+      amount: event.type === 'hours' ? (event.hours * event.hourlyRate) : event.amount,
+      hubUserId: req.user?.hubUserId || null
+    }).catch(() => {});
 
     res.status(201).json({ success: true, data: event });
   } catch (error) {

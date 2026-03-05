@@ -30,7 +30,11 @@ const historySchema = new mongoose.Schema({
       'bank_import',
       'bank_reconciled',
       'reminder_sent',
-      'reminder_failed'
+      'reminder_failed',
+      'portal_accessed',
+      'quote_updated',
+      'invoice_reverted',
+      'invoice_payment_received'
     ]
   },
   description: {

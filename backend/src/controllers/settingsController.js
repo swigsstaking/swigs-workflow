@@ -1,7 +1,21 @@
 import Settings from '../models/Settings.js';
 import History from '../models/History.js';
 import { encrypt, decrypt } from '../utils/crypto.js';
-import { isUrlAllowed } from '../services/automation/executorService.js';
+/**
+ * Simple SSRF check: reject private/loopback URLs
+ */
+async function isUrlAllowed(url) {
+  try {
+    const parsed = new URL(url);
+    const hostname = parsed.hostname;
+    // Block obvious private ranges
+    if (['localhost', '127.0.0.1', '0.0.0.0', '::1'].includes(hostname)) return false;
+    if (hostname.startsWith('10.') || hostname.startsWith('192.168.') || hostname.match(/^172\.(1[6-9]|2\d|3[01])\./)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function isValidIBAN(iban) {
   if (!iban) return true; // Optional field
@@ -66,6 +80,13 @@ export const updateSettings = async (req, res, next) => {
     if (company) {
       if (company.iban !== undefined && !isValidIBAN(company.iban)) {
         return res.status(400).json({ success: false, error: 'IBAN invalide' });
+      }
+      // Validate IDE format (CHE-XXX.XXX.XXX [MWST|TVA|IVA])
+      if (company.siret && company.siret.trim() !== '') {
+        const ideRegex = /^CHE-?\d{3}\.?\d{3}\.?\d{3}(\s*(MWST|TVA|IVA))?$/i;
+        if (!ideRegex.test(company.siret.trim())) {
+          return res.status(400).json({ success: false, error: 'Format IDE invalide. Attendu : CHE-XXX.XXX.XXX (MWST|TVA|IVA)' });
+        }
       }
       settings.company = { ...settings.company.toObject(), ...company };
     }

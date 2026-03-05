@@ -247,9 +247,15 @@ export const generateInvoicePDF = async (invoice, project, settings) => {
   const design = getDesign(settings);
   const vatRate = invoice.vatRate ?? settings.invoicing?.defaultVatRate ?? 8.1;
 
-  // Generate QR-Bill SVG if IBAN configured and showQrBill enabled
+  // Credit note: override label
+  const isCreditNote = invoice.documentType === 'credit_note';
+  if (isCreditNote) {
+    design.labelInvoice = 'Avoir';
+  }
+
+  // Generate QR-Bill SVG if IBAN configured and showQrBill enabled (not for credit notes)
   let qrBillSvg = '';
-  if (design.showQrBill && settings.company?.iban) {
+  if (!isCreditNote && design.showQrBill && settings.company?.iban) {
     qrBillSvg = await generateQRBillSVG(invoice, project, settings);
   }
 
@@ -262,11 +268,13 @@ export const generateInvoicePDF = async (invoice, project, settings) => {
     document: {
       number: invoice.number,
       issueDate: invoice.issueDate,
-      dueDate: invoice.dueDate,
+      dueDate: isCreditNote ? null : invoice.dueDate,
       paidAt: invoice.status === 'paid' ? invoice.paidAt : null,
       status: invoice.status,
       notes: invoice.notes || null,
-      paymentTerms: settings.invoicing?.defaultPaymentTerms || null
+      paymentTerms: isCreditNote ? null : (settings.invoicing?.defaultPaymentTerms || null),
+      isCreditNote,
+      creditNoteRef: invoice._creditNoteRefNumber || null
     },
     lines: buildInvoiceLines(invoice),
     totals: {
@@ -276,6 +284,7 @@ export const generateInvoicePDF = async (invoice, project, settings) => {
       discountAmount: invoice.discountAmount || 0,
       vatRate,
       vatAmount: invoice.vatAmount || 0,
+      vatBreakdown: invoice.vatBreakdown || [],
       total: invoice.total || 0
     },
     design,
@@ -315,6 +324,15 @@ export const generateReminderPDF = async (invoice, project, settings, reminderIn
     qrBillSvg = await generateQRBillSVG(invoice, project, settings);
   }
 
+  // CO art. 104: 5% annual moratoire interest on overdue amount
+  const daysOverdue = reminderInfo.daysOverdue || 0;
+  const outstandingAmount = (invoice.total || 0) - (invoice.paidAmount || 0);
+  const moratoireInterest = daysOverdue > 0
+    ? Math.round(outstandingAmount * 0.05 * (daysOverdue / 365) * 100) / 100
+    : 0;
+  const roundTo5ct = (amount) => Math.round(amount / 0.05) * 0.05;
+  const totalWithInterest = roundTo5ct(outstandingAmount + moratoireInterest);
+
   const data = {
     company: buildCompany(settings),
     client: buildClient(project),
@@ -328,7 +346,7 @@ export const generateReminderPDF = async (invoice, project, settings, reminderIn
       issueDate: invoice.issueDate,
       originalDueDate: invoice.dueDate,
       newDueDate,
-      daysOverdue: reminderInfo.daysOverdue || 0,
+      daysOverdue,
       status: 'overdue',
       notes: invoice.notes || null
     },
@@ -337,7 +355,11 @@ export const generateReminderPDF = async (invoice, project, settings, reminderIn
       subtotal: invoice.subtotal || 0,
       vatRate,
       vatAmount: invoice.vatAmount || 0,
-      total: invoice.total || 0
+      total: invoice.total || 0,
+      paidAmount: invoice.paidAmount || 0,
+      outstandingAmount,
+      moratoireInterest,
+      totalWithInterest
     },
     design,
     qrBillSvg

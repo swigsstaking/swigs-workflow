@@ -28,6 +28,7 @@ export default function CustomInvoiceForm({
         updateLine={updateCustomLine}
         removeLine={removeCustomLine}
         addLine={addCustomLine}
+        showVatRate
       />
 
       {/* Discount */}

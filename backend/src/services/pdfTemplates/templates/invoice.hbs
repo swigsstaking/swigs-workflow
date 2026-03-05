@@ -35,7 +35,7 @@
         </div>
       {{/if}}
       <div class="company-meta">
-        {{#if design.showSiret}}{{#if company.siret}}<span>IDE/SIRET: {{company.siret}}</span>{{/if}}{{/if}}
+        {{#if design.showSiret}}{{#if company.siret}}<span>N° IDE: {{company.siret}}</span>{{/if}}{{/if}}
         {{#if design.showVatNumber}}{{#if company.vatNumber}}<span>N° TVA: {{company.vatNumber}}</span>{{/if}}{{/if}}
         {{#if design.showIban}}{{#if company.iban}}<span>IBAN: {{company.iban}}</span>{{/if}}{{/if}}
       </div>
@@ -92,10 +92,12 @@
           <span class="date-label">Émission</span>
           <span class="date-value">{{formatDate document.issueDate}}</span>
         </div>
+        {{#if document.dueDate}}
         <div class="date-item">
           <span class="date-label">Échéance</span>
           <span class="date-value">{{formatDate document.dueDate}}</span>
         </div>
+        {{/if}}
         {{#if document.paidAt}}
         <div class="date-item">
           <span class="date-label">Payée le</span>
@@ -103,6 +105,11 @@
         </div>
         {{/if}}
       </div>
+      {{#if document.isCreditNote}}
+      <div style="margin-top: 6px; font-size: 9px; color: #666;">
+        Réf. facture originale : {{document.creditNoteRef}}
+      </div>
+      {{/if}}
     </div>
     {{/if}}
   </div>
@@ -140,7 +147,7 @@
   <div class="totals-section">
     <div class="totals-box">
       <div class="totals-row">
-        <span class="label">{{#if totals.vatRate}}Sous-total HT{{else}}Sous-total{{/if}}</span>
+        <span class="label">{{#if totals.vatAmount}}Sous-total HT{{else}}Sous-total{{/if}}</span>
         <span class="value">{{formatCurrency totals.subtotal}}</span>
       </div>
       {{#if totals.discountAmount}}
@@ -149,14 +156,27 @@
         <span class="value" style="color: var(--success-color);">-{{formatCurrency totals.discountAmount}}</span>
       </div>
       {{/if}}
-      {{#if totals.vatRate}}
-      <div class="totals-row">
-        <span class="label">TVA ({{totals.vatRate}}%)</span>
-        <span class="value">{{formatCurrency totals.vatAmount}}</span>
-      </div>
+      {{#if totals.vatAmount}}
+        {{#if totals.vatBreakdown.length}}
+          {{#each totals.vatBreakdown}}
+          {{#if this.rate}}
+          <div class="totals-row">
+            <span class="label">TVA {{this.rate}}% (base {{formatCurrency this.base}})</span>
+            <span class="value">{{formatCurrency this.amount}}</span>
+          </div>
+          {{/if}}
+          {{/each}}
+        {{else}}
+          {{#if totals.vatRate}}
+          <div class="totals-row">
+            <span class="label">TVA ({{totals.vatRate}}%)</span>
+            <span class="value">{{formatCurrency totals.vatAmount}}</span>
+          </div>
+          {{/if}}
+        {{/if}}
       {{/if}}
       <div class="totals-row total-final">
-        <span class="label">{{#if totals.vatRate}}Total TTC{{else}}Total{{/if}}</span>
+        <span class="label">{{#if totals.vatAmount}}Total TTC{{else}}Total{{/if}}</span>
         <span class="value">{{formatCurrency totals.total}}</span>
       </div>
     </div>

@@ -43,6 +43,12 @@ const customLineSchema = new mongoose.Schema({
     default: 0,
     min: 0
   },
+  vatRate: {
+    type: Number,
+    default: null,
+    min: 0,
+    max: 100
+  },
   total: {
     type: Number,
     required: true,
@@ -106,6 +112,20 @@ const invoiceSchema = new mongoose.Schema({
     unique: true
   },
 
+  // Document type: invoice or credit_note (avoir)
+  documentType: {
+    type: String,
+    enum: ['invoice', 'credit_note'],
+    default: 'invoice'
+  },
+
+  // Reference to original invoice (for credit notes)
+  creditNoteRef: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Invoice',
+    default: null
+  },
+
   // Invoice type: standard (from events/quotes) or custom (free lines)
   invoiceType: {
     type: String,
@@ -146,7 +166,7 @@ const invoiceSchema = new mongoose.Schema({
 
   vatRate: {
     type: Number,
-    default: 20,
+    default: 8.1,
     min: 0,
     max: 100
   },
@@ -155,6 +175,12 @@ const invoiceSchema = new mongoose.Schema({
     default: 0,
     min: 0
   },
+  // Per-rate VAT breakdown (LTVA art. 25 compliance)
+  vatBreakdown: [{
+    rate: { type: Number, required: true },
+    base: { type: Number, required: true },
+    amount: { type: Number, required: true }
+  }],
   total: {
     type: Number,
     required: true,
@@ -192,6 +218,10 @@ const invoiceSchema = new mongoose.Schema({
 
   // PDF
   pdfPath: {
+    type: String,
+    default: null
+  },
+  pdfHash: {
     type: String,
     default: null
   },
@@ -257,6 +287,13 @@ invoiceSchema.statics.generateNumber = async function() {
   const year = new Date().getFullYear();
   const seq = await Counter.getNextSequence(`invoice_${year}`);
   return `FAC-${year}-${String(seq).padStart(3, '0')}`;
+};
+
+// Generate credit note number (AVO-YYYY-NNN)
+invoiceSchema.statics.generateCreditNoteNumber = async function() {
+  const year = new Date().getFullYear();
+  const seq = await Counter.getNextSequence(`credit_note_${year}`);
+  return `AVO-${year}-${String(seq).padStart(3, '0')}`;
 };
 
 // Sync global counter with existing invoices (run once at startup)

@@ -9,6 +9,7 @@ import {
   generateRevenueReportPDF
 } from '../services/export.service.js';
 import Settings from '../models/Settings.js';
+import archiver from 'archiver';
 
 /**
  * Export journal comptable (CSV)
@@ -210,10 +211,11 @@ export const exportFiduciary = async (req, res, next) => {
 
     const userInvoices = invoices.filter(inv => inv.project !== null);
 
-    // 2. Expenses by category
+    // 2. Expenses by category (exclude ignored transactions)
     const expenses = await BankTransaction.find({
       userId,
       creditDebit: 'DBIT',
+      matchStatus: { $ne: 'ignored' },
       bookingDate: { $gte: fromDate, $lte: toDate }
     })
       .populate('expenseCategory', 'name accountNumber')
@@ -291,12 +293,13 @@ export const exportFiduciary = async (req, res, next) => {
 
     // Section 3: Détail dépenses
     lines.push('--- DÉTAIL DÉPENSES ---');
-    lines.push('Date;Contrepartie;Catégorie;Montant;TVA;Notes');
+    lines.push('Date;Contrepartie;Catégorie;Montant;TVA;Notes;Pièces jointes');
     for (const exp of expenses) {
       const catName = (exp.expenseCategory?.name || 'Non catégorisé').replace(/;/g, ',');
       const counterparty = (exp.counterpartyName || '').replace(/;/g, ',');
       const notes = (exp.notes || '').replace(/;/g, ',').replace(/\n/g, ' ');
-      lines.push(`${new Date(exp.bookingDate).toLocaleDateString('fr-CH')};${counterparty};${catName};${exp.amount.toFixed(2)};${(exp.vatAmount || 0).toFixed(2)};${notes}`);
+      const attachCount = exp.attachments?.length || 0;
+      lines.push(`${new Date(exp.bookingDate).toLocaleDateString('fr-CH')};${counterparty};${catName};${exp.amount.toFixed(2)};${(exp.vatAmount || 0).toFixed(2)};${notes};${attachCount}`);
     }
     lines.push('');
 
@@ -317,10 +320,48 @@ export const exportFiduciary = async (req, res, next) => {
 
     const safFrom = from.replace(/[^a-zA-Z0-9\-]/g, '');
     const safTo = to.replace(/[^a-zA-Z0-9\-]/g, '');
-    const filename = `fiduciaire_${safFrom}_${safTo}.csv`;
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send(csv);
+
+    // ZIP format: include CSV + all expense attachments
+    if (req.query.format === 'zip') {
+      const filename = `fiduciaire_${safFrom}_${safTo}.zip`;
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+      const archive = archiver('zip', { zlib: { level: 6 } });
+      archive.on('error', err => {
+        console.error('[Export] Archiver error:', err.message);
+        if (!res.headersSent) res.status(500).json({ success: false, error: 'Erreur lors de la création du ZIP' });
+      });
+      archive.pipe(res);
+
+      // Add CSV report
+      archive.append(Buffer.from(csv, 'utf-8'), { name: 'rapport_fiduciaire.csv' });
+
+      // Add expense attachments organized by category
+      let attachIdx = 0;
+      for (const exp of expenses) {
+        if (!exp.attachments?.length) continue;
+        const dateStr = new Date(exp.bookingDate).toISOString().slice(0, 10);
+        const safeName = (exp.counterpartyName || 'inconnu').replace(/[^a-zA-Z0-9À-ÿ _\-]/g, '').slice(0, 40);
+        const catFolder = (exp.expenseCategory?.name || 'Non catégorisé').replace(/[^a-zA-Z0-9À-ÿ _\-]/g, '');
+
+        for (const att of exp.attachments) {
+          attachIdx++;
+          const ext = att.filename?.split('.').pop() || 'bin';
+          const attFilename = `${dateStr}_${safeName}_${attachIdx}.${ext}`;
+          const buffer = Buffer.from(att.data, 'base64');
+          archive.append(buffer, { name: `pieces_justificatives/${catFolder}/${attFilename}` });
+        }
+      }
+
+      await archive.finalize();
+    } else {
+      // CSV-only format (default)
+      const filename = `fiduciaire_${safFrom}_${safTo}.csv`;
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(csv);
+    }
   } catch (error) {
     next(error);
   }

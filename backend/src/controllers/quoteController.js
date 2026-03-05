@@ -4,7 +4,8 @@ import Settings from '../models/Settings.js';
 import { historyService } from '../services/historyService.js';
 import { generateQuotePDF } from '../services/pdf.service.js';
 import { sendQuoteEmail } from '../services/email.service.js';
-import { fireInternalTrigger } from '../services/automation/triggerService.js';
+
+import { eventBus } from '../services/eventBus.service.js';
 
 /** Swiss rounding: round to nearest 5 centimes (0.05 CHF) */
 const roundTo5ct = (amount) => Math.round(amount / 0.05) * 0.05;
@@ -241,15 +242,16 @@ export const createQuote = async (req, res, next) => {
     // Log history
     await historyService.quoteCreated(project._id, number, total);
 
-    // Fire automation trigger (non-blocking)
-    fireInternalTrigger('quote.created', {
+    // Publish to Hub Event Bus for cross-app automations
+    eventBus.publish('quote.created', {
       quoteId: quote._id.toString(),
       quoteNumber: quote.number,
       projectId: project._id.toString(),
       projectName: project.name,
       total: quote.total,
-      client: project.client
-    }, req.user?._id).catch(() => {});
+      client: project.client,
+      hubUserId: req.user?.hubUserId || null
+    }).catch(() => {});
 
     res.status(201).json({ success: true, data: quote });
   } catch (error) {
@@ -431,16 +433,17 @@ export const changeQuoteStatus = async (req, res, next) => {
 
     await quote.save();
 
-    // Fire automation trigger (non-blocking)
+    // Publish to Hub Event Bus for cross-app automations
     if (status === 'signed') {
-      fireInternalTrigger('quote.signed', {
+      eventBus.publish('quote.signed', {
         quoteId: quote._id.toString(),
         quoteNumber: quote.number,
         projectId: quote.project._id.toString(),
         projectName: quote.project.name,
         total: quote.total,
-        client: quote.project.client
-      }, req.user?._id).catch(() => {});
+        client: quote.project.client,
+        hubUserId: req.user?.hubUserId || null
+      }).catch(() => {});
     }
 
     res.json({ success: true, data: quote });
@@ -599,15 +602,16 @@ export const sendQuote = async (req, res, next) => {
       await historyService.quoteSent(quote.project._id, quote.number);
     }
 
-    // Fire automation trigger (non-blocking)
-    fireInternalTrigger('quote.sent', {
+    // Publish to Hub Event Bus for cross-app automations
+    eventBus.publish('quote.sent', {
       quoteId: quote._id.toString(),
       quoteNumber: quote.number,
       projectId: quote.project._id.toString(),
       projectName: quote.project.name,
       total: quote.total,
-      client: quote.project.client
-    }, req.user?._id).catch(() => {});
+      client: quote.project.client,
+      hubUserId: req.user?.hubUserId || null
+    }).catch(() => {});
 
     res.json({
       success: true,

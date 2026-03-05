@@ -95,6 +95,9 @@ export default function CompanySection({ settings, onSettingsUpdate }) {
             onChange={(e) => updateField('siret', e.target.value)}
             placeholder="CHE-123.456.789"
           />
+          {formData.siret && !/^CHE-?\d{3}\.?\d{3}\.?\d{3}(\s*(MWST|TVA|IVA))?$/i.test(formData.siret.trim()) && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 -mt-2">Format attendu : CHE-XXX.XXX.XXX</p>
+          )}
 
           <Input
             label="N° TVA"
