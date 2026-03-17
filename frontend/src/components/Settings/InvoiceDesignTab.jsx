@@ -3,7 +3,7 @@ import {
   Paintbrush, Save, Upload, Trash2, Eye, FileText, Type,
   LayoutTemplate, Send, AlignLeft, AlignCenter, AlignRight,
   Tag, Palette, Settings2, X, ChevronDown, ChevronUp,
-  RefreshCw, Mail
+  RefreshCw, Mail, FileUp, CheckCircle
 } from 'lucide-react';
 import Button from '../ui/Button';
 import Input, { Textarea, Select } from '../ui/Input';
@@ -281,8 +281,12 @@ export default function InvoiceDesignTab({ settings, onSettingsUpdate }) {
   const [testEmail, setTestEmail]     = useState('');
   const [openSection, setOpenSection] = useState('template');
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [hasLetterhead, setHasLetterhead] = useState(false);
+  const [useLetterhead, setUseLetterhead] = useState(false);
+  const [uploadingLetterhead, setUploadingLetterhead] = useState(false);
 
   const fileInputRef    = useRef(null);
+  const letterheadInputRef = useRef(null);
   const debounceTimerRef = useRef(null);
   const { addToast }    = useToastStore();
 
@@ -328,6 +332,10 @@ export default function InvoiceDesignTab({ settings, onSettingsUpdate }) {
     }
     if (settings?.company?.logo) {
       setLogo(settings.company.logo);
+    }
+    if (settings?.invoiceDesign) {
+      setHasLetterhead(!!settings.invoiceDesign._hasLetterhead);
+      setUseLetterhead(!!settings.invoiceDesign.useLetterhead);
     }
   }, [settings]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -480,6 +488,54 @@ export default function InvoiceDesignTab({ settings, onSettingsUpdate }) {
   const handleDragOver = useCallback((e) => {
     e.preventDefault();
   }, []);
+
+  // -------------------------------------------------------------------------
+  // Letterhead handlers
+  // -------------------------------------------------------------------------
+
+  const handleLetterheadUpload = async (file) => {
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      addToast({ type: 'error', message: 'Le PDF ne doit pas dépasser 2 MB' });
+      return;
+    }
+    setUploadingLetterhead(true);
+    try {
+      await settingsApi.uploadLetterhead(file);
+      setHasLetterhead(true);
+      setUseLetterhead(true);
+      addToast({ type: 'success', message: 'Papier à lettres importé' });
+      refreshPreview(formData);
+    } catch (error) {
+      addToast({ type: 'error', message: error.response?.data?.error || "Erreur lors de l'upload" });
+    } finally {
+      setUploadingLetterhead(false);
+    }
+  };
+
+  const handleLetterheadDelete = async () => {
+    try {
+      await settingsApi.deleteLetterhead();
+      setHasLetterhead(false);
+      setUseLetterhead(false);
+      addToast({ type: 'success', message: 'Papier à lettres supprimé' });
+      refreshPreview(formData);
+    } catch {
+      addToast({ type: 'error', message: 'Erreur lors de la suppression' });
+    }
+  };
+
+  const handleToggleLetterhead = async (enabled) => {
+    setUseLetterhead(enabled);
+    try {
+      await settingsApi.update({ invoiceDesign: { ...formData, useLetterhead: enabled } });
+      // Fetch preview without re-saving (refreshPreview would call update again)
+      const html = await settingsApi.getInvoicePreviewHTML();
+      setPreviewHtml(typeof html === 'string' ? html : html?.data ?? '');
+    } catch {
+      addToast({ type: 'error', message: 'Erreur lors de la mise à jour' });
+    }
+  };
 
   // -------------------------------------------------------------------------
   // Test email handlers
@@ -742,7 +798,92 @@ export default function InvoiceDesignTab({ settings, onSettingsUpdate }) {
             </div>
           </AccordionSection>
 
-          {/* Section 4 — Informations affichées */}
+          {/* Section 4 — Papier à lettres */}
+          <AccordionSection
+            id="letterhead"
+            icon={FileUp}
+            title="Papier à lettres (PDF)"
+            openId={openSection}
+            setOpenId={setOpenSection}
+          >
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+              Importez un PDF de votre papier à lettres. Il sera utilisé comme fond pour toutes vos factures, devis et rappels — comme sur Bexio.
+            </p>
+
+            {hasLetterhead ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+                  <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-emerald-800 dark:text-emerald-300">
+                      Papier à lettres importé
+                    </p>
+                    <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5">
+                      Le PDF sera utilisé comme fond pour vos documents.
+                    </p>
+                  </div>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => letterheadInputRef.current?.click()}
+                      loading={uploadingLetterhead}
+                    >
+                      Remplacer
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      icon={Trash2}
+                      onClick={handleLetterheadDelete}
+                    >
+                      Supprimer
+                    </Button>
+                  </div>
+                </div>
+
+                <ToggleItem
+                  label="Activer le papier à lettres"
+                  checked={useLetterhead}
+                  onChange={handleToggleLetterhead}
+                />
+              </div>
+            ) : (
+              <div
+                onClick={() => letterheadInputRef.current?.click()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const file = e.dataTransfer?.files?.[0];
+                  if (file) handleLetterheadUpload(file);
+                }}
+                onDragOver={(e) => e.preventDefault()}
+                className="
+                  border-2 border-dashed border-slate-300 dark:border-dark-border rounded-xl
+                  p-8 flex flex-col items-center justify-center gap-2 cursor-pointer
+                  hover:border-primary-400 hover:bg-primary-50/50 dark:hover:bg-primary-900/10
+                  transition-colors
+                "
+              >
+                <FileUp className="w-8 h-8 text-slate-400" />
+                <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                  Glissez votre PDF ici ou cliquez pour choisir
+                </p>
+                <p className="text-xs text-slate-400">
+                  PDF uniquement — max 2 MB — page 1 utilisée comme fond
+                </p>
+              </div>
+            )}
+
+            <input
+              ref={letterheadInputRef}
+              type="file"
+              accept="application/pdf"
+              className="hidden"
+              onChange={(e) => handleLetterheadUpload(e.target.files?.[0])}
+            />
+          </AccordionSection>
+
+          {/* Section 5 — Informations affichées */}
           <AccordionSection
             id="visibility"
             icon={FileText}

@@ -17,6 +17,9 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Shared refresh promise to prevent multiple simultaneous refresh calls
+let refreshPromise = null;
+
 // Intercepteur pour gerer les erreurs 401
 api.interceptors.response.use(
   (response) => response,
@@ -30,8 +33,12 @@ api.interceptors.response.use(
       if (retryCount < 1) {
         originalRequest._retryCount = retryCount + 1;
 
-        const { refreshAccessToken } = useAuthStore.getState();
-        const success = await refreshAccessToken();
+        // Use shared promise so multiple 401s don't trigger parallel refreshes
+        if (!refreshPromise) {
+          refreshPromise = useAuthStore.getState().refreshAccessToken()
+            .finally(() => { refreshPromise = null; });
+        }
+        const success = await refreshPromise;
 
         if (success) {
           const { accessToken } = useAuthStore.getState();
@@ -129,6 +136,14 @@ export const settingsApi = {
     });
   },
   deleteLogo: () => api.delete('/settings/logo'),
+  uploadLetterhead: (file) => {
+    const formData = new FormData();
+    formData.append('letterhead', file);
+    return api.post('/settings/letterhead', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
+  deleteLetterhead: () => api.delete('/settings/letterhead'),
   getInvoicePreview: () => api.get('/settings/invoice-preview', { responseType: 'blob' }),
   getInvoicePreviewHTML: () => api.get('/settings/invoice-preview-html', { responseType: 'text', transformResponse: [(data) => data] }),
   sendTestEmail: (to) => api.post('/settings/test-email', { to }),
@@ -196,38 +211,6 @@ export const serviceCategoriesApi = {
   seed: () => api.post('/service-categories/seed')
 };
 
-// Automations
-export const automationsApi = {
-  getAll: () => api.get('/automations'),
-  getOne: (id) => api.get(`/automations/${id}`),
-  create: (data) => api.post('/automations', data),
-  update: (id, data) => api.put(`/automations/${id}`, data),
-  delete: (id) => api.delete(`/automations/${id}`),
-  toggle: (id) => api.patch(`/automations/${id}/toggle`),
-  run: (id, data) => api.post(`/automations/${id}/run`, data),
-  duplicate: (id) => api.post(`/automations/${id}/duplicate`),
-  getRuns: (id, params) => api.get(`/automations/${id}/runs`, { params })
-};
-
-// Automation Runs
-export const automationRunsApi = {
-  getOne: (id) => api.get(`/automation-runs/${id}`),
-  retry: (id) => api.post(`/automation-runs/${id}/retry`)
-};
-
-// Email Templates
-export const emailTemplatesApi = {
-  getAll: (params) => api.get('/email-templates', { params }),
-  getOne: (id) => api.get(`/email-templates/${id}`),
-  create: (data) => api.post('/email-templates', data),
-  update: (id, data) => api.put(`/email-templates/${id}`, data),
-  delete: (id) => api.delete(`/email-templates/${id}`),
-  preview: (id, data) => api.post(`/email-templates/${id}/preview`, { data }),
-  sendTest: (id, to, data) => api.post(`/email-templates/${id}/send-test`, { to, data }),
-  getVariables: (category) => api.get(`/email-templates/variables/${category}`),
-  createDefaults: () => api.post('/email-templates/create-defaults')
-};
-
 // Exports
 export const exportsApi = {
   journal: () => {
@@ -269,6 +252,7 @@ export const bankApi = {
     });
   },
   getImports: () => api.get('/bank/imports'),
+  deleteImport: (importId) => api.delete(`/bank/imports/${importId}`),
   getImportTransactions: (importId, params) => api.get(`/bank/imports/${importId}/transactions`, { params }),
   getTransactions: (params) => api.get('/bank/transactions', { params }),
   getUnmatched: () => api.get('/bank/unmatched'),
@@ -285,7 +269,34 @@ export const bankApi = {
   },
   removeAttachment: (id, aid) => api.delete(`/bank/transactions/${id}/attachments/${aid}`),
   testImap: (config) => api.post('/bank/imap/test', config),
-  fetchImapNow: () => api.post('/bank/imap/fetch')
+  fetchImapNow: () => api.post('/bank/imap/fetch'),
+  // Single transaction detail
+  getTransaction: (id) => api.get(`/bank/transactions/${id}`),
+  createTransaction: (data) => api.post('/bank/transactions', data),
+  updateTransaction: (id, data) => api.put(`/bank/transactions/${id}`, data),
+  deleteTransaction: (id) => api.delete(`/bank/transactions/${id}`),
+  // Recurring charges
+  getRecurringCharges: (params) => api.get('/bank/recurring', { params }),
+  createRecurringCharge: (data) => api.post('/bank/recurring', data),
+  updateRecurringCharge: (id, data) => api.put(`/bank/recurring/${id}`, data),
+  deleteRecurringCharge: (id) => api.delete(`/bank/recurring/${id}`),
+  // CSV Import
+  previewCsv: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/bank/import-csv/preview', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
+  confirmCsvImport: (file, mapping, options) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('mapping', JSON.stringify(mapping));
+    formData.append('options', JSON.stringify(options));
+    return api.post('/bank/import-csv/confirm', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  }
 };
 
 // Bank Accounts (Compta Plus)
@@ -346,6 +357,11 @@ export const quoteTemplatesApi = {
   update: (id, data) => api.put(`/quote-templates/${id}`, data),
   delete: (id) => api.delete(`/quote-templates/${id}`),
   reorder: (templateIds) => api.put('/quote-templates/reorder', { templateIds })
+};
+
+// API Token (for Telegram bot, etc.)
+export const apiTokenApi = {
+  generate: () => api.post('/auth/api-token'),
 };
 
 // AbaNinja

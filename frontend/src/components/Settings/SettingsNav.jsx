@@ -1,4 +1,4 @@
-import { Building2, Receipt, Palette, Paintbrush, Users, Package, Tag, Server, Mail, Bell, Link2, Landmark, RefreshCw, FileText, FolderOpen, Crown } from 'lucide-react';
+import { Building2, Receipt, Palette, Paintbrush, Users, Package, Tag, Server, Mail, Link2, Landmark, RefreshCw, FileText, FolderOpen, Crown, Bot } from 'lucide-react';
 
 const settingsNav = [
   {
@@ -24,7 +24,6 @@ const settingsNav = [
     category: 'Communication',
     items: [
       { id: 'smtp', label: 'SMTP', icon: Server },
-      { id: 'emails', label: 'Templates email', icon: Mail },
       { id: 'reminders', label: 'Emails & Relances', icon: Mail },
     ]
   },
@@ -34,6 +33,7 @@ const settingsNav = [
       { id: 'abaninja', label: 'AbaNinja', icon: Link2 },
       { id: 'cms', label: 'CMS E-commerce', icon: Link2 },
       { id: 'bank', label: 'Import bancaire', icon: Landmark },
+      { id: 'telegram-bot', label: 'Bot Telegram', icon: Bot },
     ]
   },
   {

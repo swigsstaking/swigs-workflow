@@ -2,46 +2,24 @@ import { createHash } from 'crypto';
 import Invoice from '../models/Invoice.js';
 import Event from '../models/Event.js';
 import Quote from '../models/Quote.js';
-import Project from '../models/Project.js';
 import Settings from '../models/Settings.js';
 import { historyService } from '../services/historyService.js';
 import { generateInvoicePDF } from '../services/pdf.service.js';
 import { sendInvoiceEmail } from '../services/email.service.js';
 import { decrypt } from '../utils/crypto.js';
+import { roundTo5ct, isFullyPaid, computeLineDiscount } from '../utils/currency.js';
+import { verifyProjectOwnership, getUserProjectIds, assertOwnership } from '../utils/project.js';
+import { INVOICE_STATUSES } from '../utils/constants.js';
+import { parsePagination } from '../utils/pagination.js';
 
 import { eventBus } from '../services/eventBus.service.js';
 
-/** Safe non-blocking event publish (never throws) */
+/** Safe non-blocking event publish (logs errors instead of swallowing) */
 const safePublish = (event, payload) => {
-  try { eventBus.publish(event, payload); } catch (_) { /* ignore */ }
+  try { eventBus.publish(event, payload); } catch (err) { console.error('[EventBus] publish failed:', event, err.message); }
 };
 
-/** Swiss rounding: round to nearest 5 centimes (0.05 CHF) */
-const roundTo5ct = (amount) => Math.round(amount / 0.05) * 0.05;
-
-/** Compute per-line discount amount from type + value */
-const computeLineDiscount = (line) => {
-  const gross = (line.quantity || 1) * (line.unitPrice || 0);
-  if (!line.discountType || !line.discountValue || line.discountValue <= 0) return 0;
-  if (line.discountType === 'percentage') return Math.min(gross, gross * (line.discountValue / 100));
-  return Math.min(line.discountValue, gross);
-};
-
-// Allowed status values for invoices
-const ALLOWED_INVOICE_STATUSES = ['draft', 'sent', 'paid', 'partial', 'cancelled', 'overdue'];
-
-// Helper: Verify project ownership
-const verifyProjectOwnership = async (projectId, userId) => {
-  if (!userId) throw new Error('userId requis pour vérifier l\'appartenance du projet');
-  return Project.findOne({ _id: projectId, userId });
-};
-
-// Helper: Get user's project IDs
-const getUserProjectIds = async (userId) => {
-  if (!userId) return [];
-  const projects = await Project.find({ userId }).select('_id');
-  return projects.map(p => p._id);
-};
+const ALLOWED_INVOICE_STATUSES = INVOICE_STATUSES;
 
 // @desc    Get invoices for a project
 // @route   GET /api/projects/:projectId/invoices
@@ -76,9 +54,7 @@ export const getAllInvoices = async (req, res, next) => {
     const { status } = req.query;
 
     // Pagination
-    const page = Math.max(1, parseInt(req.query.page) || 1);
-    const limit = Math.min(Math.max(1, parseInt(req.query.limit) || 50), 100);
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePagination(req.query);
 
     // Filter by user's projects
     const projectIds = await getUserProjectIds(req.user?._id);
@@ -127,14 +103,8 @@ export const getInvoice = async (req, res, next) => {
     }
 
     // Verify project ownership
-    if (req.user) {
-      if (!invoice.project.userId) {
-        return res.status(403).json({ success: false, error: 'Ce projet n\'a pas de propriétaire assigné' });
-      }
-      if (invoice.project.userId.toString() !== req.user._id.toString()) {
-        return res.status(403).json({ success: false, error: 'Accès refusé' });
-      }
-    }
+    const denied = assertOwnership(req, res, invoice);
+    if (denied) return;
 
     res.json({ success: true, data: invoice });
   } catch (error) {
@@ -666,6 +636,36 @@ export const updateInvoice = async (req, res, next) => {
         await invoice.save();
         return res.json({ success: true, data: invoice });
       }
+    }
+
+    // ── Date-only updates allowed on any status ──
+    const dateOnlyFields = ['issueDate', 'dueDate', 'paidAt'];
+    const bodyKeys = Object.keys(req.body).filter(k => k !== 'skipReminders');
+    const isDateOnlyUpdate = bodyKeys.length > 0 && bodyKeys.every(k => dateOnlyFields.includes(k));
+
+    if (isDateOnlyUpdate) {
+      const settings = await Settings.getSettings(req.user._id);
+      const paymentTerms = settings?.invoicing?.defaultPaymentTerms || 30;
+
+      if (req.body.issueDate) {
+        const newIssueDate = new Date(req.body.issueDate.length === 10 ? req.body.issueDate + 'T12:00:00' : req.body.issueDate);
+        invoice.issueDate = newIssueDate;
+        // Auto-recalculate dueDate unless explicitly provided
+        if (!req.body.dueDate) {
+          const newDueDate = new Date(newIssueDate);
+          newDueDate.setDate(newDueDate.getDate() + paymentTerms);
+          invoice.dueDate = newDueDate;
+        }
+      }
+      if (req.body.dueDate) {
+        invoice.dueDate = new Date(req.body.dueDate.length === 10 ? req.body.dueDate + 'T12:00:00' : req.body.dueDate);
+      }
+      if (req.body.paidAt) {
+        invoice.paidAt = new Date(req.body.paidAt.length === 10 ? req.body.paidAt + 'T12:00:00' : req.body.paidAt);
+      }
+
+      await invoice.save();
+      return res.json({ success: true, data: invoice });
     }
 
     // Only draft invoices can be fully updated
@@ -1255,9 +1255,10 @@ export const recordPayment = async (req, res, next) => {
     // Update paidAmount
     invoice.paidAmount = (invoice.paidAmount || 0) + finalAmount;
 
-    // Update status
-    if (invoice.paidAmount >= invoice.total) {
+    // Update status (Swiss tolerance: < 0.05 CHF difference = fully paid)
+    if (isFullyPaid(invoice.paidAmount, invoice.total)) {
       invoice.status = 'paid';
+      invoice.paidAmount = invoice.total; // Normalize to avoid display artifacts
       invoice.paidAt = new Date();
     } else {
       invoice.status = 'partial';

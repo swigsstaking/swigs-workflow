@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Landmark, Upload, CheckCircle2, AlertTriangle, XCircle, Search, FileText, ArrowRight, Mail, Save, RefreshCw } from 'lucide-react';
+import { Landmark, Upload, CheckCircle2, AlertTriangle, XCircle, Search, FileText, ArrowRight, Mail, Save, RefreshCw, Trash2, FileSpreadsheet, PlusCircle } from 'lucide-react';
 import { bankApi, invoicesApi, settingsApi } from '../../../services/api';
 import { useToastStore } from '../../../stores/toastStore';
 import Button from '../../ui/Button';
@@ -215,6 +215,32 @@ export default function BankSection() {
       addToast({ type: 'error', message: error.response?.data?.error || 'Erreur de récupération IMAP' });
     } finally {
       setImapFetching(false);
+    }
+  };
+
+  const handleDeleteImport = async (e, imp) => {
+    e.stopPropagation();
+    if (!confirm(`Supprimer l'import "${imp.filename}" et ses ${imp.totalTransactions} transactions ?`)) return;
+    try {
+      await bankApi.deleteImport(imp.importId);
+      addToast({ type: 'success', message: 'Import supprimé' });
+      setTransactions([]);
+      setImportResult(null);
+      loadImports();
+    } catch (error) {
+      addToast({ type: 'error', message: error.response?.data?.error || 'Erreur lors de la suppression' });
+    }
+  };
+
+  const handleDeleteTransaction = async (txId) => {
+    if (!confirm('Supprimer cette transaction ?')) return;
+    try {
+      await bankApi.deleteTransaction(txId);
+      setTransactions(prev => prev.filter(t => t._id !== txId));
+      addToast({ type: 'success', message: 'Transaction supprimée' });
+      loadImports(); // refresh counters
+    } catch (error) {
+      addToast({ type: 'error', message: error.response?.data?.error || 'Erreur lors de la suppression' });
     }
   };
 
@@ -491,22 +517,33 @@ export default function BankSection() {
                         {tx.matchedInvoice?.number || '-'}
                       </td>
                       <td className="px-3 py-2 text-right whitespace-nowrap">
-                        {(tx.matchStatus === 'unmatched' || tx.matchStatus === 'suggested') && tx.creditDebit === 'CRDT' && (
-                          <div className="flex items-center justify-end gap-1">
+                        <div className="flex items-center justify-end gap-1">
+                          {(tx.matchStatus === 'unmatched' || tx.matchStatus === 'suggested') && tx.creditDebit === 'CRDT' && (
+                            <>
+                              <button
+                                onClick={() => handleMatchClick(tx)}
+                                className="px-2 py-1 text-xs font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded transition-colors"
+                              >
+                                Rapprocher
+                              </button>
+                              <button
+                                onClick={() => handleIgnore(tx._id)}
+                                className="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+                              >
+                                Ignorer
+                              </button>
+                            </>
+                          )}
+                          {tx.matchStatus !== 'matched' && (
                             <button
-                              onClick={() => handleMatchClick(tx)}
-                              className="px-2 py-1 text-xs font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded transition-colors"
+                              onClick={() => handleDeleteTransaction(tx._id)}
+                              className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-500/10 text-slate-300 hover:text-red-500 transition-colors"
+                              title="Supprimer"
                             >
-                              Rapprocher
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
-                            <button
-                              onClick={() => handleIgnore(tx._id)}
-                              className="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
-                            >
-                              Ignorer
-                            </button>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -524,29 +561,41 @@ export default function BankSection() {
             Historique des imports
           </h3>
           <div className="space-y-2">
-            {imports.map((imp) => (
-              <div
-                key={imp._id}
-                className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                onClick={() => loadImportTransactions(imp.importId)}
-              >
-                <div className="flex items-center gap-3">
-                  <FileText className="w-4 h-4 text-slate-400" />
-                  <div>
-                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{imp.filename}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {new Date(imp.createdAt).toLocaleDateString('fr-CH')} — {imp.fileType} — {imp.totalTransactions} transactions
-                    </p>
+            {imports.map((imp) => {
+              const typeIcon = imp.fileType === 'csv' ? FileSpreadsheet : imp.fileType === 'manual' ? PlusCircle : FileText;
+              const TypeIcon = typeIcon;
+              const typeLabel = imp.fileType === 'csv' ? 'CSV' : imp.fileType === 'manual' ? 'Manuel' : imp.fileType;
+              return (
+                <div
+                  key={imp._id}
+                  className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer group"
+                  onClick={() => loadImportTransactions(imp.importId)}
+                >
+                  <div className="flex items-center gap-3">
+                    <TypeIcon className="w-4 h-4 text-slate-400" />
+                    <div>
+                      <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{imp.filename}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {new Date(imp.createdAt).toLocaleDateString('fr-CH')} — {typeLabel} — {imp.totalTransactions} transaction{imp.totalTransactions > 1 ? 's' : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    {imp.matchedCount > 0 && <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">{imp.matchedCount}</span>}
+                    {imp.suggestedCount > 0 && <span className="px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">{imp.suggestedCount}</span>}
+                    {imp.unmatchedCount > 0 && <span className="px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">{imp.unmatchedCount}</span>}
+                    <button
+                      onClick={(e) => handleDeleteImport(e, imp)}
+                      className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-50 dark:hover:bg-red-500/10 text-slate-300 hover:text-red-500 transition-all ml-1"
+                      title="Supprimer cet import"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                    <ArrowRight className="w-4 h-4 text-slate-400" />
                   </div>
                 </div>
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">{imp.matchedCount}</span>
-                  <span className="px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">{imp.suggestedCount}</span>
-                  <span className="px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">{imp.unmatchedCount}</span>
-                  <ArrowRight className="w-4 h-4 text-slate-400 ml-1" />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   DollarSign,
@@ -19,11 +19,11 @@ import { useUIStore } from '../stores/uiStore';
 import { useToastStore } from '../stores/toastStore';
 import { exportsApi } from '../services/api';
 import KPICard from '../components/Analytics/KPICard';
-import MonthlyChart from '../components/Analytics/MonthlyChart';
-import ProjectStatusChart from '../components/Analytics/ProjectStatusChart';
-import QuotePipelineChart from '../components/Analytics/QuotePipelineChart';
-import TopClientsChart from '../components/Analytics/TopClientsChart';
-import HoursChart from '../components/Analytics/HoursChart';
+const MonthlyChart = lazy(() => import('../components/Analytics/MonthlyChart'));
+const ProjectStatusChart = lazy(() => import('../components/Analytics/ProjectStatusChart'));
+const QuotePipelineChart = lazy(() => import('../components/Analytics/QuotePipelineChart'));
+const TopClientsChart = lazy(() => import('../components/Analytics/TopClientsChart'));
+const HoursChart = lazy(() => import('../components/Analytics/HoursChart'));
 import EmptyState from '../components/ui/EmptyState';
 import { SkeletonKPI, SkeletonChart } from '../components/ui/Skeleton';
 
@@ -111,9 +111,9 @@ export default function Analytics() {
   const hasFilters = analyticsHiddenStatuses.length > 0;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
             Analytics
@@ -128,7 +128,7 @@ export default function Analytics() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           {/* Filter Menu */}
           <div className="relative">
             <button
@@ -353,26 +353,41 @@ export default function Analytics() {
             />
           </div>
 
-          {/* Monthly Chart - Full Width */}
-          <MonthlyChart data={monthly} showLastYear={showLastYear} />
+          {/* Charts (lazy-loaded) */}
+          <Suspense fallback={
+            <div className="space-y-6">
+              <SkeletonChart className="h-80" />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <SkeletonChart />
+                <SkeletonChart />
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <SkeletonChart />
+                <SkeletonChart />
+              </div>
+            </div>
+          }>
+            {/* Monthly Chart - Full Width */}
+            <MonthlyChart data={monthly} showLastYear={showLastYear} />
 
-          {/* Two Column Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Quote Pipeline */}
-            <QuotePipelineChart data={quotes} />
+            {/* Two Column Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Quote Pipeline */}
+              <QuotePipelineChart data={quotes} />
 
-            {/* Project Status */}
-            <ProjectStatusChart data={projects?.byStatus} />
-          </div>
+              {/* Project Status */}
+              <ProjectStatusChart data={projects?.byStatus} />
+            </div>
 
-          {/* Two Column Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Top Clients */}
-            <TopClientsChart data={clients} />
+            {/* Two Column Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Top Clients */}
+              <TopClientsChart data={clients} />
 
-            {/* Hours Chart */}
-            <HoursChart data={hours} />
-          </div>
+              {/* Hours Chart */}
+              <HoursChart data={hours} />
+            </div>
+          </Suspense>
 
           {/* Additional Stats Row */}
           {quotes && (

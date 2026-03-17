@@ -1,38 +1,16 @@
 import Quote from '../models/Quote.js';
-import Project from '../models/Project.js';
 import Settings from '../models/Settings.js';
 import { historyService } from '../services/historyService.js';
 import { generateQuotePDF } from '../services/pdf.service.js';
 import { sendQuoteEmail } from '../services/email.service.js';
 
 import { eventBus } from '../services/eventBus.service.js';
+import { roundTo5ct, computeLineDiscount } from '../utils/currency.js';
+import { verifyProjectOwnership, getUserProjectIds, assertOwnership } from '../utils/project.js';
+import { QUOTE_STATUSES } from '../utils/constants.js';
+import { parsePagination } from '../utils/pagination.js';
 
-/** Swiss rounding: round to nearest 5 centimes (0.05 CHF) */
-const roundTo5ct = (amount) => Math.round(amount / 0.05) * 0.05;
-
-/** Compute per-line discount amount from type + value */
-const computeLineDiscount = (line) => {
-  const gross = (line.quantity || 1) * (line.unitPrice || 0);
-  if (!line.discountType || !line.discountValue || line.discountValue <= 0) return 0;
-  if (line.discountType === 'percentage') return Math.min(gross, gross * (line.discountValue / 100));
-  return Math.min(line.discountValue, gross); // fixed
-};
-
-// Allowed status values for quotes
-const ALLOWED_QUOTE_STATUSES = ['draft', 'sent', 'signed', 'invoiced', 'partial', 'cancelled'];
-
-// Helper: Verify project ownership
-const verifyProjectOwnership = async (projectId, userId) => {
-  if (!userId) throw new Error('userId requis pour vérifier l\'appartenance du projet');
-  return Project.findOne({ _id: projectId, userId });
-};
-
-// Helper: Get user's project IDs
-const getUserProjectIds = async (userId) => {
-  if (!userId) return [];
-  const projects = await Project.find({ userId }).select('_id');
-  return projects.map(p => p._id);
-};
+const ALLOWED_QUOTE_STATUSES = QUOTE_STATUSES;
 
 // @desc    Get quotes for a project
 // @route   GET /api/projects/:projectId/quotes
@@ -107,9 +85,7 @@ export const getAllQuotes = async (req, res, next) => {
     const { status } = req.query;
 
     // Pagination
-    const page = Math.max(1, parseInt(req.query.page) || 1);
-    const limit = Math.min(Math.max(1, parseInt(req.query.limit) || 50), 100);
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePagination(req.query);
 
     // Filter by user's projects
     const projectIds = await getUserProjectIds(req.user?._id);
@@ -154,14 +130,8 @@ export const getQuote = async (req, res, next) => {
     }
 
     // Verify project ownership
-    if (req.user) {
-      if (!quote.project.userId) {
-        return res.status(403).json({ success: false, error: 'Ce projet n\'a pas de propriétaire assigné' });
-      }
-      if (quote.project.userId.toString() !== req.user._id.toString()) {
-        return res.status(403).json({ success: false, error: 'Accès refusé' });
-      }
-    }
+    const denied = assertOwnership(req, res, quote);
+    if (denied) return;
 
     res.json({ success: true, data: quote });
   } catch (error) {
@@ -270,14 +240,8 @@ export const updateQuote = async (req, res, next) => {
     }
 
     // Verify project ownership
-    if (req.user) {
-      if (!quote.project.userId) {
-        return res.status(403).json({ success: false, error: 'Ce projet n\'a pas de propriétaire assigné' });
-      }
-      if (quote.project.userId.toString() !== req.user._id.toString()) {
-        return res.status(403).json({ success: false, error: 'Accès refusé' });
-      }
-    }
+    const denied = assertOwnership(req, res, quote);
+    if (denied) return;
 
     const { lines, notes, validUntil, vatRate, discountType, discountValue } = req.body;
     const previousStatus = quote.status;
@@ -401,14 +365,8 @@ export const changeQuoteStatus = async (req, res, next) => {
     }
 
     // Verify project ownership
-    if (req.user) {
-      if (!quote.project.userId) {
-        return res.status(403).json({ success: false, error: 'Ce projet n\'a pas de propriétaire assigné' });
-      }
-      if (quote.project.userId.toString() !== req.user._id.toString()) {
-        return res.status(403).json({ success: false, error: 'Accès refusé' });
-      }
-    }
+    const denied = assertOwnership(req, res, quote);
+    if (denied) return;
 
     // Validate transition
     const allowedNext = ALLOWED_TRANSITIONS[quote.status] || [];
@@ -463,14 +421,8 @@ export const deleteQuote = async (req, res, next) => {
     }
 
     // Verify project ownership
-    if (req.user) {
-      if (!quote.project.userId) {
-        return res.status(403).json({ success: false, error: 'Ce projet n\'a pas de propriétaire assigné' });
-      }
-      if (quote.project.userId.toString() !== req.user._id.toString()) {
-        return res.status(403).json({ success: false, error: 'Accès refusé' });
-      }
-    }
+    const denied = assertOwnership(req, res, quote);
+    if (denied) return;
 
     // Deletion rules:
     // - draft, sent, refused, expired: can be deleted
@@ -520,14 +472,8 @@ export const getQuotePDF = async (req, res, next) => {
     }
 
     // Verify project ownership
-    if (req.user) {
-      if (!quote.project.userId) {
-        return res.status(403).json({ success: false, error: 'Ce projet n\'a pas de propriétaire assigné' });
-      }
-      if (quote.project.userId.toString() !== req.user._id.toString()) {
-        return res.status(403).json({ success: false, error: 'Accès refusé' });
-      }
-    }
+    const denied = assertOwnership(req, res, quote);
+    if (denied) return;
 
     // Get settings
     const settings = await Settings.getSettings(req.user?._id);
@@ -561,14 +507,8 @@ export const sendQuote = async (req, res, next) => {
     }
 
     // Verify project ownership
-    if (req.user) {
-      if (!quote.project.userId) {
-        return res.status(403).json({ success: false, error: 'Ce projet n\'a pas de propriétaire assigné' });
-      }
-      if (quote.project.userId.toString() !== req.user._id.toString()) {
-        return res.status(403).json({ success: false, error: 'Accès refusé' });
-      }
-    }
+    const denied = assertOwnership(req, res, quote);
+    if (denied) return;
 
     // Validate client email
     if (!quote.project.client || !quote.project.client.email) {

@@ -323,8 +323,8 @@ export default function Header() {
             </button>
           )}
 
-          {/* Accent color picker */}
-          <div className="flex items-center">
+          {/* Accent color picker — hidden on mobile (available in drawer) */}
+          <div className="hidden md:flex items-center">
             {ACCENT_OPTIONS.map(({ name, bg }) => (
               <button
                 key={name}
@@ -345,10 +345,10 @@ export default function Header() {
             ))}
           </div>
 
-          {/* Dark mode toggle */}
+          {/* Dark mode toggle — hidden on mobile (available in drawer) */}
           <button
             onClick={toggleDarkMode}
-            className={`p-2 rounded-[6px] hover:bg-[rgb(var(--swigs-stone)/0.1)] dark:hover:bg-white/[0.05] transition-all duration-200 flex items-center justify-center ${focusRing}`}
+            className={`hidden md:flex p-2 rounded-[6px] hover:bg-[rgb(var(--swigs-stone)/0.1)] dark:hover:bg-white/[0.05] transition-all duration-200 items-center justify-center ${focusRing}`}
             title={darkMode ? 'Mode clair' : 'Mode sombre'}
             aria-label={darkMode ? 'Activer le mode clair' : 'Activer le mode sombre'}
             aria-pressed={darkMode}
@@ -388,7 +388,7 @@ export default function Header() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="absolute top-full left-0 right-0 z-30 bg-white/98 dark:bg-zinc-950/98 backdrop-blur-xl border-b border-[rgb(var(--swigs-stone)/0.2)] dark:border-white/[0.06] shadow-xl md:hidden"
+              className="absolute top-full left-0 right-0 z-30 bg-white dark:bg-zinc-950 backdrop-blur-xl border-b border-[rgb(var(--swigs-stone)/0.2)] dark:border-white/[0.06] shadow-xl md:hidden"
             >
               {isWorkflow && (
                 <div className="px-4 pt-3 pb-1">

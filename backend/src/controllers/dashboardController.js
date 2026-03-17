@@ -7,13 +7,8 @@ import BankTransaction from '../models/BankTransaction.js';
 import BankImport from '../models/BankImport.js';
 import ExpenseCategory from '../models/ExpenseCategory.js';
 import RecurringCharge from '../models/RecurringCharge.js';
-
-// Helper: Get user's project IDs
-const getUserProjectIds = async (userId) => {
-  if (!userId) return null;
-  const projects = await Project.find({ userId }).select('_id');
-  return projects.map(p => p._id);
-};
+import RecurringInvoice from '../models/RecurringInvoice.js';
+import { getUserProjectIds } from '../utils/project.js';
 
 /**
  * GET /api/dashboard
@@ -49,7 +44,9 @@ export const getDashboard = async (req, res, next) => {
       allPaidInvoices,
       recoveryAgg,
       settings,
-      vatAgg
+      vatAgg,
+      upcomingRecurringInvoices,
+      pendingNotOverdue
     ] = await Promise.all([
       // Overdue invoices (sent or partial, past due date)
       Invoice.find({
@@ -101,7 +98,21 @@ export const getDashboard = async (req, res, next) => {
           paidAt: { $gte: quarterStart, $lte: quarterEnd }
         }},
         { $group: { _id: null, total: { $sum: '$vatAmount' } } }
-      ])
+      ]),
+
+      // Upcoming recurring invoices (next 30 days)
+      RecurringInvoice.find({
+        userId: req.user._id,
+        status: 'active',
+        nextGenerationDate: { $lte: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000) }
+      }).populate({ path: 'project', select: 'client name' }).sort({ nextGenerationDate: 1 }).limit(10).lean(),
+
+      // Pending invoices not yet overdue (for cash flow forecast)
+      Invoice.find({
+        ...projectFilter,
+        status: { $in: ['sent', 'partial'] },
+        dueDate: { $gte: now }
+      }).populate({ path: 'project', select: 'client name' }).lean()
     ]);
 
     // --- Compta Plus: conditional accounting queries ---
@@ -111,7 +122,7 @@ export const getDashboard = async (req, res, next) => {
 
     let accountingData = null;
     if (req.hasComptaPlus) {
-      const [expenseAgg, revenueAgg, uncategorizedAgg, budgetCategories, lastImport, expensesYtdAgg, revenueYtdAgg, activeRecurring] = await Promise.all([
+      const [expenseAgg, revenueAgg, uncategorizedAgg, budgetCategories, lastImport, expensesYtdAgg, revenueYtdAgg, activeRecurring, spendByCat] = await Promise.all([
         // Expenses MTD
         BankTransaction.aggregate([
           { $match: { userId, creditDebit: 'DBIT', bookingDate: { $gte: monthStart } } },
@@ -142,7 +153,12 @@ export const getDashboard = async (req, res, next) => {
         RecurringCharge.find({ userId, isActive: true })
           .populate({ path: 'expenseCategory', select: 'name color' })
           .sort({ expectedAmount: -1 })
-          .lean()
+          .lean(),
+        // Spend per category this month (for budget alerts)
+        BankTransaction.aggregate([
+          { $match: { userId, creditDebit: 'DBIT', bookingDate: { $gte: monthStart }, expenseCategory: { $ne: null } } },
+          { $group: { _id: '$expenseCategory', spent: { $sum: '$amount' } } }
+        ])
       ]);
 
       const expensesMtd = expenseAgg[0]?.total || 0;
@@ -154,14 +170,9 @@ export const getDashboard = async (req, res, next) => {
         ? Math.round((revenueYtd - expensesYtd) / revenueYtd * 1000) / 10
         : null;
 
-      // Budget alerts: query spend per category this month
+      // Budget alerts: compute from parallel query results
       let budgetAlerts = [];
       if (budgetCategories.length > 0) {
-        const categoryIds = budgetCategories.map(c => c._id);
-        const spendByCat = await BankTransaction.aggregate([
-          { $match: { userId, creditDebit: 'DBIT', bookingDate: { $gte: monthStart }, expenseCategory: { $in: categoryIds } } },
-          { $group: { _id: '$expenseCategory', spent: { $sum: '$amount' } } }
-        ]);
         const spendMap = new Map(spendByCat.map(s => [String(s._id), s.spent]));
         budgetAlerts = budgetCategories
           .map(cat => {
@@ -268,8 +279,8 @@ export const getDashboard = async (req, res, next) => {
     // 4. Client intelligence
     const clientMap = new Map();
 
-    // Build client data from paid invoices
-    for (const inv of allPaidInvoices) {
+    // Build client data from all invoices in a single pass
+    const getOrCreateClient = (inv) => {
       const clientKey = inv.project?.client?.company || inv.project?.client?.name || 'Inconnu';
       if (!clientMap.has(clientKey)) {
         clientMap.set(clientKey, {
@@ -285,42 +296,26 @@ export const getDashboard = async (req, res, next) => {
           lastInvoiceDate: null
         });
       }
+      return clientMap.get(clientKey);
+    };
 
-      const client = clientMap.get(clientKey);
+    for (const inv of allPaidInvoices) {
+      const client = getOrCreateClient(inv);
       client.totalPaid += inv.total;
       client.totalInvoiced += inv.total;
       client.invoiceCount++;
-
-      // Calculate payment days (paidAt - issueDate)
       if (inv.paidAt && inv.issueDate) {
         const payDays = Math.floor((new Date(inv.paidAt) - new Date(inv.issueDate)) / (1000 * 60 * 60 * 24));
         if (payDays >= 0) client.paymentDays.push(payDays);
       }
-
       const invDate = new Date(inv.issueDate);
       if (!client.lastInvoiceDate || invDate > client.lastInvoiceDate) {
         client.lastInvoiceDate = invDate;
       }
     }
 
-    // Add overdue data
     for (const inv of overdueInvoices) {
-      const clientKey = inv.project?.client?.company || inv.project?.client?.name || 'Inconnu';
-      if (!clientMap.has(clientKey)) {
-        clientMap.set(clientKey, {
-          name: inv.project?.client?.name || clientKey,
-          company: inv.project?.client?.company || '',
-          email: inv.project?.client?.email || '',
-          totalInvoiced: 0,
-          totalPaid: 0,
-          totalOverdue: 0,
-          invoiceCount: 0,
-          paymentDays: [],
-          reminderCount: 0,
-          lastInvoiceDate: null
-        });
-      }
-      const client = clientMap.get(clientKey);
+      const client = getOrCreateClient(inv);
       client.totalOverdue += inv.total;
       client.totalInvoiced += inv.total;
       client.invoiceCount++;
@@ -387,13 +382,7 @@ export const getDashboard = async (req, res, next) => {
       .reduce((sum, e) => sum + e.hours, 0);
 
     // 8. Cash flow forecast (next 30 days based on avg payment days)
-    const pendingSent = overdueInvoices.concat(
-      await Invoice.find({
-        ...projectFilter,
-        status: { $in: ['sent', 'partial'] },
-        dueDate: { $gte: now }
-      }).populate({ path: 'project', select: 'client name' }).lean()
-    );
+    const pendingSent = overdueInvoices.concat(pendingNotOverdue);
 
     const globalAvgPaymentDays = clientIntelligence.length > 0
       ? Math.round(
@@ -504,6 +493,21 @@ export const getDashboard = async (req, res, next) => {
           company: q.project?.client?.company || '',
           sentAt: q.updatedAt,
           projectId: q.project?._id || null
+        })),
+        upcomingRecurringInvoices: (upcomingRecurringInvoices || []).map(ri => ({
+          _id: ri._id,
+          projectName: ri.project?.name || 'Inconnu',
+          clientName: ri.project?.client?.name || 'Inconnu',
+          company: ri.project?.client?.company || '',
+          frequency: ri.frequency,
+          nextGenerationDate: ri.nextGenerationDate,
+          total: ri.customLines.reduce((sum, l) => {
+            const lineTotal = l.quantity * l.unitPrice;
+            const disc = l.discountType === 'percentage' ? lineTotal * (l.discountValue || 0) / 100 : (l.discountValue || 0);
+            return sum + lineTotal - disc;
+          }, 0),
+          autoSend: ri.autoSend,
+          totalGenerated: ri.totalGenerated,
         })),
         accounting: accountingData ? {
           budgetAlerts: accountingData.budgetAlerts,

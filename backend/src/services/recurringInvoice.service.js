@@ -3,10 +3,12 @@ import RecurringInvoice from '../models/RecurringInvoice.js';
 import Invoice from '../models/Invoice.js';
 import Project from '../models/Project.js';
 import Settings from '../models/Settings.js';
+import { acquireCronLock, releaseCronLock } from '../models/CronLock.js';
 import { generateInvoicePDF } from './pdf.service.js';
 import { sendInvoiceEmail } from './email.service.js';
 
 import { eventBus } from './eventBus.service.js';
+import { roundTo5ct, computeLineDiscount } from '../utils/currency.js';
 
 /**
  * Calculate the next generation date based on frequency and dayOfMonth
@@ -62,14 +64,6 @@ export const generateInvoiceFromRecurring = async (recurring) => {
     throw new Error(`Projet ${recurring.project} introuvable`);
   }
 
-  // Compute per-line discount from type + value
-  const computeLineDiscount = (line) => {
-    const gross = (line.quantity || 1) * (line.unitPrice || 0);
-    if (!line.discountType || !line.discountValue || line.discountValue <= 0) return 0;
-    if (line.discountType === 'percentage') return Math.min(gross, gross * (line.discountValue / 100));
-    return Math.min(line.discountValue, gross);
-  };
-
   // Calculate totals from custom lines
   const processedLines = recurring.customLines.map(line => {
     const discount = computeLineDiscount(line);
@@ -87,7 +81,6 @@ export const generateInvoiceFromRecurring = async (recurring) => {
 
   const subtotal = processedLines.reduce((sum, line) => sum + line.total, 0);
   const vatAmount = subtotal * (recurring.vatRate / 100);
-  const roundTo5ct = (amount) => Math.round(amount / 0.05) * 0.05;
   const total = roundTo5ct(subtotal + vatAmount);
 
   const issueDate = new Date();
@@ -230,32 +223,20 @@ export const processRecurringInvoices = async () => {
 export const initRecurringInvoices = () => {
   cron.schedule('0 6 * * *', async () => {
     const lockId = 'recurring-invoice-cron';
-    const lockExpiry = 10 * 60 * 1000; // 10 min max
+
+    const acquired = await acquireCronLock(lockId);
+    if (!acquired) {
+      console.log('[RecurringInvoice] Skipping — another instance holds the lock');
+      return;
+    }
 
     try {
-      const lock = await Settings.findOneAndUpdate(
-        {
-          _lockId: lockId,
-          $or: [
-            { _lockExpiresAt: { $exists: false } },
-            { _lockExpiresAt: { $lt: new Date() } }
-          ]
-        },
-        { $set: { _lockId: lockId, _lockExpiresAt: new Date(Date.now() + lockExpiry) } },
-        { upsert: true, returnDocument: 'after' }
-      ).catch(() => null);
-
-      if (!lock) {
-        console.log('[RecurringInvoice] Skipping — another instance holds the lock');
-        return;
-      }
-
       console.log('Running daily recurring invoice generation at 6:00 AM');
       await processRecurringInvoices();
     } catch (err) {
       console.error('[RecurringInvoice] Cron error:', err.message);
     } finally {
-      await Settings.deleteOne({ _lockId: lockId }).catch(() => {});
+      await releaseCronLock(lockId);
     }
   });
 

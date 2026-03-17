@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import {
   Bell, AlertTriangle, CalendarClock, FileText, Receipt,
-  CreditCard, ShieldCheck, ArrowUpRight, Send,
+  CreditCard, ShieldCheck, ArrowUpRight, Send, Repeat,
 } from 'lucide-react';
 import { itemVariant } from '../utils/animations';
 import { fmt } from '../utils/briefingLogic';
@@ -15,6 +15,7 @@ const iconMap = {
   credit: CreditCard,
   shield: ShieldCheck,
   arrow: ArrowUpRight,
+  repeat: Repeat,
 };
 
 const accentColors = {

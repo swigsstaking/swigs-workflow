@@ -75,7 +75,7 @@ function ManualTab({ categories, onSuccess, onClose }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.bookingDate || !form.amount || Number(form.amount) <= 0) {
-      addToast('Date et montant (> 0) requis', 'error');
+      addToast({ type: 'error', message: 'Date et montant (> 0) requis' });
       return;
     }
     setSaving(true);
@@ -86,11 +86,11 @@ function ManualTab({ categories, onSuccess, onClose }) {
         expenseCategoryId: form.expenseCategoryId || undefined,
         bankAccountId: form.bankAccountId || undefined,
       });
-      addToast('Transaction ajoutée', 'success');
+      addToast({ type: 'success', message: 'Transaction ajoutée' });
       onSuccess?.();
       onClose();
     } catch (err) {
-      addToast(err.response?.data?.error || 'Erreur lors de la création', 'error');
+      addToast({ type: 'error', message: err.response?.data?.error || 'Erreur lors de la création' });
     } finally {
       setSaving(false);
     }
@@ -204,7 +204,8 @@ function CsvTab({ categories, onSuccess, onClose }) {
   const [accounts, setAccounts] = useState(null);
 
   // Mapping state
-  const [mapping, setMapping] = useState({ date: '', amount: '', counterparty: '', description: '' });
+  const [mapping, setMapping] = useState({ date: '', amount: '', debitAmount: '', creditAmount: '', counterparty: '', description: '' });
+  const [dualAmountMode, setDualAmountMode] = useState(false);
   const [options, setOptions] = useState({ defaultCreditDebit: 'DBIT', defaultCategoryId: '', bankAccountId: '', currency: 'CHF' });
 
   // Result state
@@ -222,19 +223,44 @@ function CsvTab({ categories, onSuccess, onClose }) {
       const res = await bankApi.previewCsv(f);
       const data = res.data.data;
       setPreview(data);
-      // Auto-map common column names
-      const autoMap = { date: '', amount: '', counterparty: '', description: '' };
+      // Auto-map common column names (supports Raiffeisen, PostFinance, UBS, etc.)
+      const autoMap = { date: '', amount: '', debitAmount: '', creditAmount: '', counterparty: '', description: '' };
+      let hasDual = false;
       for (const h of data.headers) {
-        const low = h.toLowerCase();
-        if (!autoMap.date && (low.includes('date') || low.includes('datum'))) autoMap.date = h;
-        if (!autoMap.amount && (low.includes('amount') || low.includes('montant') || low.includes('betrag'))) autoMap.amount = h;
-        if (!autoMap.counterparty && (low.includes('counterparty') || low.includes('fournisseur') || low.includes('name') || low.includes('nom'))) autoMap.counterparty = h;
-        if (!autoMap.description && (low.includes('description') || low.includes('libellé') || low.includes('libelle') || low.includes('reference') || low.includes('text'))) autoMap.description = h;
+        const low = h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        // Date
+        if (!autoMap.date && (low.includes('date') || low.includes('datum') || low === 'valuta' || low.includes('buchung'))) autoMap.date = h;
+        // Single amount
+        if (!autoMap.amount && (low.includes('amount') || low.includes('montant') || low.includes('betrag') || low === 'solde')) autoMap.amount = h;
+        // Debit column (Raiffeisen: "Belastung", "Debit", "Montant debit", "Ausgaben")
+        if (!autoMap.debitAmount && (low.includes('belastung') || low.includes('debit') || low.includes('ausgab') || low.includes('montant debit') || low.includes('depense'))) {
+          autoMap.debitAmount = h;
+          hasDual = true;
+        }
+        // Credit column (Raiffeisen: "Gutschrift", "Credit", "Montant credit", "Einnahmen")
+        if (!autoMap.creditAmount && (low.includes('gutschrift') || low.includes('credit') || low.includes('einnahm') || low.includes('montant credit') || low.includes('revenu'))) {
+          autoMap.creditAmount = h;
+          hasDual = true;
+        }
+        // Counterparty
+        if (!autoMap.counterparty && (low.includes('counterparty') || low.includes('fournisseur') || low.includes('empfanger') || low.includes('auftraggeber') || low.includes('nom') || low.includes('name') || low.includes('beneficiaire'))) autoMap.counterparty = h;
+        // Description
+        if (!autoMap.description && (low.includes('description') || low.includes('libelle') || low.includes('reference') || low.includes('text') || low.includes('mitteilung') || low.includes('buchungstext') || low.includes('avis'))) autoMap.description = h;
+      }
+      // If dual columns detected AND they are different columns, prefer dual mode
+      // Avoid false positive when a single column name contains both "credit" and "debit" (e.g. "Credit/Debit Amount")
+      if (hasDual && autoMap.debitAmount && autoMap.creditAmount && autoMap.debitAmount !== autoMap.creditAmount) {
+        setDualAmountMode(true);
+      } else if (hasDual) {
+        // Single column with credit/debit in name — treat as single amount
+        if (!autoMap.amount) autoMap.amount = autoMap.debitAmount || autoMap.creditAmount;
+        autoMap.debitAmount = '';
+        autoMap.creditAmount = '';
       }
       setMapping(autoMap);
       setStep(2);
     } catch (err) {
-      addToast(err.response?.data?.error || 'Erreur de lecture du CSV', 'error');
+      addToast({ type: 'error', message: err.response?.data?.error || 'Erreur de lecture du CSV' });
     } finally {
       setLoading(false);
     }
@@ -247,8 +273,8 @@ function CsvTab({ categories, onSuccess, onClose }) {
   }, [handleFile]);
 
   const handleImport = async () => {
-    if (!mapping.date || !mapping.amount) {
-      addToast('Colonnes Date et Montant requises', 'error');
+    if (!mapping.date || (!mapping.amount && !dualAmountMode) || (dualAmountMode && !mapping.debitAmount && !mapping.creditAmount)) {
+      addToast({ type: 'error', message: 'Colonnes Date et Montant (ou Débit/Crédit) requises' });
       return;
     }
     setLoading(true);
@@ -260,7 +286,7 @@ function CsvTab({ categories, onSuccess, onClose }) {
         onSuccess?.();
       }
     } catch (err) {
-      addToast(err.response?.data?.error || 'Erreur d\'import', 'error');
+      addToast({ type: 'error', message: err.response?.data?.error || 'Erreur d\'import' });
     } finally {
       setLoading(false);
     }
@@ -294,6 +320,12 @@ function CsvTab({ categories, onSuccess, onClose }) {
             onChange={e => handleFile(e.target.files?.[0])}
           />
         </div>
+        <div className="rounded-lg bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.06] p-3 text-xs text-slate-500 dark:text-slate-400 space-y-1">
+          <p className="font-medium text-slate-600 dark:text-slate-300">Formats supportés</p>
+          <p>Export CSV de votre e-banking : <span className="font-medium">Raiffeisen, PostFinance, UBS, BCGE, BCV</span>, ou tout fichier CSV/TSV.</p>
+          <p>Colonnes détectées automatiquement. Délimiteurs <code className="bg-slate-200 dark:bg-slate-700 px-1 rounded">;</code> et <code className="bg-slate-200 dark:bg-slate-700 px-1 rounded">,</code> supportés.</p>
+          <p>Colonnes montant en une colonne (signée) ou deux colonnes (Débit / Crédit) supportées.</p>
+        </div>
         <div className="flex justify-end">
           <Button variant="secondary" onClick={onClose}>Annuler</Button>
         </div>
@@ -317,11 +349,32 @@ function CsvTab({ categories, onSuccess, onClose }) {
         </div>
 
         {/* Column mapping */}
-        <div className="grid grid-cols-2 gap-3">
-          <Select label="Colonne Date *" value={mapping.date} onChange={e => setMapping(m => ({ ...m, date: e.target.value }))} options={headerOptions} />
-          <Select label="Colonne Montant *" value={mapping.amount} onChange={e => setMapping(m => ({ ...m, amount: e.target.value }))} options={headerOptions} />
-          <Select label="Colonne Contrepartie" value={mapping.counterparty} onChange={e => setMapping(m => ({ ...m, counterparty: e.target.value }))} options={headerOptions} />
-          <Select label="Colonne Description" value={mapping.description} onChange={e => setMapping(m => ({ ...m, description: e.target.value }))} options={headerOptions} />
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <Select label="Colonne Date *" value={mapping.date} onChange={e => setMapping(m => ({ ...m, date: e.target.value }))} options={headerOptions} />
+            {!dualAmountMode ? (
+              <Select label="Colonne Montant *" value={mapping.amount} onChange={e => setMapping(m => ({ ...m, amount: e.target.value }))} options={headerOptions} />
+            ) : (
+              <>
+                <div />
+              </>
+            )}
+            {dualAmountMode && (
+              <>
+                <Select label="Colonne Débit *" value={mapping.debitAmount} onChange={e => setMapping(m => ({ ...m, debitAmount: e.target.value }))} options={headerOptions} />
+                <Select label="Colonne Crédit" value={mapping.creditAmount} onChange={e => setMapping(m => ({ ...m, creditAmount: e.target.value }))} options={headerOptions} />
+              </>
+            )}
+            <Select label="Colonne Contrepartie" value={mapping.counterparty} onChange={e => setMapping(m => ({ ...m, counterparty: e.target.value }))} options={headerOptions} />
+            <Select label="Colonne Description" value={mapping.description} onChange={e => setMapping(m => ({ ...m, description: e.target.value }))} options={headerOptions} />
+          </div>
+          <button
+            type="button"
+            onClick={() => setDualAmountMode(!dualAmountMode)}
+            className="text-xs text-primary-600 dark:text-primary-400 hover:underline"
+          >
+            {dualAmountMode ? 'Utiliser une seule colonne montant' : 'Deux colonnes Débit / Crédit (Raiffeisen, etc.)'}
+          </button>
         </div>
 
         {/* Global options */}
@@ -373,7 +426,7 @@ function CsvTab({ categories, onSuccess, onClose }) {
           <Button variant="secondary" icon={ArrowLeft} onClick={() => { setStep(1); setPreview(null); setFile(null); }}>
             Retour
           </Button>
-          <Button onClick={handleImport} loading={loading} icon={ArrowRight} disabled={!mapping.date || !mapping.amount}>
+          <Button onClick={handleImport} loading={loading} icon={ArrowRight} disabled={!mapping.date || (!mapping.amount && !dualAmountMode) || (dualAmountMode && !mapping.debitAmount && !mapping.creditAmount)}>
             Importer {preview.totalRows} lignes
           </Button>
         </div>

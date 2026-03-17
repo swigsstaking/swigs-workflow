@@ -1,5 +1,7 @@
+import { useNavigate } from 'react-router-dom';
 import { Users } from 'lucide-react';
 import { formatCurrency } from '../../../utils/format';
+import { useUIStore } from '../../../stores/uiStore';
 
 function ReliabilityBadge({ score }) {
   if (score === null || score === undefined) {
@@ -19,8 +21,18 @@ function ReliabilityBadge({ score }) {
 }
 
 export default function ClientReliabilityList({ clients }) {
+  const navigate = useNavigate();
+  const { setSearchQuery } = useUIStore();
   const top = (clients || []).slice(0, 5);
   if (!top.length) return null;
+
+  const handleClientClick = (client) => {
+    const search = client.company || client.name;
+    if (search) {
+      setSearchQuery(search);
+      navigate('/workflow');
+    }
+  };
 
   return (
     <div className="bg-white border border-slate-200 dark:bg-white/[0.04] dark:backdrop-blur-sm dark:border-white/[0.06] rounded-xl p-4">
@@ -31,7 +43,11 @@ export default function ClientReliabilityList({ clients }) {
 
       <div className="space-y-2.5">
         {top.map((c, i) => (
-          <div key={i} className="flex items-center gap-2.5">
+          <div
+            key={i}
+            onClick={() => handleClientClick(c)}
+            className="flex items-center gap-2.5 cursor-pointer rounded-lg px-1 -mx-1 py-0.5 hover:bg-slate-50 dark:hover:bg-white/[0.04] transition-colors"
+          >
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary-500/20 to-violet-500/20 flex items-center justify-center flex-shrink-0">
               <span className="text-[11px] font-bold text-slate-500 dark:text-white/60">
                 {(c.company || c.name || '?').charAt(0).toUpperCase()}

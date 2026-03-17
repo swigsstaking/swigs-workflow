@@ -370,6 +370,15 @@ const invoiceDesignSchema = new mongoose.Schema({
   labelServices: {
     type: String,
     default: 'Prestations'
+  },
+  // Letterhead (papier à lettres) — PDF background
+  useLetterhead: {
+    type: Boolean,
+    default: false
+  },
+  letterheadPdf: {
+    type: String,
+    default: null
   }
 }, { _id: false });
 
@@ -456,8 +465,18 @@ const settingsSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Get settings for user (or global if no user)
+// Get settings for user (or global if no user) — excludes heavy fields
 settingsSchema.statics.getSettings = async function(userId = null) {
+  const query = userId ? { userId } : { userId: { $exists: false } };
+  let settings = await this.findOne(query).select('-invoiceDesign.letterheadPdf');
+  if (!settings) {
+    settings = await this.create({ userId });
+  }
+  return settings;
+};
+
+// Get settings with letterhead PDF (for PDF generation only)
+settingsSchema.statics.getSettingsWithLetterhead = async function(userId = null) {
   const query = userId ? { userId } : { userId: { $exists: false } };
   let settings = await this.findOne(query);
   if (!settings) {

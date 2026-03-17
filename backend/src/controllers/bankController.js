@@ -13,6 +13,7 @@ import { testImapConnection, fetchBankEmails } from '../services/bankImapFetcher
 import { decrypt } from '../utils/crypto.js';
 import RecurringCharge from '../models/RecurringCharge.js';
 import { detectRecurringCharges } from '../services/recurringDetector.service.js';
+import { isFullyPaid } from '../utils/currency.js';
 
 /**
  * GET /api/bank/transactions/:id
@@ -197,8 +198,10 @@ export const importCamt = async (req, res, next) => {
             });
             invoice.paidAmount = (invoice.paidAmount || 0) + paymentAmount;
 
-            if (invoice.paidAmount >= invoice.total) {
+            // Swiss tolerance: < 0.05 CHF difference = fully paid
+            if (isFullyPaid(invoice.paidAmount, invoice.total)) {
               invoice.status = 'paid';
+              invoice.paidAmount = invoice.total; // Normalize
               invoice.paidAt = tx.bookingDate || new Date();
             } else {
               invoice.status = 'partial';
@@ -279,7 +282,7 @@ export const deleteImport = async (req, res, next) => {
     const userId = req.user._id;
 
     const imp = await BankImport.findOne({ importId, userId });
-    if (!imp) return res.status(404).json({ error: 'Import introuvable' });
+    if (!imp) return res.status(404).json({ success: false, error: 'Import introuvable' });
 
     // Check if any transactions from this import are matched to invoices
     const matchedCount = await BankTransaction.countDocuments({
@@ -401,8 +404,10 @@ export const matchTransaction = async (req, res, next) => {
         });
         invoice.paidAmount = (invoice.paidAmount || 0) + paymentAmount;
 
-        if (invoice.paidAmount >= invoice.total) {
+        // Swiss tolerance: < 0.05 CHF difference = fully paid
+        if (isFullyPaid(invoice.paidAmount, invoice.total)) {
           invoice.status = 'paid';
+          invoice.paidAmount = invoice.total; // Normalize
           invoice.paidAt = tx.bookingDate || new Date();
         } else {
           invoice.status = 'partial';
@@ -760,14 +765,14 @@ export const mergeTransactions = async (req, res, next) => {
     const userId = req.user._id;
 
     if (!keepId || !deleteIds || !Array.isArray(deleteIds) || deleteIds.length === 0) {
-      return res.status(400).json({ error: 'keepId et deleteIds requis' });
+      return res.status(400).json({ success: false, error: 'keepId et deleteIds requis' });
     }
 
     const keepTx = await BankTransaction.findOne({ _id: keepId, userId });
-    if (!keepTx) return res.status(404).json({ error: 'Transaction à conserver introuvable' });
+    if (!keepTx) return res.status(404).json({ success: false, error: 'Transaction à conserver introuvable' });
 
     const toDelete = await BankTransaction.find({ _id: { $in: deleteIds }, userId });
-    if (toDelete.length === 0) return res.status(404).json({ error: 'Aucune transaction à supprimer trouvée' });
+    if (toDelete.length === 0) return res.status(404).json({ success: false, error: 'Aucune transaction à supprimer trouvée' });
 
     // Absorb data from duplicates into keepTx
     for (const dup of toDelete) {
@@ -1055,8 +1060,8 @@ export const confirmCsvImport = async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'Mapping JSON invalide' });
     }
 
-    if (!mapping?.date || !mapping?.amount) {
-      return res.status(400).json({ success: false, error: 'Colonnes date et montant requises dans le mapping' });
+    if (!mapping?.date || (!mapping?.amount && !mapping?.debitAmount)) {
+      return res.status(400).json({ success: false, error: 'Colonnes date et montant (ou débit/crédit) requises dans le mapping' });
     }
 
     const { headers, rows } = parseCsvBuffer(req.file.buffer);
@@ -1069,11 +1074,19 @@ export const confirmCsvImport = async (req, res, next) => {
 
     const dateIdx = colIdx('date');
     const amountIdx = colIdx('amount');
+    const debitIdx = colIdx('debitAmount');
+    const creditIdx = colIdx('creditAmount');
     const counterpartyIdx = colIdx('counterparty');
     const descriptionIdx = colIdx('description');
+    const hasDualColumns = debitIdx >= 0 || creditIdx >= 0;
 
-    if (dateIdx === -1 || amountIdx === -1) {
+    if (dateIdx === -1 || (amountIdx === -1 && !hasDualColumns)) {
       return res.status(400).json({ success: false, error: 'Colonnes date ou montant introuvables dans le fichier' });
+    }
+
+    // Limit number of transactions per import to prevent DoS
+    if (rows.length > 10000) {
+      return res.status(400).json({ success: false, error: 'Maximum 10\'000 transactions par import' });
     }
 
     const importId = crypto.randomUUID();
@@ -1093,18 +1106,28 @@ export const confirmCsvImport = async (req, res, next) => {
     const errors = [];
     const created = [];
 
+    console.log(`[CSV Import] Starting import: ${rows.length} rows, mapping:`, mapping, 'hasDualColumns:', hasDualColumns);
+
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       try {
-        // Parse date — support dd.MM.yyyy, dd/MM/yyyy, yyyy-MM-dd
-        const rawDate = row[dateIdx];
+        // Parse date — support dd.MM.yyyy, dd.MM.yy, dd/MM/yyyy, yyyy-MM-dd (with optional time)
+        const rawDate = (row[dateIdx] || '').trim();
+        // Strip time portion if present (e.g. "01.03.2026 08:30:00" → "01.03.2026")
+        const dateOnly = rawDate.split(/[\sT]/)[0];
         let bookingDate;
-        if (/^\d{4}-\d{2}-\d{2}/.test(rawDate)) {
-          bookingDate = new Date(rawDate);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
+          bookingDate = new Date(dateOnly + 'T00:00:00');
         } else {
-          const parts = rawDate.split(/[./]/);
+          const parts = dateOnly.split(/[./\-]/);
           if (parts.length === 3) {
-            bookingDate = new Date(`${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`);
+            let year = parts[2];
+            // Handle 2-digit year (e.g. "25" → "2025")
+            if (year.length === 2) {
+              const yy = parseInt(year, 10);
+              year = (yy >= 0 && yy <= 50 ? '20' : '19') + year.padStart(2, '0');
+            }
+            bookingDate = new Date(`${year}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}T00:00:00`);
           }
         }
         if (!bookingDate || isNaN(bookingDate.getTime())) {
@@ -1112,17 +1135,39 @@ export const confirmCsvImport = async (req, res, next) => {
           continue;
         }
 
-        // Parse amount — handle comma decimal separator
-        const rawAmount = row[amountIdx].replace(/['\s]/g, '').replace(',', '.');
-        const amount = Math.abs(parseFloat(rawAmount));
-        if (!amount || isNaN(amount)) {
-          errors.push({ row: i + 2, error: `Montant invalide: "${row[amountIdx]}"` });
-          continue;
+        // Parse amount — handle comma decimal separator and dual columns
+        let amount, creditDebit;
+        if (hasDualColumns) {
+          // Dual columns mode: separate debit/credit columns (Raiffeisen, etc.)
+          const rawDebit = debitIdx >= 0 ? (row[debitIdx] || '').replace(/['\s]/g, '').replace(',', '.') : '';
+          const rawCredit = creditIdx >= 0 ? (row[creditIdx] || '').replace(/['\s]/g, '').replace(',', '.') : '';
+          const debitVal = parseFloat(rawDebit) || 0;
+          const creditVal = parseFloat(rawCredit) || 0;
+          if (debitVal > 0) {
+            amount = Math.abs(debitVal);
+            creditDebit = 'DBIT';
+          } else if (creditVal > 0) {
+            amount = Math.abs(creditVal);
+            creditDebit = 'CRDT';
+          } else if (debitVal < 0) {
+            // Some banks put negative in debit col for reversals
+            amount = Math.abs(debitVal);
+            creditDebit = 'CRDT';
+          } else {
+            errors.push({ row: i + 2, error: `Montant invalide: débit="${row[debitIdx] || ''}" crédit="${row[creditIdx] || ''}"` });
+            continue;
+          }
+        } else {
+          // Single amount column
+          const rawAmount = row[amountIdx].replace(/['\s]/g, '').replace(',', '.');
+          amount = Math.abs(parseFloat(rawAmount));
+          if (!amount || isNaN(amount)) {
+            errors.push({ row: i + 2, error: `Montant invalide: "${row[amountIdx]}"` });
+            continue;
+          }
+          const originalAmount = parseFloat(rawAmount);
+          creditDebit = originalAmount < 0 ? 'DBIT' : defaultCreditDebit;
         }
-
-        // Auto-detect DBIT if original amount is negative
-        const originalAmount = parseFloat(rawAmount);
-        const creditDebit = originalAmount < 0 ? 'DBIT' : defaultCreditDebit;
 
         let vatFields = {};
         if (creditDebit === 'DBIT' && defaultVatFields.vatRate) {
@@ -1149,9 +1194,13 @@ export const confirmCsvImport = async (req, res, next) => {
         });
         created.push(tx);
       } catch (e) {
+        console.error(`[CSV Import] Row ${i + 2} error:`, e.message);
         errors.push({ row: i + 2, error: e.message });
       }
     }
+
+    console.log(`[CSV Import] Done: ${created.length} imported, ${errors.length} errors`);
+    if (errors.length > 0) console.log('[CSV Import] First errors:', errors.slice(0, 5));
 
     // Create import audit record
     if (created.length > 0) {
@@ -1176,6 +1225,7 @@ export const confirmCsvImport = async (req, res, next) => {
       }
     });
   } catch (error) {
+    console.error('[CSV Import] Fatal error:', error.message, error.stack);
     if (error.message?.includes('CSV')) {
       return res.status(400).json({ success: false, error: error.message });
     }

@@ -12,7 +12,6 @@ import ServicesTab from '../components/Settings/ServicesTab';
 import QuoteTemplatesTab from '../components/Settings/QuoteTemplatesTab';
 import StatusesSection from '../components/Settings/sections/StatusesSection';
 import SmtpSection from '../components/Settings/sections/SmtpSection';
-import EmailsSection from '../components/Settings/sections/EmailsSection';
 import RemindersSection from '../components/Settings/sections/RemindersSection';
 import RecurringSection from '../components/Settings/sections/RecurringSection';
 import AbaNinjaSection from '../components/Settings/sections/AbaNinjaSection';
@@ -22,6 +21,7 @@ import InvoiceDesignTab from '../components/Settings/InvoiceDesignTab';
 import BankAccountsSection from '../components/Settings/sections/BankAccountsSection';
 import ExpenseCategoriesSection from '../components/Settings/sections/ExpenseCategoriesSection';
 import CounterpartyRulesSection from '../components/Settings/sections/CounterpartyRulesSection';
+import TelegramBotSection from '../components/Settings/sections/TelegramBotSection';
 import UpgradePrompt from '../components/ui/UpgradePrompt';
 import { useAuthStore } from '../stores/authStore';
 
@@ -100,13 +100,6 @@ export default function Settings() {
             onSettingsUpdate={handleSettingsUpdate}
           />
         );
-      case 'emails':
-        return (
-          <EmailsSection
-            settings={settings}
-            onSettingsUpdate={handleSettingsUpdate}
-          />
-        );
       case 'reminders':
         return (
           <RemindersSection
@@ -130,6 +123,8 @@ export default function Settings() {
         );
       case 'bank':
         return <BankSection />;
+      case 'telegram-bot':
+        return <TelegramBotSection />;
       case 'bank-accounts':
         return user?.hasComptaPlus ? <BankAccountsSection /> : <UpgradePrompt feature="Les comptes bancaires multiples" />;
       case 'expense-categories':
@@ -156,7 +151,7 @@ export default function Settings() {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
           Paramètres

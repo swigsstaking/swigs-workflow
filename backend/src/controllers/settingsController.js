@@ -55,6 +55,11 @@ export const getSettings = async (req, res, next) => {
       settingsObj.bankImap._hasPass = !!settingsObj.bankImap.pass;
       delete settingsObj.bankImap.pass;
     }
+    // Strip heavy letterhead base64 — send boolean indicator instead
+    if (settingsObj.invoiceDesign) {
+      settingsObj.invoiceDesign._hasLetterhead = !!settingsObj.invoiceDesign.letterheadPdf;
+      delete settingsObj.invoiceDesign.letterheadPdf;
+    }
 
     res.json({ success: true, data: settingsObj });
   } catch (error) {
@@ -182,6 +187,10 @@ export const updateSettings = async (req, res, next) => {
       settingsObj.bankImap._hasPass = !!settingsObj.bankImap.pass;
       delete settingsObj.bankImap.pass;
     }
+    if (settingsObj.invoiceDesign) {
+      settingsObj.invoiceDesign._hasLetterhead = !!settingsObj.invoiceDesign.letterheadPdf;
+      delete settingsObj.invoiceDesign.letterheadPdf;
+    }
 
     res.json({ success: true, data: settingsObj });
   } catch (error) {
@@ -217,6 +226,56 @@ export const deleteLogo = async (req, res, next) => {
     const userId = req.user?._id || null;
     const settings = await Settings.getSettings(userId);
     settings.company.logo = null;
+    await settings.save();
+
+    res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Upload letterhead PDF (papier à lettres)
+// @route   POST /api/settings/letterhead
+export const uploadLetterhead = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'Aucun fichier fourni' });
+    }
+
+    // Validate it's a real PDF (check magic bytes)
+    const header = req.file.buffer.slice(0, 5).toString('ascii');
+    if (header !== '%PDF-') {
+      return res.status(400).json({ success: false, error: 'Le fichier n\'est pas un PDF valide' });
+    }
+
+    const base64 = req.file.buffer.toString('base64');
+
+    const userId = req.user?._id || null;
+    const settings = await Settings.getSettings(userId);
+    settings.invoiceDesign = {
+      ...(settings.invoiceDesign?.toObject ? settings.invoiceDesign.toObject() : {}),
+      letterheadPdf: base64,
+      useLetterhead: true
+    };
+    await settings.save();
+
+    res.json({ success: true, data: { useLetterhead: true, hasLetterhead: true } });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Delete letterhead PDF
+// @route   DELETE /api/settings/letterhead
+export const deleteLetterhead = async (req, res, next) => {
+  try {
+    const userId = req.user?._id || null;
+    const settings = await Settings.getSettings(userId);
+    settings.invoiceDesign = {
+      ...(settings.invoiceDesign?.toObject ? settings.invoiceDesign.toObject() : {}),
+      letterheadPdf: null,
+      useLetterhead: false
+    };
     await settings.save();
 
     res.json({ success: true });

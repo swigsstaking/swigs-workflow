@@ -77,7 +77,7 @@ export async function reconcileTransaction(tx, userId) {
           if (trailingMatch && trailingMatch[1] === shortDigits) {
             // Confirm with amount match for extra confidence (account for partial payments)
             const remaining = inv.total - (inv.paidAmount || 0);
-            const amountOk = Math.abs(remaining - tx.amount) < 0.01;
+            const amountOk = Math.abs(remaining - tx.amount) < 0.05;
             return {
               matchedInvoice: inv._id,
               matchMethod: 'qr_reference',
@@ -94,7 +94,7 @@ export async function reconcileTransaction(tx, userId) {
   // For partial invoices, compare against remaining balance (total - paidAmount)
   const amountMatches = unpaidInvoices.filter(inv => {
     const remaining = inv.total - (inv.paidAmount || 0);
-    return Math.abs(remaining - tx.amount) < 0.01;
+    return Math.abs(remaining - tx.amount) < 0.05;
   });
 
   if (amountMatches.length === 1) {

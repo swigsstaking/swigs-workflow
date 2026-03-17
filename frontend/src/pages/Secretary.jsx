@@ -80,6 +80,9 @@ export default function Secretary() {
   );
 
   const [showWelcome, setShowWelcome] = useState(false);
+  const [celebrationSeen, setCelebrationSeen] = useState(
+    () => localStorage.getItem('onboarding_celebration_seen') === 'true'
+  );
 
   useEffect(() => {
     fetchDashboard();
@@ -96,6 +99,14 @@ export default function Secretary() {
   const completedSteps = ONBOARDING_STEPS.filter(step => step.check(settings));
   const allStepsDone = completedSteps.length === ONBOARDING_STEPS.length;
   const showOnboarding = !onboardingDismissed && settings && !allStepsDone;
+
+  // Mark celebration as seen (moved from render-time side-effect)
+  useEffect(() => {
+    if (settings && allStepsDone && !onboardingDismissed && !celebrationSeen) {
+      localStorage.setItem('onboarding_celebration_seen', 'true');
+      setCelebrationSeen(true);
+    }
+  }, [settings, allStepsDone, onboardingDismissed, celebrationSeen]);
 
   // Track onboarding completion
   useEffect(() => {
@@ -127,18 +138,37 @@ export default function Secretary() {
   const handleSendAllReminders = async () => {
     if (!data?.remindersDue?.length) return;
     let sent = 0;
+    let failed = 0;
     for (const r of data.remindersDue) {
       try {
         await remindersApi.send(r.invoiceId);
         sent++;
-      } catch { /* continue */ }
+      } catch {
+        failed++;
+      }
     }
-    trackBusinessEvent('reminders_bulk_sent', { count: sent });
-    addToast({ type: 'success', message: `${sent} rappel(s) envoyé(s)` });
+    trackBusinessEvent('reminders_bulk_sent', { count: sent, failed });
+    if (failed > 0) {
+      addToast({ type: 'warning', message: `${sent} rappel(s) envoyé(s), ${failed} échec(s)` });
+    } else {
+      addToast({ type: 'success', message: `${sent} rappel(s) envoyé(s)` });
+    }
     fetchDashboard(true);
   };
 
   const handleItemClick = (item) => {
+    if (item.type === 'unbilled_work') {
+      navigate('/workflow');
+      return;
+    }
+    if (item.type === 'pending_quote' && item.projectId) {
+      navigate(`/workflow?project=${item.projectId}&tab=quotes`);
+      return;
+    }
+    if (item.type === 'upcoming_recurring') {
+      navigate('/recurring');
+      return;
+    }
     if (item.projectId) {
       navigate(`/workflow?project=${item.projectId}&tab=documents`);
     } else {
@@ -165,7 +195,7 @@ export default function Secretary() {
         <div className="absolute bottom-[-10%] right-[-5%] w-[320px] h-[320px] bg-violet-600/6 rounded-full blur-[60px]" />
       </div>
 
-      <div className="relative z-10 max-w-[1440px] mx-auto px-6 py-6">
+      <div className="relative z-10 max-w-[1440px] mx-auto px-4 sm:px-6 py-4 sm:py-6">
         {/* Onboarding card */}
         {showOnboarding && (
           <div className="mb-6 relative overflow-hidden rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white dark:bg-white/[0.03] shadow-lg shadow-slate-900/5 dark:shadow-black/20">
@@ -265,19 +295,16 @@ export default function Secretary() {
         )}
 
         {/* Onboarding complete celebration (shows once) */}
-        {settings && allStepsDone && !onboardingDismissed && !localStorage.getItem('onboarding_celebration_seen') && (() => {
-          setTimeout(() => localStorage.setItem('onboarding_celebration_seen', 'true'), 0);
-          return (
-            <div className="mb-6 relative overflow-hidden rounded-2xl border border-emerald-200 dark:border-emerald-800/60 bg-gradient-to-br from-emerald-50 via-white to-emerald-50/50 dark:from-emerald-950/40 dark:via-dark-card dark:to-emerald-950/20 p-5">
-              <h3 className="text-base font-bold text-emerald-900 dark:text-emerald-100">
-                Configuration terminée !
-              </h3>
-              <p className="text-sm text-emerald-700 dark:text-emerald-300 mt-1">
-                Votre espace est prêt. Créez votre premier projet et commencez à facturer.
-              </p>
-            </div>
-          );
-        })()}
+        {settings && allStepsDone && !onboardingDismissed && !celebrationSeen && (
+          <div className="mb-6 relative overflow-hidden rounded-2xl border border-emerald-200 dark:border-emerald-800/60 bg-gradient-to-br from-emerald-50 via-white to-emerald-50/50 dark:from-emerald-950/40 dark:via-dark-card dark:to-emerald-950/20 p-5">
+            <h3 className="text-base font-bold text-emerald-900 dark:text-emerald-100">
+              Configuration terminée !
+            </h3>
+            <p className="text-sm text-emerald-700 dark:text-emerald-300 mt-1">
+              Votre espace est prêt. Créez votre premier projet et commencez à facturer.
+            </p>
+          </div>
+        )}
 
         <BriefingHeader
           greeting={briefing.greeting}

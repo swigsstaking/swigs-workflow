@@ -85,5 +85,7 @@ bankTransactionSchema.index({ userId: 1, txId: 1 });
 bankTransactionSchema.index({ userId: 1, matchStatus: 1 });
 bankTransactionSchema.index({ importId: 1, bookingDate: -1 });
 bankTransactionSchema.index({ userId: 1, bookingDate: 1, amount: 1, creditDebit: 1, counterpartyName: 1 });
+bankTransactionSchema.index({ userId: 1, creditDebit: 1, bookingDate: -1 }); // For expense analytics
+bankTransactionSchema.index({ userId: 1, expenseCategory: 1, bookingDate: -1 }); // For budget alerts
 
 export default mongoose.model('BankTransaction', bankTransactionSchema);

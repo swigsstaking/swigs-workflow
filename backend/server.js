@@ -1,6 +1,14 @@
 // Load environment variables FIRST (before any other imports that depend on env vars)
 import 'dotenv/config';
 
+// Validate critical environment variables
+const REQUIRED_ENV = ['MONGODB_URI', 'JWT_SECRET', 'APP_SECRET'];
+const missing = REQUIRED_ENV.filter(key => !process.env[key]);
+if (missing.length > 0) {
+  console.error(`FATAL: Missing required environment variables: ${missing.join(', ')}`);
+  process.exit(1);
+}
+
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
@@ -83,7 +91,8 @@ const allowedOrigins = process.env.CORS_ORIGINS
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, etc.)
+    // No-origin requests: iCal clients, PM2 health checks, server-to-server
+    // CSRF mitigated by Bearer token requirement on all protected routes
     if (!origin) return callback(null, true);
 
     if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
@@ -128,6 +137,7 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false
 });
+
 
 
 // Apply global limiter

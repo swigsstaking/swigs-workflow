@@ -7,6 +7,7 @@ export const useTimerStore = create((set, get) => ({
   elapsed: 0,
   loading: false,
   _interval: null,
+  _cleanupRegistered: false,
 
   fetchActive: async () => {
     try {
@@ -91,6 +92,23 @@ export const useTimerStore = create((set, get) => ({
       set({ elapsed: Math.max(0, elapsed) });
     }, 1000);
     set({ _interval: interval });
+
+    // Register cleanup on page unload (once)
+    if (!get()._cleanupRegistered) {
+      const cleanup = () => get()._stopTick();
+      window.addEventListener('beforeunload', cleanup);
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && get().activeTimer?.status === 'running') {
+          // Recalculate elapsed when tab becomes visible again
+          const timer = get().activeTimer;
+          if (timer) {
+            const elapsed = Date.now() - new Date(timer.startedAt).getTime() - (timer.totalPausedMs || 0);
+            set({ elapsed: Math.max(0, elapsed) });
+          }
+        }
+      });
+      set({ _cleanupRegistered: true });
+    }
   },
 
   _stopTick: () => {

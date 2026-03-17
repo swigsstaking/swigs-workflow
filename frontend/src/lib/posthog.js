@@ -106,11 +106,6 @@ export function trackBusinessEvent(action, properties = {}) {
   trackEvent(`business_${action}`, properties);
 }
 
-// ── Automation tracking ───────────────────────────────────────
-export function trackAutomation(action, properties = {}) {
-  trackEvent(`automation_${action}`, properties);
-}
-
 // ── Portal tracking (public, no auth) ─────────────────────────
 export function trackPortalEvent(action, properties = {}) {
   trackEvent(`portal_${action}`, properties);

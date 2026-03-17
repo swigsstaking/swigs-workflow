@@ -6,7 +6,7 @@ import Modal from '../../ui/Modal';
 import Button from '../../ui/Button';
 import Input, { Textarea } from '../../ui/Input';
 import LinesEditor from '../../Sidebar/invoice/LinesEditor';
-import { formatCurrency } from '../../../utils/format';
+import { formatCurrency, roundTo5ct } from '../../../utils/format';
 
 const FREQUENCY_OPTIONS = [
   { value: 'weekly', label: 'Hebdomadaire' },
@@ -157,7 +157,6 @@ export default function RecurringInvoiceModal({ isOpen, onClose, editItem, setti
   };
 
   // Totals
-  const roundTo5ct = (amount) => Math.round(amount / 0.05) * 0.05;
   const subtotal = form.lines.reduce((sum, l) => sum + getLineTotal(l), 0);
   const vatAmount = subtotal * (parseFloat(form.vatRate) || 0) / 100;
   const total = roundTo5ct(subtotal + vatAmount);

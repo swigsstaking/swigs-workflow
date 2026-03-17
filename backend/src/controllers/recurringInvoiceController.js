@@ -1,11 +1,6 @@
 import RecurringInvoice from '../models/RecurringInvoice.js';
-import Project from '../models/Project.js';
 import { calculateNextDate, generateInvoiceFromRecurring } from '../services/recurringInvoice.service.js';
-
-// Helper: verify project exists and belongs to userId
-const verifyProject = async (projectId, userId) => {
-  return Project.findOne({ _id: projectId, userId });
-};
+import { verifyProjectOwnership } from '../utils/project.js';
 
 // Helper: calculate initial nextGenerationDate from startDate
 const getInitialNextDate = (startDate, frequency, dayOfMonth) => {
@@ -78,7 +73,7 @@ export const create = async (req, res, next) => {
     } = req.body;
 
     // Validate project ownership
-    const project = await verifyProject(projectId, req.user._id);
+    const project = await verifyProjectOwnership(projectId, req.user._id);
     if (!project) {
       return res.status(404).json({ success: false, error: 'Projet non trouvé' });
     }

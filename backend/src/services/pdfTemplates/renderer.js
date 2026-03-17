@@ -1,5 +1,6 @@
 import puppeteer from 'puppeteer';
 import Handlebars from 'handlebars';
+import { PDFDocument } from 'pdf-lib';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -71,7 +72,7 @@ export function renderHTML(templateName, data) {
 let activePdfJobs = 0;
 const MAX_CONCURRENT_PDFS = 5;
 
-export async function renderPDF(templateName, data) {
+export async function renderPDF(templateName, data, options = {}) {
   if (activePdfJobs >= MAX_CONCURRENT_PDFS) {
     throw new Error('Too many concurrent PDF jobs. Please try again later.');
   }
@@ -97,11 +98,53 @@ export async function renderPDF(templateName, data) {
       margin: { top: '15mm', bottom: '15mm', left: '12mm', right: '12mm' },
       timeout: 15000
     });
-    return Buffer.from(pdf);
+    const contentBuffer = Buffer.from(pdf);
+
+    // Merge with letterhead PDF if provided
+    if (options.letterheadPdf) {
+      return await mergeWithLetterhead(contentBuffer, options.letterheadPdf);
+    }
+
+    return contentBuffer;
   } finally {
     activePdfJobs--;
     if (page) await page.close();
   }
+}
+
+/**
+ * Merge content PDF pages over a letterhead PDF background.
+ * The letterhead page 1 is used as background for all content pages.
+ * @param {Buffer} contentBuffer - Generated invoice/quote PDF
+ * @param {string} letterheadBase64 - Base64-encoded letterhead PDF
+ * @returns {Promise<Buffer>} Merged PDF buffer
+ */
+async function mergeWithLetterhead(contentBuffer, letterheadBase64) {
+  const letterheadBytes = Buffer.from(letterheadBase64, 'base64');
+  const letterheadDoc = await PDFDocument.load(letterheadBytes);
+  const contentDoc = await PDFDocument.load(contentBuffer);
+  const mergedDoc = await PDFDocument.create();
+
+  const letterheadPage = letterheadDoc.getPages()[0];
+  const contentPages = contentDoc.getPages();
+
+  // Embed letterhead once — reuse reference for all pages
+  const [embeddedLetterhead] = await mergedDoc.embedPages([letterheadPage]);
+
+  for (let i = 0; i < contentPages.length; i++) {
+    const { width, height } = contentPages[i].getSize();
+    const newPage = mergedDoc.addPage([width, height]);
+
+    // Draw letterhead background first
+    newPage.drawPage(embeddedLetterhead, { x: 0, y: 0, width, height });
+
+    // Overlay content on top
+    const [embeddedContent] = await mergedDoc.embedPages([contentPages[i]]);
+    newPage.drawPage(embeddedContent, { x: 0, y: 0, width, height });
+  }
+
+  const mergedBytes = await mergedDoc.save();
+  return Buffer.from(mergedBytes);
 }
 
 // Cleanup on process exit

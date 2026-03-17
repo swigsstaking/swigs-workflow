@@ -3,6 +3,7 @@ import Invoice from '../models/Invoice.js';
 import Project from '../models/Project.js';
 import Settings from '../models/Settings.js';
 import { createTransporter, textToHtml } from './email.service.js';
+import { acquireCronLock, releaseCronLock } from '../models/CronLock.js';
 import { generateReminderPDF } from './pdf.service.js';
 import { historyService } from './historyService.js';
 
@@ -461,32 +462,20 @@ export const sendManualReminder = async (invoiceId, userId) => {
 export const initialize = () => {
   cron.schedule('0 8 * * *', async () => {
     const lockId = 'reminder-cron';
-    const lockExpiry = 10 * 60 * 1000; // 10 min max
+
+    const acquired = await acquireCronLock(lockId);
+    if (!acquired) {
+      console.log('[Reminder] Skipping — another instance holds the lock');
+      return;
+    }
 
     try {
-      const lock = await Settings.findOneAndUpdate(
-        {
-          _lockId: lockId,
-          $or: [
-            { _lockExpiresAt: { $exists: false } },
-            { _lockExpiresAt: { $lt: new Date() } }
-          ]
-        },
-        { $set: { _lockId: lockId, _lockExpiresAt: new Date(Date.now() + lockExpiry) } },
-        { upsert: true, returnDocument: 'after' }
-      ).catch(() => null);
-
-      if (!lock) {
-        console.log('[Reminder] Skipping — another instance holds the lock');
-        return;
-      }
-
       console.log('Running daily reminder check at 8:00 AM');
       await checkOverdueInvoices();
     } catch (err) {
       console.error('[Reminder] Cron error:', err.message);
     } finally {
-      await Settings.deleteOne({ _lockId: lockId }).catch(() => {});
+      await releaseCronLock(lockId);
     }
   });
 

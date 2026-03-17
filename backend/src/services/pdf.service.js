@@ -1,5 +1,30 @@
 import { renderPDF, renderHTML } from './pdfTemplates/renderer.js';
 import { generateQRBillSVG } from './qrbill.service.js';
+import { roundTo5ct } from '../utils/currency.js';
+
+/**
+ * Build render options (letterhead, etc.) from settings.
+ * Lazy-loads letterhead PDF from DB only when needed (avoids 2MB in every settings query).
+ */
+const getRenderOptions = async (settings) => {
+  const design = settings.invoiceDesign?.toObject
+    ? settings.invoiceDesign.toObject()
+    : (settings.invoiceDesign || {});
+  const options = {};
+  if (design.useLetterhead) {
+    // letterheadPdf may be excluded from default getSettings() query — load it separately
+    if (design.letterheadPdf) {
+      options.letterheadPdf = design.letterheadPdf;
+    } else if (settings.userId) {
+      const { default: Settings } = await import('../models/Settings.js');
+      const full = await Settings.getSettingsWithLetterhead(settings.userId);
+      if (full?.invoiceDesign?.letterheadPdf) {
+        options.letterheadPdf = full.invoiceDesign.letterheadPdf;
+      }
+    }
+  }
+  return options;
+};
 
 /**
  * PDF Service — Puppeteer + Handlebars HTML→PDF generation
@@ -149,9 +174,10 @@ const buildInvoiceLines = (invoice) => {
         : `Devis ${quoteSnapshot.number} — `;
 
       for (const line of quoteSnapshot.lines) {
+        const { title, detail } = splitDescription(line.description);
         lines.push({
-          description: prefix + line.description,
-          detail: null,
+          description: prefix + title,
+          detail,
           discount: line.discount || 0,
           quantity: line.quantity,
           unitPrice: line.unitPrice,
@@ -291,7 +317,7 @@ export const generateInvoicePDF = async (invoice, project, settings) => {
     qrBillSvg
   };
 
-  return renderPDF('invoice', data);
+  return renderPDF('invoice', data, await getRenderOptions(settings));
 };
 
 /**
@@ -330,7 +356,6 @@ export const generateReminderPDF = async (invoice, project, settings, reminderIn
   const moratoireInterest = daysOverdue > 0
     ? Math.round(outstandingAmount * 0.05 * (daysOverdue / 365) * 100) / 100
     : 0;
-  const roundTo5ct = (amount) => Math.round(amount / 0.05) * 0.05;
   const totalWithInterest = roundTo5ct(outstandingAmount + moratoireInterest);
 
   const data = {
@@ -365,7 +390,7 @@ export const generateReminderPDF = async (invoice, project, settings, reminderIn
     qrBillSvg
   };
 
-  return renderPDF('reminder', data);
+  return renderPDF('reminder', data, await getRenderOptions(settings));
 };
 
 /**
@@ -408,7 +433,7 @@ export const generateQuotePDF = async (quote, project, settings) => {
     qrBillSvg: ''
   };
 
-  return renderPDF('quote', data);
+  return renderPDF('quote', data, await getRenderOptions(settings));
 };
 
 /**
@@ -419,7 +444,6 @@ export const generateQuotePDF = async (quote, project, settings) => {
 export const generatePreviewHTML = (settings) => {
   const design = getDesign(settings);
   const vatRate = settings.invoicing?.defaultVatRate ?? 8.1;
-  const roundTo5ct = (amount) => Math.round(amount / 0.05) * 0.05;
   const subtotal = 3750;
   const vatAmount = subtotal * (vatRate / 100);
   const total = roundTo5ct(subtotal + vatAmount);

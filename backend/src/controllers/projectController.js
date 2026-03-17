@@ -8,8 +8,7 @@ import Invoice from '../models/Invoice.js';
 import { historyService } from '../services/historyService.js';
 
 import { eventBus } from '../services/eventBus.service.js';
-
-const CLIENT_SYNC_FIELDS = ['name', 'email', 'phone', 'address', 'street', 'zip', 'city', 'country', 'che', 'company', 'siret'];
+import { CLIENT_SYNC_FIELDS } from '../utils/constants.js';
 
 /**
  * Find or create a Client document matching the embedded client data.
@@ -464,7 +463,12 @@ export const createProject = async (req, res, next) => {
     if (!statusId) {
       const statusFilter = { isDefault: true };
       if (req.user) statusFilter.userId = req.user._id;
-      const defaultStatus = await Status.findOne(statusFilter);
+      let defaultStatus = await Status.findOne(statusFilter);
+      if (!defaultStatus) {
+        // Fallback: pick first status by order
+        const fallbackFilter = req.user ? { userId: req.user._id } : {};
+        defaultStatus = await Status.findOne(fallbackFilter).sort({ order: 1 });
+      }
       if (!defaultStatus) {
         return res.status(400).json({
           success: false,

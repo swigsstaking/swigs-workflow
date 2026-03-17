@@ -19,7 +19,6 @@ export default defineConfig({
       output: {
         manualChunks: {
           'vendor-charts': ['recharts'],
-          'vendor-flow': ['@xyflow/react'],
           'vendor-ui': ['framer-motion', 'lucide-react'],
           'vendor-dnd': ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities']
         }

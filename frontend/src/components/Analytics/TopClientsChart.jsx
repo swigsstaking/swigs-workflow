@@ -36,11 +36,13 @@ export default function TopClientsChart({ data }) {
   }
 
   // Transform and truncate names for display
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+  const nameMaxLen = isMobile ? 10 : 15;
   const chartData = data.map((client, index) => ({
     ...client,
     displayName: client.company || client.clientName,
-    shortName: (client.company || client.clientName).substring(0, 15) +
-      ((client.company || client.clientName).length > 15 ? '...' : ''),
+    shortName: (client.company || client.clientName).substring(0, nameMaxLen) +
+      ((client.company || client.clientName).length > nameMaxLen ? '...' : ''),
     color: COLORS[index % COLORS.length]
   }));
 
@@ -61,7 +63,7 @@ export default function TopClientsChart({ data }) {
         <BarChart
           data={chartData}
           layout="vertical"
-          margin={{ top: 5, right: 30, left: 100, bottom: 5 }}
+          margin={{ top: 5, right: 20, left: isMobile ? 60 : 100, bottom: 5 }}
         >
           <XAxis
             type="number"
@@ -76,7 +78,7 @@ export default function TopClientsChart({ data }) {
             axisLine={false}
             tickLine={false}
             tick={{ fill: '#94a3b8', fontSize: 12 }}
-            width={95}
+            width={isMobile ? 55 : 95}
           />
           <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
           <Bar

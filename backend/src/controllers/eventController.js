@@ -2,10 +2,11 @@ import Event from '../models/Event.js';
 import Project from '../models/Project.js';
 import Settings from '../models/Settings.js';
 import { historyService } from '../services/historyService.js';
+import { assertOwnership } from '../utils/project.js';
 
 import { eventBus } from '../services/eventBus.service.js';
 
-// Helper: Verify project ownership
+// Helper: Verify project ownership (lenient — allows unauthenticated access)
 const verifyProjectOwnership = async (projectId, userId) => {
   const query = { _id: projectId };
   if (userId) {
@@ -107,14 +108,8 @@ export const updateEvent = async (req, res, next) => {
     }
 
     // Verify project ownership
-    if (req.user) {
-      if (!event.project.userId) {
-        return res.status(403).json({ success: false, error: 'Ce projet n\'a pas de propriétaire assigné' });
-      }
-      if (event.project.userId.toString() !== req.user._id.toString()) {
-        return res.status(403).json({ success: false, error: 'Accès refusé' });
-      }
-    }
+    const denied = assertOwnership(req, res, event);
+    if (denied) return;
 
     // Cannot update billed events
     if (event.billed) {
@@ -155,14 +150,8 @@ export const deleteEvent = async (req, res, next) => {
     }
 
     // Verify project ownership
-    if (req.user) {
-      if (!event.project.userId) {
-        return res.status(403).json({ success: false, error: 'Ce projet n\'a pas de propriétaire assigné' });
-      }
-      if (event.project.userId.toString() !== req.user._id.toString()) {
-        return res.status(403).json({ success: false, error: 'Accès refusé' });
-      }
-    }
+    const denied = assertOwnership(req, res, event);
+    if (denied) return;
 
     // Cannot delete billed events
     if (event.billed) {

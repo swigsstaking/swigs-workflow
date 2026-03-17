@@ -126,7 +126,8 @@ export const resume = async (req, res, next) => {
 // @route   POST /api/timer/stop
 export const stop = async (req, res, next) => {
   try {
-    const timer = await Timer.findOne({
+    // Atomic findOneAndDelete to prevent race conditions
+    const timer = await Timer.findOneAndDelete({
       userId: req.user._id,
       status: { $in: ['running', 'paused'] }
     });
@@ -166,9 +167,6 @@ export const stop = async (req, res, next) => {
     // Log history
     await historyService.eventAdded(timer.projectId, 'hours', description);
 
-    // Delete the timer
-    await timer.deleteOne();
-
     res.json({ success: true, data: event });
   } catch (error) {
     next(error);
@@ -179,7 +177,7 @@ export const stop = async (req, res, next) => {
 // @route   DELETE /api/timer/discard
 export const discard = async (req, res, next) => {
   try {
-    const timer = await Timer.findOne({
+    const timer = await Timer.findOneAndDelete({
       userId: req.user._id,
       status: { $in: ['running', 'paused'] }
     });
@@ -188,7 +186,6 @@ export const discard = async (req, res, next) => {
       return res.status(404).json({ success: false, error: 'Aucun timer actif' });
     }
 
-    await timer.deleteOne();
     res.json({ success: true, data: {} });
   } catch (error) {
     next(error);

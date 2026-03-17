@@ -45,6 +45,15 @@ export default function Workflow() {
 
   const [initialLoading, setInitialLoading] = useState(true);
 
+  // Debounce search query to avoid filtering on every keystroke
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery || '');
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   // Load data on mount and when showArchived changes
   useEffect(() => {
     const init = async () => {
@@ -90,9 +99,9 @@ export default function Workflow() {
   const filteredProjects = useMemo(() => {
     let result = projects;
 
-    // Search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
+    // Search filter (debounced)
+    if (debouncedSearchQuery) {
+      const query = debouncedSearchQuery.toLowerCase();
       result = result.filter(p =>
         p.name.toLowerCase().includes(query) ||
         p.client?.name?.toLowerCase().includes(query)
@@ -118,7 +127,7 @@ export default function Workflow() {
     }
 
     return result;
-  }, [projects, searchQuery, hiddenStatuses, sortMode]);
+  }, [projects, debouncedSearchQuery, hiddenStatuses, sortMode]);
 
   // Handle project click
   const handleProjectClick = async (project) => {
@@ -144,10 +153,10 @@ export default function Workflow() {
       <div
         className={`
           transition-all duration-300
-          ${sidebarOpen ? 'mr-[480px]' : ''}
+          ${sidebarOpen ? 'md:mr-[480px]' : ''}
         `}
       >
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {initialLoading ? (
             <>
               {/* Skeleton: Status filter pills */}

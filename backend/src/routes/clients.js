@@ -13,7 +13,7 @@ const router = express.Router();
 router.route('/')
   .get(getClients)
   .post(
-    sanitizeBody('name', 'email', 'phone', 'company', 'address', 'siret', 'notes'),
+    sanitizeBody('name', 'email', 'phone', 'company', 'address', 'street', 'zip', 'city', 'country', 'che', 'siret', 'notes'),
     validate({ body: { name: 'required|string' } }),
     createClient
   );
@@ -21,7 +21,7 @@ router.route('/')
 router.route('/:id')
   .get(getClient)
   .put(
-    sanitizeBody('name', 'email', 'phone', 'company', 'address', 'siret', 'notes'),
+    sanitizeBody('name', 'email', 'phone', 'company', 'address', 'street', 'zip', 'city', 'country', 'che', 'siret', 'notes'),
     updateClient
   )
   .delete(deleteClient);

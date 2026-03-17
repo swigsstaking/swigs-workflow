@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { FileText, Receipt, Download, CheckCircle, AlertCircle, XCircle } from 'lucide-react';
 import { portalApi } from '../services/api';
-import { formatCurrency } from '../utils/format';
+import { formatCurrency, roundTo5ct } from '../utils/format';
 import { trackPortalEvent } from '../lib/posthog';
 
 export default function PortalView() {
@@ -174,7 +174,6 @@ export default function PortalView() {
     lines = doc.lines || [];
   }
 
-  const roundTo5ct = (amount) => Math.round(amount / 0.05) * 0.05;
   const subtotal = doc.subtotal || lines.reduce((sum, l) => sum + ((l.quantity || 0) * (l.unitPrice || 0)), 0);
   const vatRate = doc.vatRate || 8.1;
   const vatAmount = doc.vatAmount || subtotal * vatRate / 100;

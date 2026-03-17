@@ -27,10 +27,13 @@ export const errorHandler = (err, req, res, next) => {
     });
   }
 
-  // Default error
+  // Default error — never expose internal details to client
   const statusCode = err.statusCode || 500;
+  const safeMessage = statusCode >= 500
+    ? 'Internal server error'
+    : (err.isOperational ? err.message : 'Bad request');
   res.status(statusCode).json({
     success: false,
-    error: statusCode >= 500 ? 'Internal server error' : (err.message || 'Server Error')
+    error: safeMessage
   });
 };

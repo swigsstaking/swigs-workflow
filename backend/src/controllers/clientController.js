@@ -2,9 +2,7 @@ import Client from '../models/Client.js';
 import Project from '../models/Project.js';
 
 import { eventBus } from '../services/eventBus.service.js';
-
-// Fields to sync between Client and Project.client embedded
-const CLIENT_SYNC_FIELDS = ['name', 'email', 'phone', 'address', 'street', 'zip', 'city', 'country', 'che', 'company', 'siret'];
+import { CLIENT_SYNC_FIELDS } from '../utils/constants.js';
 
 // @desc    Get all clients
 // @route   GET /api/clients

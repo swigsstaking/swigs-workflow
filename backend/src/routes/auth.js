@@ -347,11 +347,20 @@ router.post('/sso-verify', ssoVerifyLimiter, async (req, res) => {
   }
 });
 
+// Rate limiter for refresh endpoint (5 req/min per IP)
+const refreshLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  message: { error: 'Trop de tentatives de rafraîchissement. Réessayez dans une minute.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 /**
  * POST /api/auth/refresh
  * Rafraichit le token d'acces
  */
-router.post('/refresh', async (req, res) => {
+router.post('/refresh', refreshLimiter, async (req, res) => {
   try {
     const { refreshToken } = req.body;
 
@@ -427,6 +436,18 @@ router.get('/me', requireAuth, async (req, res) => {
     // non-blocking
   }
 
+  // Check main app subscription status (trial info, etc.)
+  let subscription = null;
+  try {
+    const { checkSubscription } = await import('../middleware/checkSubscription.js');
+    await new Promise((resolve) => {
+      checkSubscription(req, res, resolve);
+    });
+    subscription = req.subscription || null;
+  } catch (e) {
+    // non-blocking
+  }
+
   res.json({
     user: {
       id: req.user._id,
@@ -434,9 +455,29 @@ router.get('/me', requireAuth, async (req, res) => {
       name: req.user.name,
       avatar: req.user.avatar,
       preferences: req.user.preferences,
-      hasComptaPlus
+      hasComptaPlus,
+      subscription
     }
   });
+});
+
+/**
+ * POST /api/auth/api-token
+ * Generate a long-lived API token for external integrations (Telegram bot, etc.)
+ * Token expires in 90 days.
+ */
+router.post('/api-token', requireAuth, async (req, res) => {
+  try {
+    const token = jwt.sign(
+      { userId: req.user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: '90d' }
+    );
+    res.json({ token, expiresIn: '90 days' });
+  } catch (error) {
+    console.error('API token generation error:', error);
+    res.status(500).json({ error: 'Erreur lors de la génération du token' });
+  }
 });
 
 /**

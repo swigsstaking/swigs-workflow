@@ -331,5 +331,7 @@ invoiceSchema.index({ status: 1 });
 invoiceSchema.index({ issueDate: -1 }); // For analytics queries
 invoiceSchema.index({ issueDate: 1, status: 1 }); // For revenue analytics
 invoiceSchema.index({ project: 1, issueDate: 1, status: 1 }); // For project analytics queries
+invoiceSchema.index({ status: 1, paidAt: -1 }); // For dashboard paid invoices
+invoiceSchema.index({ status: 1, dueDate: 1 }); // For overdue detection
 
 export default mongoose.model('Invoice', invoiceSchema);

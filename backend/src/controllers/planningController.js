@@ -147,7 +147,6 @@ export const updatePlannedBlock = async (req, res, next) => {
           description: `Planning: ${block.project?.name || 'Projet'} — ${block.project?.client?.name || ''}`,
           assignTo: req.user?.email || null,
           source: 'planning',
-          automationId: null,
           context: {
             projectName: block.project?.name,
             clientName: block.project?.client?.name,

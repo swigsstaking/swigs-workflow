@@ -14,6 +14,7 @@ import { historyService } from './historyService.js';
 import { sendPaymentConfirmationEmail } from './email.service.js';
 import { decrypt } from '../utils/crypto.js';
 import cron from 'node-cron';
+import { acquireCronLock, releaseCronLock } from '../models/CronLock.js';
 
 /**
  * Connect to IMAP, fetch new emails with XML camt attachments,
@@ -180,16 +181,37 @@ async function processXmlBuffer(buffer, filename, userId) {
     // Auto-mark invoice as paid if confidence >= 80
     if (reconciliation.matchedInvoice && reconciliation.matchConfidence >= 80) {
       const invoice = await Invoice.findById(reconciliation.matchedInvoice).populate('project');
-      if (invoice && invoice.status === 'sent') {
-        invoice.status = 'paid';
-        invoice.paidAt = tx.bookingDate;
+      if (invoice && ['sent', 'partial'].includes(invoice.status)) {
+        const remaining = invoice.total - (invoice.paidAmount || 0);
+        const paymentAmount = Math.min(Math.abs(tx.amount), remaining);
+
+        if (paymentAmount > 0) {
+          invoice.payments = invoice.payments || [];
+          invoice.payments.push({
+            amount: paymentAmount,
+            date: tx.bookingDate || new Date(),
+            method: 'bank_transfer',
+            notes: `Import IMAP auto (${reconciliation.matchMethod}, confiance ${reconciliation.matchConfidence}%)`
+          });
+          invoice.paidAmount = (invoice.paidAmount || 0) + paymentAmount;
+        }
+
+        // Swiss tolerance: < 0.05 CHF difference = fully paid
+        if ((invoice.total - invoice.paidAmount) < 0.05) {
+          invoice.status = 'paid';
+          invoice.paidAmount = invoice.total;
+          invoice.paidAt = tx.bookingDate;
+        } else {
+          invoice.status = 'partial';
+        }
         await invoice.save();
 
         try {
+          const statusLabel = invoice.status === 'paid' ? 'marquée payée' : `paiement partiel (${paymentAmount.toFixed(2)} CHF)`;
           await historyService.log(
             invoice.project._id || invoice.project,
             'bank_reconciled',
-            `Facture ${invoice.number} marquée payée via import IMAP automatique (${reconciliation.matchMethod}, confiance ${reconciliation.matchConfidence}%)`,
+            `Facture ${invoice.number} ${statusLabel} via import IMAP automatique (${reconciliation.matchMethod}, confiance ${reconciliation.matchConfidence}%)`,
             { importId, txId: tx.txId, amount: tx.amount, source: 'imap' }
           );
         } catch (e) { /* non-blocking */ }
@@ -261,16 +283,37 @@ async function processEmailTransaction(tx, subject, userId) {
   // Auto-mark invoice as paid if confidence >= 80
   if (reconciliation.matchedInvoice && reconciliation.matchConfidence >= 80) {
     const invoice = await Invoice.findById(reconciliation.matchedInvoice).populate('project');
-    if (invoice && invoice.status === 'sent') {
-      invoice.status = 'paid';
-      invoice.paidAt = tx.bookingDate;
+    if (invoice && ['sent', 'partial'].includes(invoice.status)) {
+      const remaining = invoice.total - (invoice.paidAmount || 0);
+      const paymentAmount = Math.min(Math.abs(tx.amount), remaining);
+
+      if (paymentAmount > 0) {
+        invoice.payments = invoice.payments || [];
+        invoice.payments.push({
+          amount: paymentAmount,
+          date: tx.bookingDate || new Date(),
+          method: 'bank_transfer',
+          notes: `Notification email bancaire (${reconciliation.matchMethod}, confiance ${reconciliation.matchConfidence}%)`
+        });
+        invoice.paidAmount = (invoice.paidAmount || 0) + paymentAmount;
+      }
+
+      // Swiss tolerance: < 0.05 CHF difference = fully paid
+      if ((invoice.total - invoice.paidAmount) < 0.05) {
+        invoice.status = 'paid';
+        invoice.paidAmount = invoice.total;
+        invoice.paidAt = tx.bookingDate;
+      } else {
+        invoice.status = 'partial';
+      }
       await invoice.save();
 
       try {
+        const statusLabel = invoice.status === 'paid' ? 'marquée payée' : `paiement partiel (${paymentAmount.toFixed(2)} CHF)`;
         await historyService.log(
           invoice.project._id || invoice.project,
           'bank_reconciled',
-          `Facture ${invoice.number} marquée payée via notification email bancaire (${reconciliation.matchMethod}, confiance ${reconciliation.matchConfidence}%)`,
+          `Facture ${invoice.number} ${statusLabel} via notification email bancaire (${reconciliation.matchMethod}, confiance ${reconciliation.matchConfidence}%)`,
           { importId, txId: tx.txId, amount: tx.amount, source: 'email_notification' }
         );
       } catch (e) { /* non-blocking */ }
@@ -370,34 +413,20 @@ async function checkAllUsers() {
 export function initBankImapCron() {
   cron.schedule('30 * * * *', async () => {
     const lockId = 'bank-imap-cron';
-    const lockExpiry = 10 * 60 * 1000; // 10 min max lock duration
+
+    const acquired = await acquireCronLock(lockId);
+    if (!acquired) {
+      console.log('[BankIMAP] Skipping — another instance holds the lock');
+      return;
+    }
 
     try {
-      // Atomic lock: only one instance wins
-      const lock = await Settings.findOneAndUpdate(
-        {
-          _lockId: lockId,
-          $or: [
-            { _lockExpiresAt: { $exists: false } },
-            { _lockExpiresAt: { $lt: new Date() } }
-          ]
-        },
-        { $set: { _lockId: lockId, _lockExpiresAt: new Date(Date.now() + lockExpiry) } },
-        { upsert: true, returnDocument: 'after' }
-      ).catch(() => null);
-
-      if (!lock) {
-        console.log('[BankIMAP] Skipping — another instance holds the lock');
-        return;
-      }
-
       console.log('[BankIMAP] Running hourly check...');
       await checkAllUsers();
     } catch (err) {
       console.error('[BankIMAP] Cron error:', err.message);
     } finally {
-      // Release lock
-      await Settings.deleteOne({ _lockId: lockId }).catch(() => {});
+      await releaseCronLock(lockId);
     }
   });
 

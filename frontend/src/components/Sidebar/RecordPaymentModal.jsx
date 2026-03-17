@@ -3,6 +3,7 @@ import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import { useProjectStore } from '../../stores/projectStore';
 import { useToastStore } from '../../stores/toastStore';
+import { roundRemaining } from '../../utils/format';
 import { formatCurrency } from '../../utils/format';
 
 const PAYMENT_METHODS = [
@@ -22,7 +23,7 @@ export default function RecordPaymentModal({ invoice, isOpen, onClose }) {
   const [method, setMethod] = useState('bank_transfer');
   const [notes, setNotes] = useState('');
 
-  const remaining = invoice ? invoice.total - (invoice.paidAmount || 0) : 0;
+  const remaining = roundRemaining(invoice ? invoice.total - (invoice.paidAmount || 0) : 0);
 
   useEffect(() => {
     if (isOpen && invoice) {

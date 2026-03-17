@@ -347,8 +347,8 @@ export default function Planning() {
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="flex flex-col h-[calc(100vh-41px)]">
         {/* Header — SWIGS Carte Alpine */}
-        <div className="relative flex items-center justify-between px-5 py-3 border-b border-[rgb(var(--swigs-stone)/0.3)] dark:border-dark-border bg-white dark:bg-dark-card shrink-0">
-          <div className="flex items-center gap-3">
+        <div className="relative flex items-center justify-between px-3 sm:px-5 py-3 border-b border-[rgb(var(--swigs-stone)/0.3)] dark:border-dark-border bg-white dark:bg-dark-card shrink-0 overflow-x-auto gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <h1 className="font-display font-bold text-[16px] tracking-tight text-slate-900 dark:text-white">
               Planning
             </h1>
@@ -382,7 +382,7 @@ export default function Planning() {
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {/* Filter Menu */}
           <div className="relative">
             <button

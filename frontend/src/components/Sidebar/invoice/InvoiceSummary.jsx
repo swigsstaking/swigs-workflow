@@ -1,8 +1,5 @@
 import { Settings2, ChevronDown, ChevronUp, Calendar, Send, Bell } from 'lucide-react';
-import { formatCurrency } from '../../../utils/format';
-
-/** Swiss rounding: round to nearest 5 centimes (0.05 CHF) */
-const roundTo5ct = (amount) => Math.round(amount / 0.05) * 0.05;
+import { formatCurrency, roundTo5ct } from '../../../utils/format';
 
 const FREQUENCY_LABELS = {
   weekly: 'Hebdomadaire',

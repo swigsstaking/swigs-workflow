@@ -26,6 +26,13 @@ const reminderLabels = {
   final_notice: 'Mise en demeure',
 };
 
+const frequencyLabels = {
+  weekly: 'Hebdomadaire',
+  monthly: 'Mensuelle',
+  quarterly: 'Trimestrielle',
+  yearly: 'Annuelle',
+};
+
 function getGreeting(user) {
   const h = new Date().getHours();
   const firstName = user?.name?.split(' ')[0] || '';
@@ -175,7 +182,22 @@ function buildWatchItems(data) {
     });
   }
 
-  // 3) Unbilled work — only if significant (>5000 CHF or >20h)
+  // 3) Upcoming recurring invoices
+  for (const ri of data.upcomingRecurringInvoices || []) {
+    items.push({
+      id: `recurring-inv-${ri._id}`,
+      type: 'upcoming_recurring',
+      icon: 'repeat',
+      title: ri.clientName || ri.projectName,
+      subtitle: ri.company || null,
+      detail: `${frequencyLabels[ri.frequency] || ri.frequency} · ${relDate(ri.nextGenerationDate)}`,
+      badge: ri.autoSend ? 'Auto' : null,
+      amount: ri.total,
+      sortKey: 30,
+    });
+  }
+
+  // 4) Unbilled work — only if significant (>5000 CHF or >20h)
   if ((o.unbilledTotal > 5000) || (o.unbilledHours > 20)) {
     items.push({
       id: 'unbilled-work',
@@ -226,7 +248,19 @@ function buildStatusItems(data) {
     });
   }
 
-  // 3) Recent actions (reminders sent)
+  // 3) Recurring charges
+  const rc = data.accounting?.recurringCharges;
+  if (rc?.count > 0) {
+    items.push({
+      id: 'recurring-charges',
+      type: 'recurring_charges',
+      icon: 'repeat',
+      title: `${rc.count} charges récurrentes`,
+      detail: `~${fmt(rc.estimatedMonthly)}/mois`,
+    });
+  }
+
+  // 4) Recent actions (reminders sent)
   if (data.recentActions?.length > 0) {
     items.push({
       id: 'recent-actions',
@@ -266,10 +300,23 @@ export function computeBriefing(data, user) {
   const watch = buildWatchItems(data);
   const status = buildStatusItems(data);
 
+  const chips = buildChips(data.overview);
+
+  // Recurring charges chip (from accounting data)
+  const rc = data.accounting?.recurringCharges;
+  if (rc?.estimatedMonthly > 0) {
+    chips.push({
+      id: 'recurring',
+      label: 'Charges fixes',
+      value: `CHF ${fmtShort(rc.estimatedMonthly)}/m`,
+      color: 'slate',
+    });
+  }
+
   return {
     greeting: getGreeting(user),
     summary: buildSummary(urgent, watch),
-    chips: buildChips(data.overview),
+    chips,
     urgent,
     watch,
     status,
