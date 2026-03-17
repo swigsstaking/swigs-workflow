@@ -22,10 +22,10 @@ import TimerWidget from './TimerWidget';
 import Logo from './Logo';
 
 const NAV_ITEMS = [
-  { to: '/',            label: 'Briefing',    icon: Home,     exact: true },
-  { to: '/workflow',    label: 'Projets',     icon: Layers },
-  { to: '/analytics',  label: 'Analytics',   icon: BarChart3 },
-  { to: '/comptabilite',label: 'Comptabilité', icon: Calculator },
+  { to: '/',            label: 'Briefing',      icon: Home,       exact: true },
+  { to: '/workflow',    label: 'Projets',       icon: Layers },
+  { to: '/comptabilite',label: 'Comptabilité',  icon: Calculator },
+  { to: '/analytics',  label: 'Analytics',      icon: BarChart3 },
 ];
 
 const ACCENT_OPTIONS = [

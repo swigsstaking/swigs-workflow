@@ -24,7 +24,7 @@ import invoiceRoutes from './src/routes/invoices.js';
 import quoteRoutes from './src/routes/quotes.js';
 import settingsRoutes from './src/routes/settings.js';
 import clientRoutes from './src/routes/clients.js';
-import { getIcalFeed as icalFeedHandler } from './src/controllers/planningController.js';
+import { getIcalFeed as icalFeedHandler } from './src/controllers/icalController.js';
 import analyticsRoutes from './src/routes/analytics.js';
 import serviceRoutes from './src/routes/services.js';
 import serviceCategoryRoutes from './src/routes/serviceCategories.js';
