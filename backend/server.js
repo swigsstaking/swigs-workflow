@@ -41,6 +41,7 @@ import counterpartyRuleRoutes from './src/routes/counterpartyRules.js';
 import timerRoutes from './src/routes/timer.js';
 import recurringInvoiceRoutes from './src/routes/recurringInvoices.js';
 import quoteTemplateRoutes from './src/routes/quoteTemplates.js';
+import aiRoutes from './src/routes/ai.js';
 import Invoice from './src/models/Invoice.js';
 import { errorHandler } from './src/middleware/errorHandler.js';
 import { requireAuth } from './src/middleware/auth.js';
@@ -250,6 +251,9 @@ app.use('/api/recurring-invoices', requireAuth, recurringInvoiceRoutes);
 
 // Quote template routes (protected)
 app.use('/api/quote-templates', requireAuth, quoteTemplateRoutes);
+
+// AI routes (auth handled internally — /health is public, rest requires auth)
+app.use('/api/ai', aiRoutes);
 
 // =============================================================================
 // ERROR HANDLING
