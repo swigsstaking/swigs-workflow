@@ -13,6 +13,8 @@ import BriefingHeader from '../components/Briefing/BriefingHeader';
 import BriefingFeed from '../components/Briefing/BriefingFeed';
 import BriefingSidebar from '../components/Briefing/sidebar/BriefingSidebar';
 import WelcomeModal from '../components/WelcomeModal';
+import AISuggestionBanner from '../components/AI/AISuggestionBanner';
+import { useAIStore } from '../stores/aiStore';
 
 const ONBOARDING_STEPS = [
   {
@@ -73,6 +75,7 @@ export default function Secretary() {
   const { user } = useAuthStore();
   const { settings, fetchSettings } = useSettingsStore();
   const { addToast } = useToastStore();
+  const aiSuggestions = useAIStore(s => s.suggestions);
   const navigate = useNavigate();
 
   const [onboardingDismissed, setOnboardingDismissed] = useState(
@@ -313,6 +316,12 @@ export default function Secretary() {
           loading={loading}
           onRefresh={() => fetchDashboard(true)}
         />
+
+        {aiSuggestions.length > 0 && (
+          <div className="mb-4">
+            <AISuggestionBanner suggestions={aiSuggestions} />
+          </div>
+        )}
 
         <div className="flex gap-6">
           {/* Main feed */}

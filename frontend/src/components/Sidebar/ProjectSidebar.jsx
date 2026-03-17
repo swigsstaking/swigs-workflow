@@ -13,6 +13,7 @@ import { useProjectStore } from '../../stores/projectStore';
 import InfoTab from './InfoTab';
 import EventsTab from './EventsTab';
 import HistoryTab from './HistoryTab';
+import AIQuickAction from '../AI/AIQuickAction';
 import DocumentsTab from './DocumentsTab';
 
 const tabs = [
@@ -104,6 +105,11 @@ export default function ProjectSidebar({ project, isOpen, onClose }) {
                   </p>
                 )}
               </div>
+
+              <AIQuickAction
+                label="Analyser"
+                prompt={`Analyse le projet "${project.name}"${project.client?.name ? ` pour le client ${project.client.name}` : ''}. Donne-moi un résumé de la situation et des recommandations.`}
+              />
 
               <button
                 onClick={onClose}

@@ -14,6 +14,9 @@ import TransactionDetailModal from '../components/Comptabilite/TransactionDetail
 import AddExpenseModal from '../components/Comptabilite/AddExpenseModal';
 import InvoiceDetailModal from '../components/Comptabilite/InvoiceDetailModal';
 import RecurringInvoiceDetailModal from '../components/Comptabilite/RecurringInvoiceDetailModal';
+import AISuggestionBanner from '../components/AI/AISuggestionBanner';
+import AIQuickAction from '../components/AI/AIQuickAction';
+import { useAIStore } from '../stores/aiStore';
 
 const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '-';
@@ -21,6 +24,7 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString('fr-CH', { day: '2-dig
 export default function Comptabilite() {
   const { user } = useAuthStore();
   const { addToast } = useToastStore();
+  const aiSuggestions = useAIStore(s => s.suggestions);
 
   // Core data
   const [expenses, setExpenses] = useState(null);
@@ -250,6 +254,12 @@ export default function Comptabilite() {
         </div>
       </div>
 
+      {/* ═══ AI Suggestions ═══ */}
+      <AISuggestionBanner
+        suggestions={aiSuggestions}
+        filter={(s) => s.type === 'warning' && ['view_overdue', 'check_vat'].includes(s.action)}
+      />
+
       {/* ═══ KPI Cards ═══ */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard label="Revenus" value={formatCurrency(totalRevenue)} icon={TrendingUp} color="emerald" />
@@ -400,8 +410,9 @@ export default function Comptabilite() {
       {/* ═══ VAT Detail ═══ */}
       {vatDetail && (
         <section className="bg-white dark:bg-dark-card rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-          <div className="p-5 pb-3">
+          <div className="p-5 pb-3 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-900 dark:text-white">TVA par trimestre ({vatDetail.year})</h2>
+            <AIQuickAction label="Calculer avec l'AI" prompt={`Aide-moi à comprendre ma situation TVA. TVA nette : ${formatCurrency(vatDetail?.totals?.vatNet || 0)} CHF pour ${vatDetail.year}.`} />
           </div>
           <div className="overflow-x-auto px-5 pb-5">
             <table className="w-full text-sm">
