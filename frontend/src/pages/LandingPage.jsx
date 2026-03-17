@@ -29,8 +29,8 @@ const features = [
   },
   {
     icon: BarChart3,
-    title: 'Analytics & planning',
-    description: 'Tableau de bord avec chiffre d\'affaires, heures facturées et planning hebdomadaire pour piloter votre activité.',
+    title: 'Analytics & comptabilité',
+    description: 'Tableau de bord avec chiffre d\'affaires, heures facturées et suivi comptable pour piloter votre activité.',
   },
 ];
 

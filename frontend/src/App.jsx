@@ -1,6 +1,6 @@
 import { useEffect, lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
-import { Loader2, Briefcase, ArrowRight, Clock, FileText, PenLine, CalendarDays, CheckCircle } from 'lucide-react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Loader2, Briefcase, ArrowRight, Clock, FileText, PenLine, CheckCircle } from 'lucide-react';
 import { useUIStore } from './stores/uiStore';
 import { useAuthStore } from './stores/authStore';
 import Layout from './components/Layout/Layout';
@@ -12,7 +12,6 @@ import { initPostHog, identifyUser, resetUser, trackPageView } from './lib/posth
 
 // Lazy-loaded pages
 const Secretary = lazy(() => import('./pages/Secretary'));
-const Planning = lazy(() => import('./pages/Planning'));
 const Analytics = lazy(() => import('./pages/Analytics'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Comptabilite = lazy(() => import('./pages/Comptabilite'));
@@ -109,11 +108,7 @@ function App() {
             </Suspense>
           } />
           <Route path="workflow" element={<Workflow />} />
-          <Route path="planning" element={
-            <Suspense fallback={suspenseFallback}>
-              <Planning />
-            </Suspense>
-          } />
+          <Route path="planning" element={<Navigate to="/" replace />} />
           <Route path="analytics" element={
             <Suspense fallback={suspenseFallback}>
               <Analytics />
@@ -161,11 +156,6 @@ const landingFeatures = [
     icon: PenLine,
     title: 'Devis & signatures',
     description: 'Créez des devis professionnels, envoyez-les à vos clients et suivez les signatures.',
-  },
-  {
-    icon: CalendarDays,
-    title: 'Planning',
-    description: 'Planifiez vos projets et visualisez votre charge de travail sur un calendrier interactif.',
   },
 ];
 

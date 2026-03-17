@@ -9,7 +9,6 @@ import {
   Sparkles,
   FolderKanban,
   Receipt,
-  CalendarDays,
   BarChart3,
   Building2,
   Paintbrush,
@@ -36,12 +35,6 @@ const FEATURES = [
     color: 'blue'
   },
   {
-    icon: CalendarDays,
-    title: 'Planning',
-    description: 'Visualisez votre charge de travail et planifiez vos semaines',
-    color: 'violet'
-  },
-  {
     icon: BarChart3,
     title: 'Comptabilité',
     description: 'Import bancaire, catégorisation auto et rapports P&L',
@@ -49,7 +42,7 @@ const FEATURES = [
   }
 ];
 
-const PILLS = ['Projets', 'Factures', 'Devis', 'Planning', 'Comptabilité'];
+const PILLS = ['Projets', 'Factures', 'Devis', 'Comptabilité'];
 
 const colorMap = {
   emerald: {

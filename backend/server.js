@@ -24,7 +24,6 @@ import invoiceRoutes from './src/routes/invoices.js';
 import quoteRoutes from './src/routes/quotes.js';
 import settingsRoutes from './src/routes/settings.js';
 import clientRoutes from './src/routes/clients.js';
-import planningRoutes from './src/routes/planning.js';
 import { getIcalFeed as icalFeedHandler } from './src/controllers/planningController.js';
 import analyticsRoutes from './src/routes/analytics.js';
 import serviceRoutes from './src/routes/services.js';
@@ -215,9 +214,8 @@ app.use('/api/quotes', requireAuth, quoteRoutes);
 app.use('/api/settings', requireAuth, settingsRoutes);
 app.use('/api/dashboard', requireAuth, dashboardRoutes);
 app.use('/api/clients', requireAuth, clientRoutes);
-// iCal feed — public (token-authenticated), must be before requireAuth
+// iCal feed — public (token-authenticated), kept for external calendar subscriptions
 app.get('/api/planning/ical/:token', icalFeedHandler);
-app.use('/api/planning', requireAuth, planningRoutes);
 app.use('/api/analytics', requireAuth, analyticsRoutes);
 app.use('/api/services', requireAuth, serviceRoutes);
 app.use('/api/service-categories', requireAuth, serviceCategoryRoutes);

@@ -33,9 +33,6 @@ export const useUIStore = create(
       // Analytics filters
       analyticsHiddenStatuses: [],
 
-      // Planning filters
-      planningHiddenStatuses: [],
-
       // Expanded cards
       expandedCards: {},
 
@@ -84,17 +81,6 @@ export const useUIStore = create(
       }),
       clearAnalyticsHiddenStatuses: () => set({ analyticsHiddenStatuses: [] }),
 
-      // Planning filter actions
-      togglePlanningHiddenStatus: (statusId) => set(state => {
-        const hidden = state.planningHiddenStatuses;
-        return {
-          planningHiddenStatuses: hidden.includes(statusId)
-            ? hidden.filter(id => id !== statusId)
-            : [...hidden, statusId]
-        };
-      }),
-      clearPlanningHiddenStatuses: () => set({ planningHiddenStatuses: [] }),
-
       resetFilters: () => set({
         searchQuery: '',
         hiddenStatuses: [],
@@ -131,7 +117,6 @@ export const useUIStore = create(
         expandedCards: state.expandedCards,
         hiddenStatuses: state.hiddenStatuses,
         analyticsHiddenStatuses: state.analyticsHiddenStatuses,
-        planningHiddenStatuses: state.planningHiddenStatuses,
         cardStyle: state.cardStyle,
         cardSize: state.cardSize,
         viewMode: state.viewMode,

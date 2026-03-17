@@ -159,14 +159,6 @@ export const clientsApi = {
   delete: (id) => api.delete(`/clients/${id}`)
 };
 
-// Planning
-export const planningApi = {
-  getBlocks: (params) => api.get('/planning', { params }),
-  create: (data) => api.post('/planning', data),
-  update: (id, data) => api.put(`/planning/${id}`, data),
-  delete: (id) => api.delete(`/planning/${id}`),
-  generateCalendarToken: () => api.post('/planning/calendar-token')
-};
 
 // Dashboard
 export const dashboardApi = {
