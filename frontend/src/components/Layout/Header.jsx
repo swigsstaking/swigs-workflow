@@ -12,12 +12,13 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   Settings, Plus, Search, Archive, Sun, Moon,
   BarChart3, LogIn, LogOut, Menu, X,
-  Home, Layers, Calculator,
+  Home, Layers, Calculator, Sparkles,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimerStore } from '../../stores/timerStore';
+import { useAIStore } from '../../stores/aiStore';
 import TimerWidget from './TimerWidget';
 import Logo from './Logo';
 
@@ -50,6 +51,7 @@ export default function Header() {
 
   const { user, isAuthenticated, logout, loginWithHub } = useAuthStore();
   const { activeTimer, fetchActive } = useTimerStore();
+  const { isOpen: aiOpen, toggleSidebar: toggleAI, suggestions } = useAIStore();
 
   const currentPath = location.pathname;
   const isWorkflow = currentPath === '/workflow';
@@ -288,6 +290,28 @@ export default function Header() {
                 <span className="hidden sm:inline">Nouveau</span>
               </button>
             </div>
+          )}
+
+          {/* AI toggle */}
+          {isAuthenticated && (
+            <button
+              onClick={toggleAI}
+              className={`
+                relative p-1.5 rounded-[6px] transition-all duration-200 ${focusRing}
+                ${aiOpen
+                  ? 'bg-primary-50/90 dark:bg-primary-500/[0.08] text-primary-700 dark:text-primary-300'
+                  : 'text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300 hover:bg-[rgb(var(--swigs-stone)/0.1)] dark:hover:bg-white/[0.05]'
+                }
+              `}
+              title="Assistant AI"
+              aria-label="Assistant AI"
+              aria-pressed={aiOpen}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              {suggestions.length > 0 && !aiOpen && (
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              )}
+            </button>
           )}
 
           {/* Divider */}

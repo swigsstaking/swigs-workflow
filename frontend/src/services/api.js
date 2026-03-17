@@ -366,4 +366,23 @@ export const abaninjaApi = {
   getStatus: () => api.get('/abaninja/status')
 };
 
+// AI — chat uses fetch (SSE streaming), other endpoints use axios
+export const aiApi = {
+  chat: (message) => {
+    const { accessToken } = useAuthStore.getState();
+    return fetch('/api/ai/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({ message })
+    });
+  },
+  stop: () => api.post('/ai/chat/stop'),
+  suggestions: () => api.get('/ai/suggestions'),
+  vatCalc: (params) => api.post('/ai/tools/vat', params),
+  health: () => api.get('/ai/health')
+};
+
 export default api;
