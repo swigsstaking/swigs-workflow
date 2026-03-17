@@ -21,6 +21,19 @@ export const chatLimiter = rateLimit({
   legacyHeaders: false
 });
 
+export const ocrLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  keyGenerator,
+  message: {
+    success: false,
+    error: 'Trop de requêtes OCR. Réessayez dans une minute.',
+    code: 'AI_RATE_LIMIT'
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 export const aiGeneralLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 60,

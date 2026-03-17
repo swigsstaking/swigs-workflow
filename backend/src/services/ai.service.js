@@ -431,6 +431,75 @@ export async function generateSuggestions(userId) {
 }
 
 // ---------------------------------------------------------------------------
+// OCR — Document extraction via Qwen vision
+// ---------------------------------------------------------------------------
+
+const OCR_PROMPT = `Analyse cette image de document comptable (facture, ticket, reçu).
+Extrais les informations suivantes au format JSON strict :
+- vendor: nom du fournisseur
+- date: date du document (YYYY-MM-DD)
+- amountNet: montant hors taxe (number ou null)
+- amountGross: montant TTC (number ou null)
+- vatAmount: montant TVA (number ou null)
+- vatRate: taux TVA en % (number ou null)
+- currency: devise (CHF, EUR, USD)
+- invoiceNumber: numéro de facture/référence
+- category: catégorie parmi (office, telecom, transport, food, software, insurance, rent, other)
+- confidence: ton niveau de confiance de 0 à 1
+
+Réponds UNIQUEMENT avec le JSON, sans texte autour.
+Si un champ est illisible, mets null.`;
+
+/**
+ * Extract structured data from a document image using Qwen vision.
+ * @param {Buffer} imageBuffer - The image file buffer
+ * @param {string} mimeType - MIME type of the image
+ * @returns {Promise<object>} Extracted document data
+ */
+export async function ocrDocument(imageBuffer, mimeType) {
+  const base64 = imageBuffer.toString('base64');
+
+  const ollamaRes = await fetch(`${OLLAMA_URL}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: AI_MODEL,
+      messages: [
+        {
+          role: 'user',
+          content: OCR_PROMPT,
+          images: [base64]
+        }
+      ],
+      stream: false,
+      options: { temperature: 0.1 } // Low temperature for structured extraction
+    }),
+    signal: AbortSignal.timeout(60_000)
+  });
+
+  if (!ollamaRes.ok) {
+    const errText = await ollamaRes.text().catch(() => 'Unknown error');
+    throw new Error(`Ollama OCR error ${ollamaRes.status}: ${errText}`);
+  }
+
+  const result = await ollamaRes.json();
+  const rawText = result.message?.content || '';
+
+  // Extract JSON from response — Qwen may wrap it in markdown code blocks
+  const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error('Le modèle n\'a pas retourné de JSON valide. Réponse brute disponible.');
+  }
+
+  try {
+    const parsed = JSON.parse(jsonMatch[0]);
+    return { ...parsed, rawText };
+  } catch {
+    throw new Error('JSON invalide dans la réponse du modèle.');
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Health check
 // ---------------------------------------------------------------------------
 export async function checkOllamaHealth() {

@@ -12,6 +12,8 @@ export const useAIStore = create(
       isStreaming: false,
       suggestions: [],
       error: null,
+      ocrResult: null,       // { vendor, date, amountGross, ... }
+      isProcessingOcr: false,
 
       toggleSidebar: () => set(s => ({ isOpen: !s.isOpen })),
       openSidebar: () => set({ isOpen: true }),
@@ -134,6 +136,29 @@ export const useAIStore = create(
           // ignore — best effort
         }
       },
+
+      // ---------------------------------------------------------------
+      // Upload document — POST /api/ai/ocr
+      // ---------------------------------------------------------------
+      uploadDocument: async (file) => {
+        if (get().isProcessingOcr) return;
+        set({ isProcessingOcr: true, ocrResult: null, error: null });
+
+        try {
+          const { data } = await aiApi.ocr(file);
+          if (data.success) {
+            set({ ocrResult: data.data });
+          } else {
+            set({ error: data.error || 'Erreur OCR' });
+          }
+        } catch (err) {
+          set({ error: err.response?.data?.error || err.message || 'Erreur lors de l\'analyse du document' });
+        } finally {
+          set({ isProcessingOcr: false });
+        }
+      },
+
+      clearOcrResult: () => set({ ocrResult: null }),
 
       // ---------------------------------------------------------------
       // Fetch suggestions — GET /api/ai/suggestions

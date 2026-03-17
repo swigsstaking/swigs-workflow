@@ -6,7 +6,8 @@ import {
   pushHistory,
   generateSuggestions,
   checkOllamaHealth,
-  executeTool
+  executeTool,
+  ocrDocument
 } from '../services/ai.service.js';
 
 // Active SSE connections — allows /chat/stop to abort
@@ -124,6 +125,34 @@ export const calculateVat = async (req, res) => {
   }
 
   res.json({ success: true, data: result });
+};
+
+// ---------------------------------------------------------------------------
+// POST /api/ai/ocr — Document OCR extraction
+// ---------------------------------------------------------------------------
+export const ocr = async (req, res, next) => {
+  if (!req.file) {
+    return res.status(400).json({ success: false, error: 'Aucun fichier envoyé.' });
+  }
+
+  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+  if (!allowed.includes(req.file.mimetype)) {
+    return res.status(400).json({
+      success: false,
+      error: 'Format non supporté. Formats acceptés : JPEG, PNG, WebP, PDF.'
+    });
+  }
+
+  try {
+    const data = await ocrDocument(req.file.buffer, req.file.mimetype);
+    res.json({ success: true, data });
+  } catch (err) {
+    console.error('[AI] OCR error:', err.message);
+    res.status(422).json({
+      success: false,
+      error: err.message || 'Erreur lors de l\'extraction du document.'
+    });
+  }
 };
 
 // ---------------------------------------------------------------------------

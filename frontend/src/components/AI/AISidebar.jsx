@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { X, Send, Square, Trash2, Sparkles } from 'lucide-react';
 import { useAIStore } from '../../stores/aiStore';
 import AIChatMessage from './AIChatMessage';
+import AIDocumentUpload from './AIDocumentUpload';
 
 const SPRING = { type: 'spring', damping: 26, stiffness: 220 };
 
@@ -103,6 +104,9 @@ export default function AISidebar() {
                 </button>
               </div>
             </div>
+
+            {/* Document Upload */}
+            <AIDocumentUpload />
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">

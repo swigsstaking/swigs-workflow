@@ -382,7 +382,14 @@ export const aiApi = {
   stop: () => api.post('/ai/chat/stop'),
   suggestions: () => api.get('/ai/suggestions'),
   vatCalc: (params) => api.post('/ai/tools/vat', params),
-  health: () => api.get('/ai/health')
+  health: () => api.get('/ai/health'),
+  ocr: (file) => {
+    const formData = new FormData();
+    formData.append('document', file);
+    return api.post('/ai/ocr', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  }
 };
 
 export default api;
