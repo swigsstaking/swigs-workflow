@@ -14,7 +14,6 @@ import StatusesSection from '../components/Settings/sections/StatusesSection';
 import SmtpSection from '../components/Settings/sections/SmtpSection';
 import RemindersSection from '../components/Settings/sections/RemindersSection';
 import RecurringSection from '../components/Settings/sections/RecurringSection';
-import AbaNinjaSection from '../components/Settings/sections/AbaNinjaSection';
 import CmsSection from '../components/Settings/sections/CmsSection';
 import BankSection from '../components/Settings/sections/BankSection';
 import InvoiceDesignTab from '../components/Settings/InvoiceDesignTab';
@@ -103,13 +102,6 @@ export default function Settings() {
       case 'reminders':
         return (
           <RemindersSection
-            settings={settings}
-            onSettingsUpdate={handleSettingsUpdate}
-          />
-        );
-      case 'abaninja':
-        return (
-          <AbaNinjaSection
             settings={settings}
             onSettingsUpdate={handleSettingsUpdate}
           />

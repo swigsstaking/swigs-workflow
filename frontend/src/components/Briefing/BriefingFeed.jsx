@@ -2,10 +2,11 @@ import { motion } from 'framer-motion';
 import UrgentSection from './sections/UrgentSection';
 import WatchSection from './sections/WatchSection';
 import StatusSection from './sections/StatusSection';
+import ActionsSection from './sections/ActionsSection';
 import AllClearState from './AllClearState';
 import { feedContainer } from './utils/animations';
 
-export default function BriefingFeed({ briefing, onSendReminder, onSendAll, onItemClick }) {
+export default function BriefingFeed({ briefing, suggestions = [], onSendReminder, onSendAll, onItemClick }) {
   const { urgent, watch, status, allClear } = briefing;
 
   return (
@@ -25,6 +26,11 @@ export default function BriefingFeed({ briefing, onSendReminder, onSendAll, onIt
       />
 
       <WatchSection items={watch} onItemClick={onItemClick} />
+
+      <ActionsSection
+        suggestions={suggestions}
+        hasUrgentItems={urgent.length > 0}
+      />
 
       {status.length > 0 && <StatusSection items={status} />}
     </motion.div>

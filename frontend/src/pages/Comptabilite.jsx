@@ -8,15 +8,14 @@ import { analyticsApi, exportsApi, bankApi, expenseCategoriesApi } from '../serv
 import { useAuthStore } from '../stores/authStore';
 import { useToastStore } from '../stores/toastStore';
 import UpgradePrompt from '../components/ui/UpgradePrompt';
+import Modal from '../components/ui/Modal';
 import Button from '../components/ui/Button';
 import { formatCurrency } from '../utils/format';
 import TransactionDetailModal from '../components/Comptabilite/TransactionDetailModal';
 import AddExpenseModal from '../components/Comptabilite/AddExpenseModal';
 import InvoiceDetailModal from '../components/Comptabilite/InvoiceDetailModal';
 import RecurringInvoiceDetailModal from '../components/Comptabilite/RecurringInvoiceDetailModal';
-import AISuggestionBanner from '../components/AI/AISuggestionBanner';
 import AIQuickAction from '../components/AI/AIQuickAction';
-import { useAIStore } from '../stores/aiStore';
 
 const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '-';
@@ -24,8 +23,6 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString('fr-CH', { day: '2-dig
 export default function Comptabilite() {
   const { user } = useAuthStore();
   const { addToast } = useToastStore();
-  const aiSuggestions = useAIStore(s => s.suggestions);
-
   // Core data
   const [expenses, setExpenses] = useState(null);
   const [profitLoss, setProfitLoss] = useState(null);
@@ -44,6 +41,9 @@ export default function Comptabilite() {
   const [recurringCharges, setRecurringCharges] = useState(null);
   const [uncategorized, setUncategorized] = useState([]);
   const [loadingUncat, setLoadingUncat] = useState(false);
+
+  // Compliance
+  const [complianceWarnings, setComplianceWarnings] = useState([]);
 
   // Inline drill-downs
   const [expandedMonth, setExpandedMonth] = useState(null); // { index, data, loading }
@@ -73,6 +73,7 @@ export default function Comptabilite() {
       setExpenses(expRes.data.data);
       setProfitLoss(plRes.data.data);
       setVatDetail(vatRes.data.data);
+      setComplianceWarnings(plRes.data.complianceWarnings || []);
     } catch {
       addToast({ type: 'error', message: 'Erreur de chargement des données comptables' });
     }
@@ -246,7 +247,7 @@ export default function Comptabilite() {
             Ajouter
           </Button>
           <Button icon={Download} variant="secondary" size="sm" onClick={() => setShowExportModal(true)}>
-            Export
+            Exporter
           </Button>
           <button onClick={handleRefreshAll} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/[0.06] text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
             <RefreshCw className="w-4 h-4" />
@@ -254,11 +255,30 @@ export default function Comptabilite() {
         </div>
       </div>
 
-      {/* ═══ AI Suggestions ═══ */}
-      <AISuggestionBanner
-        suggestions={aiSuggestions}
-        filter={(s) => s.type === 'warning' && ['view_overdue', 'check_vat'].includes(s.action)}
-      />
+      {/* ═══ Compliance Warnings ═══ */}
+      {complianceWarnings.length > 0 && (
+        <div className="space-y-2">
+          {complianceWarnings.map((w, i) => (
+            <div
+              key={w.code || i}
+              className={`flex items-start gap-3 px-4 py-3 rounded-xl border ${
+                w.type === 'critical' ? 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800/30' :
+                w.type === 'warning' ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800/30' :
+                'bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800/30'
+              }`}
+            >
+              <AlertCircle className={`w-4 h-4 mt-0.5 shrink-0 ${
+                w.type === 'critical' ? 'text-red-500' : w.type === 'warning' ? 'text-amber-500' : 'text-blue-500'
+              }`} />
+              <p className={`text-[13px] ${
+                w.type === 'critical' ? 'text-red-800 dark:text-red-300' :
+                w.type === 'warning' ? 'text-amber-800 dark:text-amber-300' :
+                'text-blue-800 dark:text-blue-300'
+              }`}>{w.message}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ═══ KPI Cards ═══ */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -412,7 +432,33 @@ export default function Comptabilite() {
         <section className="bg-white dark:bg-dark-card rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
           <div className="p-5 pb-3 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-900 dark:text-white">TVA par trimestre ({vatDetail.year})</h2>
-            <AIQuickAction label="Calculer avec l'AI" prompt={`Aide-moi à comprendre ma situation TVA. TVA nette : ${formatCurrency(vatDetail?.totals?.vatNet || 0)} CHF pour ${vatDetail.year}.`} />
+            <div className="flex items-center gap-2">
+              <select
+                onChange={async (e) => {
+                  const q = parseInt(e.target.value);
+                  if (!q) return;
+                  try {
+                    const res = await analyticsApi.exportVatDeclaration(q, vatDetail.year);
+                    const url = URL.createObjectURL(new Blob([res.data]));
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `TVA_T${q}_${vatDetail.year}.csv`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    addToast({ type: 'success', message: `Export TVA T${q} téléchargé` });
+                  } catch { addToast({ type: 'error', message: 'Erreur export TVA' }); }
+                  e.target.value = '';
+                }}
+                className="text-xs px-2 py-1.5 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-dark-card text-slate-600 dark:text-slate-400 cursor-pointer"
+              >
+                <option value="">Export LTVA 740</option>
+                <option value="1">T1</option>
+                <option value="2">T2</option>
+                <option value="3">T3</option>
+                <option value="4">T4</option>
+              </select>
+              <AIQuickAction label="Calculer avec l'AI" prompt={`Aide-moi à comprendre ma situation TVA. TVA nette : ${formatCurrency(vatDetail?.totals?.vatNet || 0)} CHF pour ${vatDetail.year}.`} />
+            </div>
           </div>
           <div className="overflow-x-auto px-5 pb-5">
             <table className="w-full text-sm">
@@ -1061,38 +1107,48 @@ function FiduciaryExportModal({ onClose }) {
       const { data } = await exportsApi.fiduciary(from, to);
       const url = window.URL.createObjectURL(data);
       const a = document.createElement('a');
-      a.href = url; a.download = `fiduciaire_${from}_${to}.csv`; a.click();
+      a.href = url; a.download = `comptabilite_${from}_${to}.zip`; a.click();
       window.URL.revokeObjectURL(url);
-      addToast({ type: 'success', message: 'Export téléchargé' });
+      addToast({ type: 'success', message: 'Dossier comptable téléchargé' });
       onClose();
-    } catch { addToast({ type: 'error', message: 'Erreur export' }); }
+    } catch { addToast({ type: 'error', message: 'Erreur lors de la génération' }); }
     finally { setExporting(false); }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div className="bg-white dark:bg-dark-card rounded-xl shadow-xl w-full max-w-md mx-4 p-6" onClick={e => e.stopPropagation()}>
-        <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Export fiduciaire</h3>
-        <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-          Rapport CSV : revenus, dépenses par catégorie, résumé TVA et résultat.
-        </p>
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1">Du</label>
-            <input type="date" value={from} onChange={e => setFrom(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-dark-bg text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 outline-none" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1">Au</label>
-            <input type="date" value={to} onChange={e => setTo(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-dark-bg text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 outline-none" />
-          </div>
+    <Modal isOpen={true} onClose={onClose} title="Envoyer à mon comptable" size="md">
+      <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">
+        Génère un dossier ZIP complet prêt à transmettre à votre fiduciaire.
+      </p>
+      <div className="rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.06] p-3 mb-4">
+        <p className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">Contenu du dossier :</p>
+        <ul className="text-xs text-slate-500 dark:text-slate-400 space-y-1">
+          <li>Rapport fiduciaire (revenus, charges, P&L, TVA)</li>
+          <li>Journal comptable (écritures chronologiques)</li>
+          <li>Déclarations TVA par trimestre (format LTVA 740)</li>
+          <li>Rapport de revenus PDF</li>
+          <li>Liste clients</li>
+          <li>Pièces justificatives (scans et tickets)</li>
+        </ul>
+      </div>
+      <div className="grid grid-cols-2 gap-3 mb-6">
+        <div>
+          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Du</label>
+          <input type="date" value={from} onChange={e => setFrom(e.target.value)}
+            className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-dark-card text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 outline-none transition-all" />
         </div>
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={onClose}>Annuler</Button>
-          <Button icon={Download} size="sm" onClick={handleExport} loading={exporting}>Télécharger CSV</Button>
+        <div>
+          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Au</label>
+          <input type="date" value={to} onChange={e => setTo(e.target.value)}
+            className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-dark-card text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 outline-none transition-all" />
         </div>
       </div>
-    </div>
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={onClose}>Annuler</Button>
+        <Button icon={Download} size="sm" onClick={handleExport} loading={exporting}>
+          {exporting ? 'Génération...' : 'Télécharger le dossier .zip'}
+        </Button>
+      </div>
+    </Modal>
   );
 }

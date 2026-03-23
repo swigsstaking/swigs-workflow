@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Upload, Loader2, FileText, Check, Pencil, X } from 'lucide-react';
+import { Upload, Loader2, FileText, Check, Pencil, X, Camera } from 'lucide-react';
 import { useAIStore } from '../../stores/aiStore';
 import { bankApi } from '../../services/api';
 import { useToastStore } from '../../stores/toastStore';
@@ -23,6 +23,8 @@ export default function AIDocumentUpload() {
   const [preview, setPreview] = useState(null);
   const [creating, setCreating] = useState(false);
   const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
+  const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
 
   // Cleanup blob URL on unmount or when preview changes
   useEffect(() => {
@@ -177,9 +179,10 @@ export default function AIDocumentUpload() {
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
-      onClick={handleClick}
+      onClick={isMobile ? undefined : handleClick}
       className={`
-        mx-4 mt-3 px-4 py-3 rounded-xl border border-dashed cursor-pointer transition-all duration-200
+        mx-4 mt-3 px-4 py-3 rounded-xl border border-dashed transition-all duration-200
+        ${!isMobile ? 'cursor-pointer' : ''}
         ${isDragging
           ? 'border-primary-400 dark:border-primary-500 bg-primary-50 dark:bg-primary-500/10 scale-[1.02]'
           : 'border-slate-300 dark:border-zinc-700 hover:border-primary-300 dark:hover:border-primary-600 hover:bg-slate-50 dark:hover:bg-zinc-900'
@@ -193,10 +196,42 @@ export default function AIDocumentUpload() {
         onChange={handleInputChange}
         className="hidden"
       />
-      <div className="flex items-center gap-2 text-[12px] text-slate-500 dark:text-zinc-500">
-        <Upload className={`w-4 h-4 shrink-0 ${isDragging ? 'text-primary-500' : ''}`} />
-        <span>{isDragging ? 'Déposez le document' : 'Scanner un document (facture, ticket)'}</span>
-      </div>
+      {isMobile && (
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleInputChange}
+          className="hidden"
+        />
+      )}
+      {isMobile ? (
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => cameraInputRef.current?.click()}
+            className="flex items-center gap-1.5 text-[12px] text-primary-600 dark:text-primary-400 font-medium"
+          >
+            <Camera className="w-4 h-4 shrink-0" />
+            Photo
+          </button>
+          <span className="text-slate-300 dark:text-zinc-700">|</span>
+          <button
+            type="button"
+            onClick={handleClick}
+            className="flex items-center gap-1.5 text-[12px] text-slate-500 dark:text-zinc-500"
+          >
+            <Upload className="w-4 h-4 shrink-0" />
+            Fichier
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 text-[12px] text-slate-500 dark:text-zinc-500">
+          <Upload className={`w-4 h-4 shrink-0 ${isDragging ? 'text-primary-500' : ''}`} />
+          <span>{isDragging ? 'Déposez le document' : 'Scanner un document (facture, ticket)'}</span>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,18 +1,54 @@
-import { useState, useRef, useCallback } from 'react';
-import { Upload, FileSpreadsheet, PlusCircle, ArrowRight, ArrowLeft, Check, AlertCircle, Loader2, X } from 'lucide-react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { Upload, FileSpreadsheet, PlusCircle, ArrowRight, ArrowLeft, Check, AlertCircle, Loader2, X, Camera } from 'lucide-react';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import Input, { Select, Textarea } from '../ui/Input';
 import { bankApi, bankAccountsApi } from '../../services/api';
 import { useToastStore } from '../../stores/toastStore';
+import useOcr from '../../hooks/useOcr';
 
 const TABS = [
   { key: 'manual', label: 'Saisie manuelle', icon: PlusCircle },
   { key: 'csv', label: 'Import CSV', icon: FileSpreadsheet },
+  { key: 'scanner', label: 'Scanner', icon: Camera },
 ];
+
+const CATEGORY_MAP = {
+  office: ['bureau', 'office', 'fourniture'],
+  telecom: ['télécom', 'telecom', 'internet', 'téléphone'],
+  transport: ['transport', 'déplacement', 'essence', 'parking'],
+  food: ['alimentation', 'restaurant', 'repas'],
+  software: ['logiciel', 'software', 'abonnement', 'saas'],
+  insurance: ['assurance', 'insurance'],
+  rent: ['loyer', 'rent', 'bail'],
+};
+
+function mapOcrCategory(ocrCategory, categories) {
+  if (!ocrCategory) return '';
+  const keywords = CATEGORY_MAP[ocrCategory] || [ocrCategory];
+  const match = categories.find(c =>
+    keywords.some(k => c.name.toLowerCase().includes(k))
+  );
+  return match?._id || '';
+}
 
 export default function AddExpenseModal({ open, onClose, categories = [], onSuccess }) {
   const [tab, setTab] = useState('manual');
+  const [ocrPrefill, setOcrPrefill] = useState(null);
+
+  const handleOcrComplete = useCallback((result) => {
+    const prefill = {
+      counterpartyName: result.vendor || '',
+      bookingDate: result.date || new Date().toISOString().slice(0, 10),
+      amount: String(result.amountGross || result.amountNet || ''),
+      currency: result.currency || 'CHF',
+      creditDebit: 'DBIT',
+      expenseCategoryId: mapOcrCategory(result.category, categories),
+      description: result.description || '',
+    };
+    setOcrPrefill(prefill);
+    setTab('manual');
+  }, [categories]);
 
   if (!open) return null;
 
@@ -37,7 +73,9 @@ export default function AddExpenseModal({ open, onClose, categories = [], onSucc
       </div>
 
       {tab === 'manual' ? (
-        <ManualTab categories={categories} onSuccess={onSuccess} onClose={onClose} />
+        <ManualTab categories={categories} onSuccess={onSuccess} onClose={onClose} initialValues={ocrPrefill} />
+      ) : tab === 'scanner' ? (
+        <ScannerTab onOcrComplete={handleOcrComplete} onClose={onClose} />
       ) : (
         <CsvTab categories={categories} onSuccess={onSuccess} onClose={onClose} />
       )}
@@ -45,13 +83,161 @@ export default function AddExpenseModal({ open, onClose, categories = [], onSucc
   );
 }
 
+/* ─────────────── Scanner Tab ─────────────── */
+
+function ScannerTab({ onOcrComplete, onClose }) {
+  const { ocrResult, isProcessing, error, preview, fileInputRef, processFile, clear } = useOcr();
+  const [dragOver, setDragOver] = useState(false);
+  const cameraInputRef = useRef(null);
+  const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault();
+    setDragOver(false);
+    const f = e.dataTransfer?.files?.[0];
+    if (f) processFile(f);
+  }, [processFile]);
+
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    setDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    setDragOver(false);
+  }, []);
+
+  // When OCR succeeds, pass result up
+  useEffect(() => {
+    if (ocrResult) {
+      onOcrComplete(ocrResult);
+    }
+  }, [ocrResult, onOcrComplete]);
+
+  return (
+    <div className="space-y-4">
+      <div
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onClick={() => !isMobile && fileInputRef.current?.click()}
+        className={`border-2 border-dashed rounded-xl p-10 text-center transition-colors ${
+          isMobile ? '' : 'cursor-pointer'
+        } ${
+          dragOver
+            ? 'border-primary-400 bg-primary-50 dark:border-primary-500 dark:bg-primary-900/20'
+            : 'border-slate-300 dark:border-slate-600 hover:border-primary-400 dark:hover:border-primary-500'
+        }`}
+      >
+        {isProcessing ? (
+          <div className="space-y-3">
+            <Loader2 className="w-10 h-10 mx-auto text-primary-500 animate-spin" />
+            <p className="text-sm text-slate-600 dark:text-slate-400">Analyse du document en cours...</p>
+          </div>
+        ) : (
+          <>
+            <Camera className="w-10 h-10 mx-auto text-slate-400 mb-3" />
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              {isMobile ? 'Photographiez ou importez un document' : (
+                <>Glissez une <span className="font-semibold">facture</span> ou un <span className="font-semibold">ticket</span> ici</>
+              )}
+            </p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+              JPEG, PNG, WebP ou PDF
+            </p>
+            {isMobile && (
+              <div className="flex gap-2 justify-center mt-4">
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); cameraInputRef.current?.click(); }}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors"
+                >
+                  <Camera className="w-4 h-4" />
+                  Prendre une photo
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-zinc-700 transition-colors"
+                >
+                  <Upload className="w-4 h-4" />
+                  Choisir un fichier
+                </button>
+              </div>
+            )}
+          </>
+        )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,application/pdf"
+          className="hidden"
+          onChange={e => {
+            const f = e.target.files?.[0];
+            if (f) processFile(f);
+            e.target.value = '';
+          }}
+        />
+        {isMobile && (
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={e => {
+              const f = e.target.files?.[0];
+              if (f) processFile(f);
+              e.target.value = '';
+            }}
+          />
+        )}
+      </div>
+
+      {/* Preview image */}
+      {preview && (
+        <div className="relative rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700">
+          <img src={preview} alt="Document" className="max-h-48 w-full object-contain bg-slate-50 dark:bg-slate-800" />
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); clear(); }}
+            className="absolute top-2 right-2 p-1 rounded-full bg-slate-900/60 text-white hover:bg-slate-900/80 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+          <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+          <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+        </div>
+      )}
+
+      <div className="rounded-lg bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.06] p-3 text-xs text-slate-500 dark:text-slate-400 space-y-1">
+        <p className="font-medium text-slate-600 dark:text-slate-300">Comment ca marche</p>
+        <p>Prenez en photo ou importez une facture/ticket. L'IA extrait automatiquement le fournisseur, la date, le montant et la catégorie.</p>
+        <p>Les champs seront pré-remplis dans le formulaire de saisie manuelle.</p>
+      </div>
+
+      <div className="flex justify-end">
+        <Button variant="secondary" onClick={onClose}>Annuler</Button>
+      </div>
+    </div>
+  );
+}
+
 /* ─────────────── Manual Tab ─────────────── */
 
-function ManualTab({ categories, onSuccess, onClose }) {
+function ManualTab({ categories, onSuccess, onClose, initialValues }) {
   const { addToast } = useToastStore();
   const [saving, setSaving] = useState(false);
   const [accounts, setAccounts] = useState(null);
-  const [form, setForm] = useState({
+  const [ocrFields, setOcrFields] = useState(new Set());
+
+  const defaultForm = {
     bookingDate: new Date().toISOString().slice(0, 10),
     amount: '',
     currency: 'CHF',
@@ -61,16 +247,65 @@ function ManualTab({ categories, onSuccess, onClose }) {
     expenseCategoryId: '',
     bankAccountId: '',
     notes: '',
+  };
+
+  const [form, setForm] = useState(() => {
+    if (initialValues) {
+      const merged = { ...defaultForm };
+      const fields = new Set();
+      for (const [k, v] of Object.entries(initialValues)) {
+        if (v && v !== '' && k in merged) {
+          merged[k] = v;
+          fields.add(k);
+        }
+      }
+      // defer setting ocrFields
+      setTimeout(() => setOcrFields(fields), 0);
+      return merged;
+    }
+    return defaultForm;
   });
+
+  // When initialValues changes (OCR prefill), update form
+  useEffect(() => {
+    if (!initialValues) return;
+    const fields = new Set();
+    setForm(prev => {
+      const updated = { ...prev };
+      for (const [k, v] of Object.entries(initialValues)) {
+        if (v && v !== '' && k in updated) {
+          updated[k] = v;
+          fields.add(k);
+        }
+      }
+      return updated;
+    });
+    setOcrFields(fields);
+  }, [initialValues]);
 
   // Lazy-load bank accounts on first render
   useState(() => {
     bankAccountsApi.getAll().then(r => setAccounts(r.data.data || [])).catch(() => setAccounts([]));
   });
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const set = (k, v) => {
+    setForm(f => ({ ...f, [k]: v }));
+    // Clear OCR highlight when user edits a field
+    if (ocrFields.has(k)) {
+      setOcrFields(prev => {
+        const next = new Set(prev);
+        next.delete(k);
+        return next;
+      });
+    }
+  };
 
   const selectedCat = categories.find(c => c._id === form.expenseCategoryId);
+
+  const ocrFieldClass = (fieldName) =>
+    ocrFields.has(fieldName)
+      ? 'ring-2 ring-blue-300 dark:ring-blue-600 bg-blue-50/50 dark:bg-blue-900/10 rounded-lg'
+      : '';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -98,8 +333,16 @@ function ManualTab({ categories, onSuccess, onClose }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* OCR banner */}
+      {ocrFields.size > 0 && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-xs text-blue-700 dark:text-blue-400">
+          <Camera className="w-4 h-4 shrink-0" />
+          <span>Champs pré-remplis par le scanner. Vérifiez et ajustez si nécessaire.</span>
+        </div>
+      )}
+
       {/* Row 1: Type toggle */}
-      <div>
+      <div className={ocrFieldClass('creditDebit')}>
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Type</label>
         <div className="flex rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 h-[42px]">
           <button
@@ -129,13 +372,13 @@ function ManualTab({ categories, onSuccess, onClose }) {
 
       {/* Row 2: Date + Amount + Currency */}
       <div className="grid grid-cols-5 gap-3">
-        <div className="col-span-2">
+        <div className={`col-span-2 ${ocrFieldClass('bookingDate')}`}>
           <Input label="Date" type="date" value={form.bookingDate} onChange={e => set('bookingDate', e.target.value)} required />
         </div>
-        <div className="col-span-2">
+        <div className={`col-span-2 ${ocrFieldClass('amount')}`}>
           <Input label="Montant" type="number" step="0.01" min="0.01" value={form.amount} onChange={e => set('amount', e.target.value)} required placeholder="0.00" />
         </div>
-        <div className="col-span-1">
+        <div className={`col-span-1 ${ocrFieldClass('currency')}`}>
           <Select label="Devise" value={form.currency} onChange={e => set('currency', e.target.value)} options={[
             { value: 'CHF', label: 'CHF' },
             { value: 'EUR', label: 'EUR' },
@@ -146,14 +389,18 @@ function ManualTab({ categories, onSuccess, onClose }) {
 
       {/* Row 2: Counterparty + Description */}
       <div className="grid grid-cols-2 gap-3">
-        <Input label="Fournisseur" value={form.counterpartyName} onChange={e => set('counterpartyName', e.target.value)} placeholder="Nom du fournisseur" />
-        <Input label="Description" value={form.description} onChange={e => set('description', e.target.value)} placeholder="Libellé" />
+        <div className={ocrFieldClass('counterpartyName')}>
+          <Input label="Fournisseur" value={form.counterpartyName} onChange={e => set('counterpartyName', e.target.value)} placeholder="Nom du fournisseur" />
+        </div>
+        <div className={ocrFieldClass('description')}>
+          <Input label="Description" value={form.description} onChange={e => set('description', e.target.value)} placeholder="Libellé" />
+        </div>
       </div>
 
       {/* Row 4: Category + Account */}
       <div className={`grid gap-3 ${form.creditDebit === 'DBIT' ? 'grid-cols-2' : 'grid-cols-1'}`}>
         {form.creditDebit === 'DBIT' && (
-          <div>
+          <div className={ocrFieldClass('expenseCategoryId')}>
             <Select
               label={`Catégorie${selectedCat ? ` · TVA ${selectedCat.vatRate ?? 8.1}%` : ''}`}
               value={form.expenseCategoryId}

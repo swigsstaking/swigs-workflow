@@ -30,7 +30,6 @@ const settingsNav = [
   {
     category: 'Intégrations',
     items: [
-      { id: 'abaninja', label: 'AbaNinja', icon: Link2 },
       { id: 'cms', label: 'CMS E-commerce', icon: Link2 },
       { id: 'bank', label: 'Import bancaire', icon: Landmark },
       { id: 'telegram-bot', label: 'Bot Telegram', icon: Bot },

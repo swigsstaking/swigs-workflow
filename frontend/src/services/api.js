@@ -180,7 +180,9 @@ export const analyticsApi = {
   // Drill-down detail endpoints
   getProfitLossDetail: (year, month, params) => api.get(`/analytics/profitloss/${year}/${month}/detail`, { params }),
   getExpenseCategoryDetail: (categoryId, params) => api.get(`/analytics/expenses/${categoryId}/detail`, { params }),
-  getVatQuarterDetail: (quarter, params) => api.get(`/analytics/vat-detail/${quarter}/detail`, { params })
+  getVatQuarterDetail: (quarter, params) => api.get(`/analytics/vat-detail/${quarter}/detail`, { params }),
+  // VAT declaration export
+  exportVatDeclaration: (quarter, year) => api.get(`/analytics/vat-export/${quarter}`, { params: { year }, responseType: 'blob' })
 };
 
 // Services
@@ -214,7 +216,7 @@ export const exportsApi = {
     const year = new Date().getFullYear();
     return api.get(`/exports/revenue-report?from=${year}-01-01&to=${year}-12-31`, { responseType: 'blob' });
   },
-  fiduciary: (from, to) => api.get(`/exports/fiduciary?from=${from}&to=${to}`, { responseType: 'blob' })
+  fiduciary: (from, to) => api.get(`/exports/fiduciary?from=${from}&to=${to}`, { responseType: 'blob', timeout: 60000 })
 };
 
 // Portal
@@ -389,7 +391,13 @@ export const aiApi = {
     return api.post('/ai/ocr', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
-  }
+  },
+  updateSetting: (setting, value) => api.post('/ai/tools/update-setting', { setting, value }),
+  checkPrerequisites: (feature) => api.post('/ai/tools/check-prerequisites', { feature }),
+};
+
+export const companyLookupApi = {
+  search: (q) => api.get('/company-lookup', { params: { q } }),
 };
 
 export default api;

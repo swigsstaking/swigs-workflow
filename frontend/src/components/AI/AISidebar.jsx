@@ -129,7 +129,7 @@ export default function AISidebar() {
                     ].map((q) => (
                       <button
                         key={q}
-                        onClick={() => { setInput(q); textareaRef.current?.focus(); }}
+                        onClick={() => { sendMessage(q); }}
                         className="px-3 py-1.5 text-[11px] rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-zinc-700 transition-colors"
                       >
                         {q}

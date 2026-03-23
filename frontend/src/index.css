@@ -2,6 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Lock scroll and hide header when a modal is open */
+body.modal-open {
+  overflow: hidden;
+}
+body.modal-open header {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 0.15s ease;
+}
+
 /* ========================
    Design System Variables
    ======================== */
