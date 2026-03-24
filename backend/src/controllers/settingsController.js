@@ -402,10 +402,10 @@ export const sendTestEmail = async (req, res, next) => {
     const company = settings.company || {};
 
     await transporter.sendMail({
-      from: `"${company.name || 'SWIGS'}" <${settings.smtp.user}>`,
+      from: `"${company.name || 'Mon entreprise'}" <${settings.smtp.user}>`,
       to,
-      subject: `[TEST] Facture FAC-2026-TEST — ${company.name || 'SWIGS'}`,
-      text: `Bonjour,\n\nCeci est un email test pour vérifier le design des factures et le bon fonctionnement de l'envoi.\n\nVeuillez trouver ci-joint une facture test (FAC-2026-TEST) d'un montant de 4'594.25 CHF.\n\nCordialement,\n${company.name || 'SWIGS'}\n\n`,
+      subject: `[TEST] Facture FAC-2026-TEST — ${company.name || 'Mon entreprise'}`,
+      text: `Bonjour,\n\nCeci est un email test pour vérifier le design des factures et le bon fonctionnement de l'envoi.\n\nVeuillez trouver ci-joint une facture test (FAC-2026-TEST) d'un montant de 4'594.25 CHF.\n\nCordialement,\n${company.name || 'Mon entreprise'}\n\n`,
       attachments: [
         {
           filename: 'Facture-FAC-2026-TEST.pdf',
@@ -465,7 +465,7 @@ export const sendTestReminder = async (req, res, next) => {
       total: fmtCurrency(4594.25),
       dueDate: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-CH'),
       daysOverdue: '10',
-      companyName: company.name || 'SWIGS'
+      companyName: company.name || 'Mon entreprise'
     };
 
     let subject = firstReminder.subject || '';
@@ -521,7 +521,7 @@ export const sendTestReminder = async (req, res, next) => {
     const transporter = createTransporter(settings.smtp);
 
     await transporter.sendMail({
-      from: `"${company.name || 'SWIGS'}" <${settings.smtp.user}>`,
+      from: `"${company.name || 'Mon entreprise'}" <${settings.smtp.user}>`,
       to,
       subject,
       text: body,

@@ -41,7 +41,7 @@ const addHeader = (doc, settings, documentType, documentNumber) => {
 
   // Company info (top right)
   doc.fontSize(10)
-    .text(company.name || 'SWIGS', 400, 50, { align: 'right' })
+    .text(company.name || 'Mon entreprise', 400, 50, { align: 'right' })
     .text(company.address || '', 400, 65, { align: 'right' })
     .text(company.email || '', 400, 80, { align: 'right' })
     .text(company.phone || '', 400, 95, { align: 'right' });
@@ -197,7 +197,7 @@ const addFooter = (doc, settings) => {
   doc.fontSize(8)
     .font('Helvetica')
     .text(
-      `${company.name || 'SWIGS'} - ${company.address || ''} - ${company.email || ''}`,
+      `${company.name || 'Mon entreprise'} - ${company.address || ''} - ${company.email || ''}`,
       50,
       750,
       { align: 'center', width: 500 }

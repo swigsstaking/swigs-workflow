@@ -131,6 +131,68 @@ export const generateClientListCSV = (clients) => {
  * @param {Object} settings - User settings
  * @returns {Promise<Buffer>} PDF buffer
  */
+/**
+ * Generate VAT declaration CSV (LTVA formulaire 740 structure)
+ * @param {Object} vatData - { quarter, year, quarters, totals, company }
+ * @returns {String} CSV string
+ */
+export const generateVatDeclarationCSV = (vatData) => {
+  const BOM = '\uFEFF';
+  const { quarter, year, quarterData, company } = vatData;
+  const q = quarterData;
+
+  const endMonths = { 1: 3, 2: 6, 3: 9, 4: 12 };
+  const endMonth = endMonths[quarter] || 3;
+  const periodStart = new Date(year, endMonth - 3, 1).toLocaleDateString('fr-CH');
+  const periodEnd = new Date(year, endMonth, 0).toLocaleDateString('fr-CH');
+  const deadline = new Date(year, endMonth, 0);
+  deadline.setDate(deadline.getDate() + 60);
+
+  const lines = [
+    `DÉCOMPTE TVA — Formulaire 740 (simplifié)`,
+    ``,
+    `Entreprise:,${escapeCSV(company?.name || '')}`,
+    `IDE:,${escapeCSV(company?.siret || '')}`,
+    `N° TVA:,${escapeCSV(company?.vatNumber || '')}`,
+    `Période:,T${quarter} ${year} (${periodStart} - ${periodEnd})`,
+    `Échéance:,${deadline.toLocaleDateString('fr-CH')}`,
+    ``,
+    `CHIFFRE,DESCRIPTION,MONTANT CHF`,
+    ``,
+    `I. CHIFFRE D'AFFAIRES`,
+    `200,"Total des contre-prestations convenues (Art. 39 LTVA)",${formatCurrency(q.revenueHT || 0)}`,
+    ``,
+    `II. CALCUL DE L'IMPÔT`,
+    `302,"Prestations au taux normal (8.1%)",${formatCurrency(q.revenueHT || 0)}`,
+    `312,"Prestations au taux réduit (2.6%)",0.00`,
+    `342,"Prestations au taux spécial hébergement (3.8%)",0.00`,
+    ``,
+    `382,"Total de l'impôt dû",${formatCurrency(q.vatCollected || 0)}`,
+    ``,
+    `III. IMPÔT PRÉALABLE`,
+    `400,"Impôt préalable sur achats de matériel / prestations",${formatCurrency(q.vatDeductible || 0)}`,
+    `405,"Impôt préalable sur investissements",0.00`,
+    ``,
+    `479,"Total impôt préalable",${formatCurrency(q.vatDeductible || 0)}`,
+    ``,
+    `IV. SOLDE`,
+    `500,"Montant à payer à l'AFC (+) / crédit (−)",${formatCurrency(q.vatNet || 0)}`,
+    ``,
+    `---`,
+    `Note: Ce document est un récapitulatif généré par SWIGS Pro. Il ne remplace pas le formulaire officiel de l'AFC.`,
+    `Généré le:,${new Date().toLocaleDateString('fr-CH')}`
+  ];
+
+  return BOM + lines.join('\n');
+};
+
+/**
+ * Generate revenue report PDF
+ * @param {Array} invoices - Array of invoices in period
+ * @param {Object} dateRange - { from, to }
+ * @param {Object} settings - User settings
+ * @returns {Promise<Buffer>} PDF buffer
+ */
 export const generateRevenueReportPDF = async (invoices, dateRange, settings) => {
   return new Promise((resolve, reject) => {
     try {
@@ -154,7 +216,7 @@ export const generateRevenueReportPDF = async (invoices, dateRange, settings) =>
 
       // Company info
       doc.fontSize(10)
-        .text(company.name || 'SWIGS', 400, 50, { align: 'right' })
+        .text(company.name || 'Mon entreprise', 400, 50, { align: 'right' })
         .text(company.address || '', 400, 65, { align: 'right' });
 
       // Title
@@ -268,7 +330,7 @@ export const generateRevenueReportPDF = async (invoices, dateRange, settings) =>
       doc.fontSize(8)
         .font('Helvetica')
         .text(
-          `Généré le ${formatDateLong(new Date())} - ${company.name || 'SWIGS'}`,
+          `Généré le ${formatDateLong(new Date())} - ${company.name || 'Mon entreprise'}`,
           50,
           750,
           { align: 'center', width: 500 }

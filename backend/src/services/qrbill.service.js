@@ -113,7 +113,7 @@ const buildQRBillData = (invoice, project, settings) => {
     currency: 'CHF',
     amount: invoice.total,
     creditor: {
-      name: (company.name || 'SWIGS').substring(0, 70),
+      name: (company.name || 'Mon entreprise').substring(0, 70),
       address: creditor.address.substring(0, 70),
       zip: creditor.zip,
       city: creditor.city.substring(0, 35),

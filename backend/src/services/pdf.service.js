@@ -104,7 +104,7 @@ const getDesign = (settings) => {
 const buildCompany = (settings) => {
   const company = settings.company || {};
   return {
-    name: company.name || 'SWIGS',
+    name: company.name || 'Mon entreprise',
     address: company.address || '',
     email: company.email || '',
     phone: company.phone || '',

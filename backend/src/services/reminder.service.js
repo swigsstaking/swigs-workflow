@@ -84,7 +84,7 @@ export const sendReminder = async (invoice, project, settings, scheduleItem) => 
       total: formatCurrency(invoice.total),
       dueDate: formatDate(invoice.dueDate),
       daysOverdue: daysOverdue.toString(),
-      companyName: company.name || 'SWIGS'
+      companyName: company.name || 'Mon entreprise'
     };
 
     // Process templates
@@ -116,7 +116,7 @@ export const sendReminder = async (invoice, project, settings, scheduleItem) => 
 
     // Send HTML email with PDF attachment (minimal HTML to prevent Gmail signature splitting)
     const mailOptions = {
-      from: `"${company.name || 'SWIGS'}" <${settings.smtp.user}>`,
+      from: `"${company.name || 'Mon entreprise'}" <${settings.smtp.user}>`,
       to: client.email,
       subject,
       text: body,

@@ -177,7 +177,7 @@ export const sendQuoteEmail = async (quote, project, settings, pdfBuffer) => {
     number: quote.number,
     projectName: project.name || 'Projet',
     total: formatCurrency(quote.total),
-    companyName: company.name || 'SWIGS',
+    companyName: company.name || 'Mon entreprise',
     paymentTerms: settings.invoicing?.defaultPaymentTerms || 30
   };
 
@@ -198,7 +198,7 @@ export const sendQuoteEmail = async (quote, project, settings, pdfBuffer) => {
 
   // Send email
   const mailOptions = {
-    from: `"${company.name || 'SWIGS'}" <${settings.smtp.user}>`,
+    from: `"${company.name || 'Mon entreprise'}" <${settings.smtp.user}>`,
     to: client.email,
     subject,
     text: body,
@@ -253,7 +253,7 @@ export const sendInvoiceEmail = async (invoice, project, settings, pdfBuffer) =>
     number: invoice.number,
     projectName: project.name || 'Projet',
     total: formatCurrency(invoice.total),
-    companyName: company.name || 'SWIGS',
+    companyName: company.name || 'Mon entreprise',
     paymentTerms: settings.invoicing?.defaultPaymentTerms || 30
   };
 
@@ -274,7 +274,7 @@ export const sendInvoiceEmail = async (invoice, project, settings, pdfBuffer) =>
 
   // Send email
   const mailOptions = {
-    from: `"${company.name || 'SWIGS'}" <${settings.smtp.user}>`,
+    from: `"${company.name || 'Mon entreprise'}" <${settings.smtp.user}>`,
     to: client.email,
     subject,
     text: body,
@@ -320,7 +320,7 @@ export const sendPaymentConfirmationEmail = async (invoice, settings) => {
     number: invoice.number,
     projectName: project.name || 'Projet',
     total: formatCurrency(invoice.total),
-    companyName: company.name || 'SWIGS'
+    companyName: company.name || 'Mon entreprise'
   };
 
   const subject = replaceVariables(
@@ -337,7 +337,7 @@ export const sendPaymentConfirmationEmail = async (invoice, settings) => {
   const transporter = createTransporter(settings.smtp);
 
   const mailOptions = {
-    from: `"${company.name || 'SWIGS'}" <${settings.smtp.user}>`,
+    from: `"${company.name || 'Mon entreprise'}" <${settings.smtp.user}>`,
     to: client.email,
     subject,
     text: body,
