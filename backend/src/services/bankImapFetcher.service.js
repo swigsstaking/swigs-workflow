@@ -17,6 +17,53 @@ import cron from 'node-cron';
 import { acquireCronLock, releaseCronLock } from '../models/CronLock.js';
 
 /**
+ * Push a bank transaction to Lexa (AI accounting sibling product).
+ * Non-blocking: failures are logged but do not interrupt Swigs Pro flow.
+ * Only activated when LEXA_ENABLED=true in env.
+ */
+async function pushTransactionToLexa(tx, userId) {
+  if (process.env.LEXA_ENABLED !== 'true') return null;
+  const lexaUrl = process.env.LEXA_URL || 'http://192.168.110.59:3010';
+
+  try {
+    const bookingDate = tx.bookingDate instanceof Date
+      ? tx.bookingDate.toISOString().split('T')[0]
+      : String(tx.bookingDate);
+
+    const { default: axios } = await import('axios');
+    const { data } = await axios.post(`${lexaUrl}/connectors/bank/ingest`, {
+      transactions: [{
+        txId: tx.txId,
+        amount: Math.abs(tx.amount),
+        currency: tx.currency || 'CHF',
+        creditDebit: tx.creditDebit,
+        counterpartyName: tx.counterpartyName,
+        counterpartyIban: tx.counterpartyIban,
+        reference: tx.reference,
+        unstructuredReference: tx.unstructuredReference,
+        bookingDate,
+        importFilename: tx.importFilename || '[EMAIL]',
+        source: 'swigs-pro-email',
+        userId: String(userId || ''),
+      }],
+    }, { timeout: 60_000 });
+
+    const result = data?.results?.[0];
+    if (result?.status === 'classified' && result?.classification) {
+      console.log(
+        `[Lexa] ✓ ${tx.txId} → ${result.classification.debitAccount} (conf ${result.classification.confidence})`
+      );
+      return result;
+    }
+    console.log(`[Lexa] ${tx.txId} ingested without classification`);
+    return null;
+  } catch (err) {
+    console.warn(`[Lexa] push failed for ${tx.txId}: ${err.message}`);
+    return null;
+  }
+}
+
+/**
  * Connect to IMAP, fetch new emails with XML camt attachments,
  * parse and reconcile automatically.
  */
@@ -175,8 +222,18 @@ async function processXmlBuffer(buffer, filename, userId) {
         expenseCategory: classification.expenseCategory,
         autoClassified: classification.autoClassified
       } : {}),
-      userId
+      userId,
+      importFilename: tx.importFilename || filename
     });
+
+    // Non-blocking push to Lexa (AI accounting) — only if LEXA_ENABLED=true.
+    // Lexa stores in its own event store and provides Käfer classification + citations.
+    // We do NOT await here; we fire-and-forget so Pro flow is never slowed.
+    if (process.env.LEXA_ENABLED === 'true') {
+      pushTransactionToLexa(tx, userId).catch((err) => {
+        console.warn(`[Lexa] unhandled push error: ${err.message}`);
+      });
+    }
 
     // Auto-mark invoice as paid if confidence >= 80
     if (reconciliation.matchedInvoice && reconciliation.matchConfidence >= 80) {
