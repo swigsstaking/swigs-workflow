@@ -8,20 +8,31 @@ import { parseStringPromise } from 'xml2js';
 
 const UID_ENDPOINT = 'https://www.uid-wse.admin.ch/V5.0/PublicServices.svc';
 
-// eCH-0097 legal form codes → our internal values
+/**
+ * Mapping empirique validé contre l'API BFS UID V5 le 2026-04-14
+ * (voir apps/backend/src/services/companyLookup.ts dans le repo lexa).
+ *
+ * Sondes live :
+ *   0101 → Raison individuelle (Gianadda Pierre)
+ *   0106 → SA                  (Nestlé AG, UBS AG, SWIGS SA)
+ *   0107 → Sàrl                (Kozelsky Sàrl) — l'ancien mapping disait 'sa'
+ *   0108 → Coopérative         (Migros-Genossenschafts-Bund) — l'ancien disait 'sarl'
+ *   0109 → Association         (Croix-Rouge, Bauernverband) — l'ancien disait 'cooperative'
+ *   0110 → Fondation           (Pierre Gianadda)
+ *
+ * Les codes rares (société simple, SNC, SEnC, KmdAG, succursale étrangère…)
+ * tombent dans 'autre' jusqu'à validation empirique.
+ */
 const LEGAL_FORM_MAP = {
-  '0101': 'raison_individuelle', // Einzelunternehmen / Entreprise individuelle
-  '0104': 'snc',                 // Kollektivgesellschaft / SNC
-  '0105': 'senc',                // Kommanditgesellschaft / SEnC
-  '0106': 'sa',                  // Aktiengesellschaft / SA
-  '0107': 'sa',                  // Kommanditaktiengesellschaft (rare, map to SA)
-  '0108': 'sarl',                // GmbH / Sàrl
-  '0109': 'cooperative',         // Genossenschaft / Coopérative
-  '0110': 'fondation',           // Stiftung / Fondation
-  '0302': 'raison_individuelle', // Zweigniederlassung / Succursale
-  '0220': 'association',         // Verein / Association
-  '0221': 'association',         // Verein / Association (variant)
+  '0101': 'raison_individuelle',
+  '0106': 'sa',
+  '0107': 'sarl',
+  '0108': 'cooperative',
+  '0109': 'association',
+  '0110': 'fondation',
 };
+
+const seenUnknownCodes = new Set();
 
 function escapeXml(str) {
   return str
@@ -119,11 +130,18 @@ export async function searchCompany(name, maxResults = 10) {
       : '';
 
     const legalFormCode = val(id.legalForm);
+    const legalForm = LEGAL_FORM_MAP[legalFormCode] || 'autre';
+    if (legalForm === 'autre' && legalFormCode && !seenUnknownCodes.has(legalFormCode)) {
+      seenUnknownCodes.add(legalFormCode);
+      console.warn(
+        `[companyLookup] Unknown BFS legalForm code '${legalFormCode}' for ${val(id.organisationName)} — add to LEGAL_FORM_MAP`,
+      );
+    }
 
     return {
       uid: uidFormatted,
       name: val(id.organisationName),
-      legalForm: LEGAL_FORM_MAP[legalFormCode] || 'raison_individuelle',
+      legalForm,
       legalFormCode,
       street: [val(addr.street), val(addr.houseNumber)].filter(Boolean).join(' '),
       zip: val(addr.swissZipCode),
