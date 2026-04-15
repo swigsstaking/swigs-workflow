@@ -76,12 +76,30 @@ const bankTransactionSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     index: true,
     required: true
+  },
+  // --- Lexa AI classification (session 20, webhook retour Lexa→Pro) ---
+  lexaClassification: {
+    streamId: String,
+    debitAccount: String,
+    creditAccount: String,
+    tvaRate: Number,
+    tvaCode: String,
+    confidence: Number,
+    amountHt: Number,
+    amountTtc: Number,
+    citations: [{
+      source: String,
+      article: String,
+      law: String,
+    }],
+    classifiedAt: Date,
   }
 }, {
   timestamps: true
 });
 
 bankTransactionSchema.index({ userId: 1, txId: 1 });
+bankTransactionSchema.index({ txId: 1 }, { sparse: true }); // webhook lookup Lexa→Pro
 bankTransactionSchema.index({ userId: 1, matchStatus: 1 });
 bankTransactionSchema.index({ importId: 1, bookingDate: -1 });
 bankTransactionSchema.index({ userId: 1, bookingDate: 1, amount: 1, creditDebit: 1, counterpartyName: 1 });

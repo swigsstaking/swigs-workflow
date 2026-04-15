@@ -43,6 +43,7 @@ import recurringInvoiceRoutes from './src/routes/recurringInvoices.js';
 import quoteTemplateRoutes from './src/routes/quoteTemplates.js';
 import aiRoutes from './src/routes/ai.js';
 import companyLookupRoutes from './src/routes/companyLookup.js';
+import integrationsRoutes from './src/routes/integrations.js';
 import Invoice from './src/models/Invoice.js';
 import { errorHandler } from './src/middleware/errorHandler.js';
 import { requireAuth } from './src/middleware/auth.js';
@@ -105,7 +106,7 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Lexa-Signature', 'X-Lexa-Timestamp'],
   maxAge: 86400 // 24 hours
 }));
 
@@ -159,7 +160,13 @@ app.use(compression({
 }));
 
 // Body parsing with size limits
-app.use(express.json({ limit: '2mb' }));
+// Le hook verify capture rawBody pour la vérification HMAC du webhook Lexa→Pro (session 20)
+app.use(express.json({
+  limit: '2mb',
+  verify: (req, _res, buf) => {
+    req.rawBody = buf;
+  }
+}));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 // Sanitize MongoDB query injection
@@ -256,6 +263,9 @@ app.use('/api/quote-templates', requireAuth, quoteTemplateRoutes);
 // AI routes (auth handled internally — /health is public, rest requires auth)
 app.use('/api/ai', aiRoutes);
 app.use('/api/company-lookup', requireAuth, companyLookupRoutes);
+
+// Integrations routes (session 20 — Lexa webhook inbound, HMAC-signed)
+app.use('/api/integrations', integrationsRoutes);
 
 // =============================================================================
 // ERROR HANDLING
