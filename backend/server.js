@@ -44,6 +44,7 @@ import quoteTemplateRoutes from './src/routes/quoteTemplates.js';
 import aiRoutes from './src/routes/ai.js';
 import companyLookupRoutes from './src/routes/companyLookup.js';
 import integrationsRoutes from './src/routes/integrations.js';
+import expenseRoutes from './src/routes/expenses.js';
 import Invoice from './src/models/Invoice.js';
 import { errorHandler } from './src/middleware/errorHandler.js';
 import { requireAuth } from './src/middleware/auth.js';
@@ -266,6 +267,9 @@ app.use('/api/company-lookup', requireAuth, companyLookupRoutes);
 
 // Integrations routes (session 20 — Lexa webhook inbound, HMAC-signed)
 app.use('/api/integrations', integrationsRoutes);
+
+// Expense (Notes de frais) routes — protected
+app.use('/api/expenses', requireAuth, expenseRoutes);
 
 // =============================================================================
 // ERROR HANDLING
