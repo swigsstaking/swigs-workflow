@@ -21,6 +21,7 @@ import BankAccountsSection from '../components/Settings/sections/BankAccountsSec
 import ExpenseCategoriesSection from '../components/Settings/sections/ExpenseCategoriesSection';
 import CounterpartyRulesSection from '../components/Settings/sections/CounterpartyRulesSection';
 import TelegramBotSection from '../components/Settings/sections/TelegramBotSection';
+import LexaIntegrationSection from '../components/Settings/sections/LexaIntegrationSection';
 import UpgradePrompt from '../components/ui/UpgradePrompt';
 import { useAuthStore } from '../stores/authStore';
 
@@ -117,6 +118,13 @@ export default function Settings() {
         return <BankSection />;
       case 'telegram-bot':
         return <TelegramBotSection />;
+      case 'lexa':
+        return (
+          <LexaIntegrationSection
+            settings={settings}
+            onSettingsUpdate={handleSettingsUpdate}
+          />
+        );
       case 'bank-accounts':
         return user?.hasComptaPlus ? <BankAccountsSection /> : <UpgradePrompt feature="Les comptes bancaires multiples" />;
       case 'expense-categories':

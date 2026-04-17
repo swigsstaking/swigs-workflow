@@ -151,7 +151,7 @@ export const submit = async (req, res, next) => {
       date: expense.date.toISOString().slice(0, 10),
       employeeName: expense.employeeName,
       attachmentUrl: expense.attachmentUrl ?? null,
-    }).then(() => {
+    }, req.user?._id || null).then(() => {
       // Marquer comme ingested côté Pro pour tracking (non bloquant)
       Expense.updateOne({ _id: expense._id }, { lexaIngested: true }).catch(() => {});
     }).catch((err) => {

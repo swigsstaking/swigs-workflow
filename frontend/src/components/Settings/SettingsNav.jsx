@@ -1,4 +1,4 @@
-import { Building2, Receipt, Palette, Paintbrush, Users, Package, Tag, Server, Mail, Link2, Landmark, RefreshCw, FileText, FolderOpen, Crown, Bot } from 'lucide-react';
+import { Building2, Receipt, Palette, Paintbrush, Users, Package, Tag, Server, Mail, Link2, Landmark, RefreshCw, FileText, FolderOpen, Crown, Bot, BookOpen } from 'lucide-react';
 
 const settingsNav = [
   {
@@ -33,6 +33,7 @@ const settingsNav = [
       { id: 'cms', label: 'CMS E-commerce', icon: Link2 },
       { id: 'bank', label: 'Import bancaire', icon: Landmark },
       { id: 'telegram-bot', label: 'Bot Telegram', icon: Bot },
+      { id: 'lexa', label: 'Lexa (Compta)', icon: BookOpen },
     ]
   },
   {

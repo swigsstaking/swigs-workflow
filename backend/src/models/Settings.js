@@ -52,6 +52,37 @@ const companySchema = new mongoose.Schema({
   qrIban: {
     type: String,
     default: ''
+  },
+  // --- Paramètres comptables suisses ---
+  legalForm: {
+    type: String,
+    enum: ['raison_individuelle', 'sarl', 'sa', 'snc', 'senc', 'cooperative', 'association', 'fondation'],
+    default: 'raison_individuelle'
+  },
+  canton: {
+    type: String,
+    enum: ['AG', 'AI', 'AR', 'BE', 'BL', 'BS', 'FR', 'GE', 'GL', 'GR', 'JU', 'LU', 'NE', 'NW', 'OW', 'SG', 'SH', 'SO', 'SZ', 'TG', 'TI', 'UR', 'VD', 'VS', 'ZG', 'ZH'],
+    default: null
+  },
+  isVatSubject: {
+    type: Boolean,
+    default: true
+  },
+  vatDeclarationFrequency: {
+    type: String,
+    enum: ['quarterly', 'monthly', 'annual'],
+    default: 'quarterly'
+  },
+  fiscalYearStart: {
+    type: Number,
+    min: 1,
+    max: 12,
+    default: 1
+  },
+  employeeCount: {
+    type: Number,
+    default: 0,
+    min: 0
   }
 }, { _id: false });
 
@@ -382,6 +413,29 @@ const invoiceDesignSchema = new mongoose.Schema({
   }
 }, { _id: false });
 
+const lexaIntegrationSchema = new mongoose.Schema({
+  enabled: {
+    type: Boolean,
+    default: true // true = publie vers Lexa
+  },
+  publishInvoices: {
+    type: Boolean,
+    default: true
+  },
+  publishExpenses: {
+    type: Boolean,
+    default: true
+  },
+  lastPublishedAt: {
+    type: Date,
+    default: null
+  },
+  failureCount: {
+    type: Number,
+    default: 0
+  }
+}, { _id: false });
+
 const abaninjaSchema = new mongoose.Schema({
   enabled: {
     type: Boolean,
@@ -459,6 +513,10 @@ const settingsSchema = new mongoose.Schema({
   },
   bankImap: {
     type: bankImapSchema,
+    default: () => ({})
+  },
+  lexaIntegration: {
+    type: lexaIntegrationSchema,
     default: () => ({})
   }
 }, {

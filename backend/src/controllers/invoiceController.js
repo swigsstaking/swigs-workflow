@@ -279,7 +279,7 @@ export const createInvoice = async (req, res, next) => {
         tvaRate: invoice.vatRate,
         dueDate: invoice.dueDate,
         description: project.name,
-      }).catch(() => { /* silent fire-and-forget */ });
+      }, req.user?._id || null).catch(() => { /* silent fire-and-forget */ });
 
       return res.status(201).json({ success: true, data: invoice });
     }
@@ -478,7 +478,7 @@ export const createInvoice = async (req, res, next) => {
       tvaRate: invoice.vatRate,
       dueDate: invoice.dueDate,
       description: project.name,
-    }).catch(() => { /* silent fire-and-forget */ });
+    }, req.user?._id || null).catch(() => { /* silent fire-and-forget */ });
 
     res.status(201).json({ success: true, data: invoice });
   } catch (error) {
@@ -1188,7 +1188,7 @@ export const changeInvoiceStatus = async (req, res, next) => {
         paidAmount: invoice.total,
         paidDate: invoice.paidAt,
         paymentMethod: 'direct',
-      }).catch(() => { /* silent fire-and-forget */ });
+      }, req.user?._id || null).catch(() => { /* silent fire-and-forget */ });
     } else if (status === 'sent') {
       safePublish('invoice.sent', {
         invoiceId: invoice._id.toString(),
@@ -1335,7 +1335,7 @@ export const recordPayment = async (req, res, next) => {
         paidAmount: invoice.paidAmount,
         paidDate: invoice.paidAt,
         paymentMethod: method || 'bank_transfer',
-      }).catch(() => { /* silent fire-and-forget */ });
+      }, req.user?._id || null).catch(() => { /* silent fire-and-forget */ });
     }
 
     res.json({ success: true, data: invoice });
