@@ -15,23 +15,33 @@ import { sendPaymentConfirmationEmail } from './email.service.js';
 import { decrypt } from '../utils/crypto.js';
 import cron from 'node-cron';
 import { acquireCronLock, releaseCronLock } from '../models/CronLock.js';
+import { publishToLexa } from './lexaWebhook.service.js';
 
 /**
  * Push a bank transaction to Lexa (AI accounting sibling product).
  * Non-blocking: failures are logged but do not interrupt Swigs Pro flow.
  * Only activated when LEXA_ENABLED=true in env.
+ *
+ * Session 14 : la requête est signée HMAC-SHA256 via X-Lexa-Signature.
+ * Le secret vit dans LEXA_WEBHOOK_SECRET (même valeur des deux côtés).
+ * classify:true explicite pour forcer la classification automatique sur
+ * le pipeline Lexa (lexa-classifier sur Spark, ~15s bout-en-bout).
  */
 async function pushTransactionToLexa(tx, userId) {
   if (process.env.LEXA_ENABLED !== 'true') return null;
   const lexaUrl = process.env.LEXA_URL || 'http://192.168.110.59:3010';
+  const webhookSecret = process.env.LEXA_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    console.warn('[Lexa] LEXA_WEBHOOK_SECRET missing, skip push');
+    return null;
+  }
 
   try {
     const bookingDate = tx.bookingDate instanceof Date
       ? tx.bookingDate.toISOString().split('T')[0]
       : String(tx.bookingDate);
 
-    const { default: axios } = await import('axios');
-    const { data } = await axios.post(`${lexaUrl}/connectors/bank/ingest`, {
+    const payload = {
       transactions: [{
         txId: tx.txId,
         amount: Math.abs(tx.amount),
@@ -46,7 +56,23 @@ async function pushTransactionToLexa(tx, userId) {
         source: 'swigs-pro-email',
         userId: String(userId || ''),
       }],
-    }, { timeout: 60_000 });
+      classify: true,
+    };
+    const rawBody = JSON.stringify(payload);
+
+    const { createHmac } = await import('node:crypto');
+    const signature = createHmac('sha256', webhookSecret)
+      .update(rawBody)
+      .digest('hex');
+
+    const { default: axios } = await import('axios');
+    const { data } = await axios.post(`${lexaUrl}/connectors/bank/ingest`, rawBody, {
+      timeout: 60_000,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Lexa-Signature': `sha256=${signature}`,
+      },
+    });
 
     const result = data?.results?.[0];
     if (result?.status === 'classified' && result?.classification) {
@@ -58,7 +84,8 @@ async function pushTransactionToLexa(tx, userId) {
     console.log(`[Lexa] ${tx.txId} ingested without classification`);
     return null;
   } catch (err) {
-    console.warn(`[Lexa] push failed for ${tx.txId}: ${err.message}`);
+    const status = err.response?.status ?? 'no-response';
+    console.warn(`[Lexa] push failed for ${tx.txId}: ${status} ${err.message}`);
     return null;
   }
 }
@@ -230,8 +257,34 @@ async function processXmlBuffer(buffer, filename, userId) {
     // Lexa stores in its own event store and provides Käfer classification + citations.
     // We do NOT await here; we fire-and-forget so Pro flow is never slowed.
     if (process.env.LEXA_ENABLED === 'true') {
+      // Path 1 : ancienne route /connectors/bank/ingest (classification synchrone)
       pushTransactionToLexa(tx, userId).catch((err) => {
         console.warn(`[Lexa] unhandled push error: ${err.message}`);
+      });
+
+      // Path 2 : bridge EventBus bank.transaction (dedup fingerprint cross-source)
+      const bookingDate = tx.bookingDate instanceof Date
+        ? tx.bookingDate.toISOString().split('T')[0]
+        : String(tx.bookingDate);
+      const signedAmount = tx.creditDebit === 'DBIT'
+        ? -Math.abs(tx.amount)
+        : Math.abs(tx.amount);
+      publishToLexa(
+        'bank.transaction',
+        String(userId || ''),
+        {
+          bankRef: tx.reference || tx.unstructuredReference || undefined,
+          iban: tx.counterpartyIban || undefined,
+          date: bookingDate,
+          amount: signedAmount,
+          currency: tx.currency || 'CHF',
+          description: [tx.counterpartyName, tx.reference, tx.unstructuredReference]
+            .filter(Boolean).join(' | ') || '(bank transaction)',
+          counterpartyName: tx.counterpartyName || undefined,
+        },
+        userId,
+      ).catch((err) => {
+        console.warn(`[Lexa] bridge bank.transaction publish error: ${err.message}`);
       });
     }
 
