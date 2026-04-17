@@ -13,6 +13,7 @@ import { INVOICE_STATUSES } from '../utils/constants.js';
 import { parsePagination } from '../utils/pagination.js';
 
 import { eventBus } from '../services/eventBus.service.js';
+import { publishToLexa } from '../services/lexaWebhook.service.js';
 
 /** Safe non-blocking event publish (logs errors instead of swallowing) */
 const safePublish = (event, payload) => {
@@ -267,6 +268,19 @@ export const createInvoice = async (req, res, next) => {
         hubUserId: req.user?.hubUserId || null
       });
 
+      // Publish to Lexa bridge (fire-and-forget, HMAC signed)
+      publishToLexa('invoice.created', req.user?.hubUserId || null, {
+        invoiceId: invoice._id.toString(),
+        invoiceNumber: invoice.number,
+        clientName: typeof project.client === 'object' ? (project.client?.name || project.client?.company || '') : (project.client || ''),
+        total: invoice.total,
+        amountHt: invoice.subtotal,
+        amountTva: invoice.vatAmount,
+        tvaRate: invoice.vatRate,
+        dueDate: invoice.dueDate,
+        description: project.name,
+      }).catch(() => { /* silent fire-and-forget */ });
+
       return res.status(201).json({ success: true, data: invoice });
     }
 
@@ -452,6 +466,19 @@ export const createInvoice = async (req, res, next) => {
       client: project.client,
       hubUserId: req.user?.hubUserId || null
     });
+
+    // Publish to Lexa bridge (fire-and-forget, HMAC signed)
+    publishToLexa('invoice.created', req.user?.hubUserId || null, {
+      invoiceId: invoice._id.toString(),
+      invoiceNumber: invoice.number,
+      clientName: typeof project.client === 'object' ? (project.client?.name || project.client?.company || '') : (project.client || ''),
+      total: invoice.total,
+      amountHt: invoice.subtotal,
+      amountTva: invoice.vatAmount,
+      tvaRate: invoice.vatRate,
+      dueDate: invoice.dueDate,
+      description: project.name,
+    }).catch(() => { /* silent fire-and-forget */ });
 
     res.status(201).json({ success: true, data: invoice });
   } catch (error) {
@@ -1152,6 +1179,16 @@ export const changeInvoiceStatus = async (req, res, next) => {
         client: invoice.project.client,
         hubUserId: req.user?.hubUserId || null
       });
+
+      // Publish to Lexa bridge (fire-and-forget, HMAC signed)
+      publishToLexa('invoice.paid', req.user?.hubUserId || null, {
+        invoiceId: invoice._id.toString(),
+        invoiceNumber: invoice.number,
+        clientName: typeof invoice.project.client === 'object' ? (invoice.project.client?.name || invoice.project.client?.company || '') : (invoice.project.client || ''),
+        paidAmount: invoice.total,
+        paidDate: invoice.paidAt,
+        paymentMethod: 'direct',
+      }).catch(() => { /* silent fire-and-forget */ });
     } else if (status === 'sent') {
       safePublish('invoice.sent', {
         invoiceId: invoice._id.toString(),
@@ -1289,6 +1326,16 @@ export const recordPayment = async (req, res, next) => {
         client: invoice.project.client,
         hubUserId: req.user?.hubUserId || null
       });
+
+      // Publish to Lexa bridge (fire-and-forget, HMAC signed)
+      publishToLexa('invoice.paid', req.user?.hubUserId || null, {
+        invoiceId: invoice._id.toString(),
+        invoiceNumber: invoice.number,
+        clientName: typeof invoice.project.client === 'object' ? (invoice.project.client?.name || invoice.project.client?.company || '') : (invoice.project.client || ''),
+        paidAmount: invoice.paidAmount,
+        paidDate: invoice.paidAt,
+        paymentMethod: method || 'bank_transfer',
+      }).catch(() => { /* silent fire-and-forget */ });
     }
 
     res.json({ success: true, data: invoice });
