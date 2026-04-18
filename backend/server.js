@@ -44,6 +44,8 @@ import quoteTemplateRoutes from './src/routes/quoteTemplates.js';
 import aiRoutes from './src/routes/ai.js';
 import companyLookupRoutes from './src/routes/companyLookup.js';
 import integrationsRoutes from './src/routes/integrations.js';
+import internalRoutes from './src/routes/internal.js';
+import lexaExportRoutes from './src/routes/lexaExport.js';
 import expenseRoutes from './src/routes/expenses.js';
 import Invoice from './src/models/Invoice.js';
 import { errorHandler } from './src/middleware/errorHandler.js';
@@ -270,6 +272,12 @@ app.use('/api/integrations', integrationsRoutes);
 
 // Expense (Notes de frais) routes — protected
 app.use('/api/expenses', requireAuth, expenseRoutes);
+
+// Internal inter-service routes (X-App-Secret protected, no user auth)
+app.use('/api/internal', internalRoutes);
+
+// Lexa export route (X-App-Secret protected, bulk export for Lexa sync)
+app.use('/api/integrations/lexa', lexaExportRoutes);
 
 // =============================================================================
 // ERROR HANDLING
