@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, Save, Activity } from 'lucide-react';
+import { BookOpen, Save, Activity, Copy, Check, Key } from 'lucide-react';
 import Button from '../../ui/Button';
 import { settingsApi } from '../../../services/api';
 import { useToastStore } from '../../../stores/toastStore';
+import { useAuthStore } from '../../../stores/authStore';
 
 export default function LexaIntegrationSection({ settings, onSettingsUpdate }) {
   const [formData, setFormData] = useState({
@@ -12,10 +13,25 @@ export default function LexaIntegrationSection({ settings, onSettingsUpdate }) {
   });
   const [hasChanges, setHasChanges] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
   const { addToast } = useToastStore();
+  const user = useAuthStore((s) => s.user);
 
   const lastPublishedAt = settings?.lexaIntegration?.lastPublishedAt;
   const failureCount = settings?.lexaIntegration?.failureCount ?? 0;
+  const hubUserId = user?.hubUserId || user?._id || user?.id || null;
+
+  const handleCopy = async () => {
+    if (!hubUserId) return;
+    try {
+      await navigator.clipboard.writeText(hubUserId);
+      setCopied(true);
+      addToast({ type: 'success', message: 'ID copié — collez-le dans Lexa' });
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      addToast({ type: 'error', message: 'Copie impossible' });
+    }
+  };
 
   useEffect(() => {
     if (settings?.lexaIntegration) {
@@ -73,6 +89,34 @@ export default function LexaIntegrationSection({ settings, onSettingsUpdate }) {
       <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
         Contrôlez la synchronisation des données vers Lexa, votre logiciel fiscal-comptable.
       </p>
+
+      {/* Hub User ID — à coller dans Lexa Settings → Intégration Pro */}
+      {hubUserId && (
+        <div className="bg-violet-50 dark:bg-violet-900/20 rounded-xl border border-violet-200 dark:border-violet-800 p-4 mb-4 flex items-start gap-3">
+          <Key className="w-4 h-4 mt-0.5 text-violet-600 dark:text-violet-400 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-slate-800 dark:text-white mb-1">
+              Votre ID compte (à coller dans Lexa)
+            </p>
+            <p className="text-xs text-slate-600 dark:text-slate-400 mb-2">
+              Dans Lexa → Réglages → Intégration Swigs Pro → champ "ID compte Swigs Pro" puis cliquez "Importer mes données".
+            </p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 min-w-0 truncate px-3 py-1.5 rounded-md bg-white dark:bg-slate-800 border border-violet-200 dark:border-violet-700 text-xs font-mono text-slate-800 dark:text-slate-200">
+                {hubUserId}
+              </code>
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="px-3 py-1.5 rounded-md bg-violet-600 hover:bg-violet-700 text-white text-xs font-medium flex items-center gap-1.5 transition-colors"
+              >
+                {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                {copied ? 'Copié' : 'Copier'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white dark:bg-dark-card rounded-xl border border-slate-200 dark:border-dark-border p-6 space-y-5">
         {/* Toggle principal */}
