@@ -20,6 +20,116 @@ import CounterpartyRule from '../models/CounterpartyRule.js';
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://192.168.110.103:11434';
 const AI_MODEL = process.env.AI_MODEL || 'comptable-suisse-fast';
 
+// vLLM config (OpenAI-compatible, apolo13x/Qwen3.5-35B-A3B-NVFP4)
+const VLLM_URL = process.env.VLLM_URL || 'http://192.168.110.103:8100';
+const VLLM_MODEL = process.env.VLLM_MODEL || 'apolo13x/Qwen3.5-35B-A3B-NVFP4';
+const USE_VLLM_CHAT = process.env.USE_VLLM_CHAT === 'true';
+
+// System prompt extrait du modelfile comptable-suisse:latest (Ollama)
+// Préservé ici pour injection explicite avec vLLM (pas de Modelfile disponible côté vLLM)
+const COMPTABLE_SUISSE_SYSTEM_PROMPT = `Tu es un assistant comptable suisse spécialisé. Tu fournis des informations basées UNIQUEMENT sur le droit suisse en vigueur.
+
+RÈGLES ABSOLUES :
+1. Tu ne donnes JAMAIS de conseils subjectifs — uniquement des informations factuelles avec sources
+2. Tu cites TOUJOURS l article de loi correspondant (format: Art. XX LTVA, Art. XX CO, Art. XX LIFD, etc.)
+3. Si tu n es pas sûr d une information, tu dis explicitement "Je ne suis pas certain de cette information — vérifiez avec votre fiduciaire"
+4. Tu ne fais JAMAIS de calculs arithmétiques toi-même — tu décris la formule et les étapes
+5. Tu distingues toujours le niveau fédéral, cantonal et communal quand c est pertinent
+6. Tu utilises le plan comptable PME suisse (Käfer) comme référence
+7. Tu réponds dans la langue de la question (FR, DE, IT, EN)
+
+LOIS DE RÉFÉRENCE PRINCIPALES :
+- CO (Code des obligations) — RS 220
+- LTVA (Loi sur la TVA) — RS 641.20
+- LIFD (Loi sur l impôt fédéral direct) — RS 642.11
+- LHID (Loi sur l harmonisation des impôts) — RS 642.14
+- LP (Loi sur la poursuite et la faillite) — RS 281.1
+
+PLAN COMPTABLE PME SUISSE (Käfer) - RÉFÉRENCE :
+Classe 1 - Actifs :
+- 1000 Caisse
+- 1020 Banque (compte courant)
+- 1100 Débiteurs (créances clients)
+- 1170 Impôt préalable (TVA déductible)
+- 1200 Stock de marchandises
+- 1500 Machines et appareils
+- 1510 Mobilier et installations
+- 1520 Matériel informatique
+- 1530 Véhicules
+
+Classe 2 - Passifs :
+- 2000 Créanciers (fournisseurs)
+- 2030 Acomptes reçus
+- 2100 Dettes bancaires court terme
+- 2200 TVA due
+- 2270 Impôts dus
+- 2300 Emprunts à long terme
+- 2800 Capital social
+- 2900 Réserves
+- 2970 Bénéfice/perte reporté
+- 2979 Bénéfice/perte de l exercice
+
+Classe 3 - Produits :
+- 3000 Ventes de marchandises
+- 3200 Produits des prestations de services
+- 3400 Autres produits d exploitation
+- 3800 Rabais et escomptes accordés
+
+Classe 4 - Charges de matériel :
+- 4000 Achat de matériel et marchandises
+- 4200 Charges de sous-traitance
+- 4400 Variation de stocks
+
+Classe 5 - Charges de personnel :
+- 5000 Salaires
+- 5700 Charges sociales (AVS/AI/APG/AC)
+- 5800 Autres charges de personnel
+
+Classe 6 - Autres charges :
+- 6000 Loyers
+- 6100 Entretien et réparations
+- 6200 Assurances
+- 6300 Énergie
+- 6500 Frais administratifs
+- 6600 Publicité
+- 6700 Amortissements
+- 6800 Charges financières
+- 6900 Charges extraordinaires
+
+Classe 7 - Produits accessoires :
+- 7000 Produits accessoires
+- 7500 Produits financiers
+- 7900 Produits extraordinaires
+
+Classe 8 - Résultat :
+- 8000 Bénéfice/perte
+
+ARTICLES DE LOI CLÉS :
+- Art. 25 al. 1 LTVA : taux normal TVA 8,1%
+- Art. 25 al. 2 LTVA : taux réduit TVA 2,6%
+- Art. 25 al. 4 LTVA : taux hébergement TVA 3,8%
+- Art. 10 al. 2 let. a LTVA : seuil assujettissement TVA 100 000 CHF
+- Art. 28 LTVA : droit à déduction de l impôt préalable
+- Art. 35 LTVA : méthode de décompte effective
+- Art. 37 LTVA : méthode de décompte selon les taux de la dette fiscale nette
+- Art. 68 LIFD : taux impôt fédéral direct personnes morales 8,5%
+- Art. 957-964 CO : obligations comptables
+- Art. 958 CO : comptes annuels (bilan, CR, annexe)
+- Art. 958c CO : principes d évaluation
+- Art. 960 CO : évaluation des actifs
+- Art. 725 CO : perte de capital et surendettement (SA/Sàrl)
+- Notice A 1995 AFC : taux d amortissement admis fiscalement
+  - Mobilier de bureau : 25% dégressif ou 12,5% linéaire
+  - Matériel informatique : 40% dégressif ou 25% linéaire
+  - Véhicules : 40% dégressif ou 20% linéaire
+  - Immeubles commerciaux : 4% dégressif ou 2% linéaire
+
+DISCLAIMER : Tu affiches toujours en fin de réponse :
+"⚠️ Information à titre indicatif — consultez votre fiduciaire pour validation."`;
+
+// vLLM base payload extras (OBLIGATOIRE pour Qwen3.5 — désactive le mode thinking)
+const VLLM_EXTRA = { chat_template_kwargs: { enable_thinking: false } };
+
 // ---------------------------------------------------------------------------
 // Context cache (in-memory, 5min TTL)
 // ---------------------------------------------------------------------------
@@ -1365,6 +1475,163 @@ async function checkPrerequisites({ feature }, userId) {
  * @returns {Promise<string>} Full assistant response text
  */
 export async function streamChat({ systemPrompt, messages, res, signal, userId }) {
+  if (USE_VLLM_CHAT) {
+    return streamChatVLLM({ systemPrompt, messages, res, signal, userId });
+  }
+  return streamChatOllama({ systemPrompt, messages, res, signal, userId });
+}
+
+// ---------------------------------------------------------------------------
+// vLLM streaming (OpenAI-compatible SSE)
+// ---------------------------------------------------------------------------
+async function streamChatVLLM({ systemPrompt, messages, res, signal, userId }) {
+  const vllmMessages = [
+    { role: 'system', content: systemPrompt },
+    ...messages
+  ];
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 120_000);
+
+  if (signal) {
+    signal.addEventListener('abort', () => controller.abort(), { once: true });
+  }
+
+  let fullResponse = '';
+
+  try {
+    const vllmRes = await fetch(`${VLLM_URL}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: VLLM_MODEL,
+        messages: vllmMessages,
+        stream: true,
+        tools: AI_TOOLS,
+        ...VLLM_EXTRA
+      }),
+      signal: controller.signal
+    });
+
+    if (!vllmRes.ok) {
+      const errText = await vllmRes.text().catch(() => 'Unknown error');
+      throw new Error(`vLLM error ${vllmRes.status}: ${errText}`);
+    }
+
+    const reader = vllmRes.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    // Accumulate tool_calls across streaming chunks
+    let pendingToolCalls = {}; // index → { id, name, arguments }
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // OpenAI SSE: lines prefixed with "data: "
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // keep incomplete line
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed === 'data: [DONE]') continue;
+        if (!trimmed.startsWith('data: ')) continue;
+
+        try {
+          const data = JSON.parse(trimmed.slice(6));
+          const delta = data.choices?.[0]?.delta;
+          if (!delta) continue;
+
+          // Accumulate tool_calls streamed in chunks
+          if (delta.tool_calls?.length > 0) {
+            for (const tc of delta.tool_calls) {
+              const idx = tc.index ?? 0;
+              if (!pendingToolCalls[idx]) {
+                pendingToolCalls[idx] = { id: tc.id || '', name: tc.function?.name || '', arguments: '' };
+              }
+              if (tc.function?.name) pendingToolCalls[idx].name = tc.function.name;
+              if (tc.function?.arguments) pendingToolCalls[idx].arguments += tc.function.arguments;
+            }
+          }
+
+          // Regular text token
+          if (delta.content) {
+            fullResponse += delta.content;
+            res.write(`data: ${JSON.stringify({ type: 'token', content: delta.content })}\n\n`);
+          }
+
+          // finish_reason: tool_calls → execute and follow up
+          if (data.choices?.[0]?.finish_reason === 'tool_calls') {
+            const toolResults = [];
+            const toolMessages = [];
+
+            // Build assistant message with tool_calls
+            const assistantMsg = {
+              role: 'assistant',
+              content: fullResponse || null,
+              tool_calls: Object.values(pendingToolCalls).map(tc => ({
+                id: tc.id || `call_${tc.name}`,
+                type: 'function',
+                function: { name: tc.name, arguments: tc.arguments }
+              }))
+            };
+
+            for (const tc of Object.values(pendingToolCalls)) {
+              let args;
+              try { args = JSON.parse(tc.arguments || '{}'); } catch { args = {}; }
+              const result = await executeTool(tc.name, args, userId);
+              toolResults.push(result);
+              res.write(`data: ${JSON.stringify({ type: 'tool_result', tool: tc.name, result })}\n\n`);
+              toolMessages.push({
+                role: 'tool',
+                tool_call_id: tc.id || `call_${tc.name}`,
+                content: JSON.stringify(result)
+              });
+            }
+
+            pendingToolCalls = {};
+
+            // Follow-up generation with tool results
+            const followUp = await streamToolFollowUpVLLM({
+              systemPrompt,
+              messages: [
+                ...messages,
+                assistantMsg,
+                ...toolMessages
+              ],
+              res,
+              signal: controller.signal
+            });
+            fullResponse += followUp;
+            clearTimeout(timeoutId);
+            return fullResponse;
+          }
+        } catch {
+          // Skip malformed SSE lines
+        }
+      }
+    }
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      res.write(`data: ${JSON.stringify({ type: 'error', content: 'Génération interrompue (timeout ou annulation).' })}\n\n`);
+    } else {
+      res.write(`data: ${JSON.stringify({ type: 'error', content: 'Erreur de connexion au modèle AI. Réessayez.' })}\n\n`);
+      console.error('[AI] vLLM streaming error:', err.message);
+    }
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  return fullResponse;
+}
+
+// ---------------------------------------------------------------------------
+// Ollama streaming (chemin original — préservé comme fallback)
+// ---------------------------------------------------------------------------
+async function streamChatOllama({ systemPrompt, messages, res, signal, userId }) {
   const ollamaMessages = [
     { role: 'system', content: systemPrompt },
     ...messages
@@ -1479,7 +1746,7 @@ export async function streamChat({ systemPrompt, messages, res, signal, userId }
 }
 
 /**
- * Follow-up streaming after tool call execution.
+ * Follow-up streaming after tool call execution (Ollama fallback).
  */
 async function streamToolFollowUp({ systemPrompt, messages, res, signal }) {
   const ollamaMessages = [
@@ -1533,6 +1800,71 @@ async function streamToolFollowUp({ systemPrompt, messages, res, signal }) {
   } catch (err) {
     if (err.name !== 'AbortError') {
       console.error('[AI] Tool follow-up error:', err.message);
+    }
+  }
+
+  return fullResponse;
+}
+
+/**
+ * Follow-up streaming after tool call execution (vLLM / OpenAI-compatible SSE).
+ */
+async function streamToolFollowUpVLLM({ systemPrompt, messages, res, signal }) {
+  const vllmMessages = [
+    { role: 'system', content: systemPrompt },
+    ...messages
+  ];
+
+  let fullResponse = '';
+
+  try {
+    const vllmRes = await fetch(`${VLLM_URL}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: VLLM_MODEL,
+        messages: vllmMessages,
+        stream: true,
+        ...VLLM_EXTRA
+      }),
+      signal
+    });
+
+    if (!vllmRes.ok) {
+      throw new Error(`vLLM follow-up error ${vllmRes.status}`);
+    }
+
+    const reader = vllmRes.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed === 'data: [DONE]') continue;
+        if (!trimmed.startsWith('data: ')) continue;
+        try {
+          const data = JSON.parse(trimmed.slice(6));
+          const content = data.choices?.[0]?.delta?.content;
+          if (content) {
+            fullResponse += content;
+            res.write(`data: ${JSON.stringify({ type: 'token', content })}\n\n`);
+          }
+        } catch {
+          // Skip malformed lines
+        }
+      }
+    }
+  } catch (err) {
+    if (err.name !== 'AbortError') {
+      console.error('[AI] vLLM tool follow-up error:', err.message);
     }
   }
 
@@ -1764,30 +2096,57 @@ export async function ocrDocument(fileBuffer, mimeType) {
     throw new Error(hint);
   }
 
-  // --- Stage 2: LLM structuring via existing Qwen model ---
-  const ollamaRes = await fetch(`${OLLAMA_URL}/api/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: AI_MODEL,
-      messages: [
-        { role: 'system', content: OCR_STRUCTURING_PROMPT },
-        { role: 'user', content: `Texte extrait (méthode: ${extractionMethod}, confiance: ${(ocrConfidence * 100).toFixed(0)}%) :\n\n${rawText}` },
-      ],
-      stream: false,
-      think: false, // Disable reasoning mode — OCR structuring is deterministic
-      options: { temperature: 0.1 },
-    }),
-    signal: AbortSignal.timeout(120_000),
-  });
+  // --- Stage 2: LLM structuring (vLLM si USE_VLLM_CHAT, sinon Ollama) ---
+  let llmText;
+  if (USE_VLLM_CHAT) {
+    const vllmRes = await fetch(`${VLLM_URL}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: VLLM_MODEL,
+        messages: [
+          { role: 'system', content: OCR_STRUCTURING_PROMPT },
+          { role: 'user', content: `Texte extrait (méthode: ${extractionMethod}, confiance: ${(ocrConfidence * 100).toFixed(0)}%) :\n\n${rawText}` },
+        ],
+        stream: false,
+        temperature: 0.1,
+        ...VLLM_EXTRA
+      }),
+      signal: AbortSignal.timeout(120_000),
+    });
 
-  if (!ollamaRes.ok) {
-    const errText = await ollamaRes.text().catch(() => 'Unknown error');
-    throw new Error(`LLM structuring error ${ollamaRes.status}: ${errText}`);
+    if (!vllmRes.ok) {
+      const errText = await vllmRes.text().catch(() => 'Unknown error');
+      throw new Error(`LLM structuring error (vLLM) ${vllmRes.status}: ${errText}`);
+    }
+
+    const vllmResult = await vllmRes.json();
+    llmText = vllmResult.choices?.[0]?.message?.content || '';
+  } else {
+    const ollamaRes = await fetch(`${OLLAMA_URL}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: AI_MODEL,
+        messages: [
+          { role: 'system', content: OCR_STRUCTURING_PROMPT },
+          { role: 'user', content: `Texte extrait (méthode: ${extractionMethod}, confiance: ${(ocrConfidence * 100).toFixed(0)}%) :\n\n${rawText}` },
+        ],
+        stream: false,
+        think: false, // Disable reasoning mode — OCR structuring is deterministic
+        options: { temperature: 0.1 },
+      }),
+      signal: AbortSignal.timeout(120_000),
+    });
+
+    if (!ollamaRes.ok) {
+      const errText = await ollamaRes.text().catch(() => 'Unknown error');
+      throw new Error(`LLM structuring error ${ollamaRes.status}: ${errText}`);
+    }
+
+    const llmResult = await ollamaRes.json();
+    llmText = llmResult.message?.content || '';
   }
-
-  const llmResult = await ollamaRes.json();
-  const llmText = llmResult.message?.content || '';
 
   // Extract JSON from response
   const jsonMatch = llmText.match(/\{[\s\S]*\}/);
