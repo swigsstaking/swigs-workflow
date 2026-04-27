@@ -326,12 +326,15 @@ async function processXmlBuffer(buffer, filename, userId) {
           );
         } catch (e) { /* non-blocking */ }
 
-        // Send payment confirmation email to client
+        // Send payment confirmation email to client (skip if disabled in settings)
         try {
           const userSettings = await Settings.findOne({ userId });
-          if (userSettings?.smtp?.host) {
+          const notifyEnabled = userSettings?.emailNotifications?.paymentConfirmation !== false;
+          if (userSettings?.smtp?.host && notifyEnabled) {
             await sendPaymentConfirmationEmail(invoice, userSettings);
             console.log(`[BankIMAP] Payment confirmation sent for ${invoice.number}`);
+          } else if (!notifyEnabled) {
+            console.log(`[BankIMAP] Payment confirmation skipped for ${invoice.number} (disabled in settings)`);
           }
         } catch (e) {
           console.error(`[BankIMAP] Payment confirmation email failed for ${invoice.number}:`, e.message);
@@ -428,12 +431,15 @@ async function processEmailTransaction(tx, subject, userId) {
         );
       } catch (e) { /* non-blocking */ }
 
-      // Send payment confirmation email to client
+      // Send payment confirmation email to client (skip if disabled in settings)
       try {
         const userSettings = await Settings.findOne({ userId });
-        if (userSettings?.smtp?.host) {
+        const notifyEnabled = userSettings?.emailNotifications?.paymentConfirmation !== false;
+        if (userSettings?.smtp?.host && notifyEnabled) {
           await sendPaymentConfirmationEmail(invoice, userSettings);
           console.log(`[BankIMAP] Payment confirmation sent for ${invoice.number} (email notification)`);
+        } else if (!notifyEnabled) {
+          console.log(`[BankIMAP] Payment confirmation skipped for ${invoice.number} (disabled in settings)`);
         }
       } catch (e) {
         console.error(`[BankIMAP] Payment confirmation email failed for ${invoice.number}:`, e.message);

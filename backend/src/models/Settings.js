@@ -143,6 +143,13 @@ const emailTemplatesSchema = new mongoose.Schema({
   }
 }, { _id: false });
 
+const emailNotificationsSchema = new mongoose.Schema({
+  paymentConfirmation: {
+    type: Boolean,
+    default: true
+  }
+}, { _id: false });
+
 const cmsIntegrationSchema = new mongoose.Schema({
   enabled: {
     type: Boolean,
@@ -489,6 +496,10 @@ const settingsSchema = new mongoose.Schema({
   },
   emailTemplates: {
     type: emailTemplatesSchema,
+    default: () => ({})
+  },
+  emailNotifications: {
+    type: emailNotificationsSchema,
     default: () => ({})
   },
   cmsIntegration: {

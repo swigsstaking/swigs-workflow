@@ -71,7 +71,7 @@ export const getSettings = async (req, res, next) => {
 // @route   PUT /api/settings
 export const updateSettings = async (req, res, next) => {
   try {
-    const { company, invoicing, personalization, emailTemplates, smtp, abaninja, reminders, cms, cmsIntegration, bankImap, invoiceDesign } = req.body;
+    const { company, invoicing, personalization, emailTemplates, emailNotifications, smtp, abaninja, reminders, cms, cmsIntegration, bankImap, invoiceDesign } = req.body;
 
     const userId = req.user?._id || null;
     const query = userId ? { userId } : { userId: { $exists: false } };
@@ -106,6 +106,13 @@ export const updateSettings = async (req, res, next) => {
 
     if (emailTemplates) {
       settings.emailTemplates = { ...settings.emailTemplates.toObject(), ...emailTemplates };
+    }
+
+    if (emailNotifications) {
+      settings.emailNotifications = {
+        ...(settings.emailNotifications?.toObject ? settings.emailNotifications.toObject() : {}),
+        ...emailNotifications,
+      };
     }
 
     if (smtp) {

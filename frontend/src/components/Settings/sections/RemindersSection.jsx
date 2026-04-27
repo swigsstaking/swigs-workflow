@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Bell, Save, Edit2, X, Clock, AlertTriangle, Mail, ChevronDown, ChevronUp, FileText, Receipt } from 'lucide-react';
+import { Bell, Save, Edit2, X, Clock, AlertTriangle, Mail, ChevronDown, ChevronUp, FileText, Receipt, CheckCircle2 } from 'lucide-react';
 import { settingsApi } from '../../../services/api';
 import { useToastStore } from '../../../stores/toastStore';
 import Button from '../../ui/Button';
@@ -106,10 +106,15 @@ export default function RemindersSection({ settings, onSettingsUpdate }) {
     quoteSubject: '',
     quoteBody: '',
   });
+  const [emailNotifications, setEmailNotifications] = useState({
+    paymentConfirmation: true,
+  });
   const [hasChanges, setHasChanges] = useState(false);
   const [hasEmailChanges, setHasEmailChanges] = useState(false);
+  const [hasNotificationsChanges, setHasNotificationsChanges] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingEmail, setSavingEmail] = useState(false);
+  const [savingNotifications, setSavingNotifications] = useState(false);
   const [expandedIndex, setExpandedIndex] = useState(null);
   const [editingIndex, setEditingIndex] = useState(null);
   const [editDraft, setEditDraft] = useState(null);
@@ -154,6 +159,36 @@ export default function RemindersSection({ settings, onSettingsUpdate }) {
       setHasEmailChanges(false);
     }
   }, [settings]);
+
+  // Load notification preferences from settings (default true if absent)
+  useEffect(() => {
+    setEmailNotifications({
+      paymentConfirmation: settings?.emailNotifications?.paymentConfirmation !== false,
+    });
+    setHasNotificationsChanges(false);
+  }, [settings]);
+
+  const togglePaymentConfirmation = () => {
+    setEmailNotifications((prev) => ({
+      ...prev,
+      paymentConfirmation: !prev.paymentConfirmation,
+    }));
+    setHasNotificationsChanges(true);
+  };
+
+  const handleSaveNotifications = async () => {
+    setSavingNotifications(true);
+    try {
+      const { data } = await settingsApi.update({ emailNotifications });
+      onSettingsUpdate(data.data);
+      setHasNotificationsChanges(false);
+      addToast({ type: 'success', message: 'Préférences de notification enregistrées' });
+    } catch {
+      addToast({ type: 'error', message: "Erreur lors de l'enregistrement" });
+    } finally {
+      setSavingNotifications(false);
+    }
+  };
 
   // Lock body scroll when email edit modal is open
   useEffect(() => {
@@ -317,6 +352,58 @@ export default function RemindersSection({ settings, onSettingsUpdate }) {
           Personnalisez vos emails d'envoi et configurez les relances automatiques.
         </p>
       </div>
+
+      {/* ──────── Notification preferences ──────── */}
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+          Notifications automatiques
+        </h3>
+        <div className="border border-slate-200 dark:border-dark-border rounded-xl bg-white dark:bg-dark-card overflow-hidden">
+          <div className="flex items-center gap-3 px-4 py-4">
+            <div className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center bg-emerald-100 dark:bg-emerald-900/40">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-medium text-slate-900 dark:text-white text-sm">
+                Confirmation de paiement reçu
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Envoie un email au client lors de la réconciliation bancaire automatique d'une facture marquée payée.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={togglePaymentConfirmation}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-dark-bg ${
+                emailNotifications.paymentConfirmation ? 'bg-primary-600' : 'bg-slate-200 dark:bg-slate-700'
+              }`}
+              aria-pressed={emailNotifications.paymentConfirmation}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                  emailNotifications.paymentConfirmation ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+        {hasNotificationsChanges && (
+          <div className="flex justify-end">
+            <Button
+              icon={Save}
+              onClick={handleSaveNotifications}
+              loading={savingNotifications}
+              disabled={savingNotifications}
+              size="sm"
+            >
+              Enregistrer les préférences
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* ──────── Divider ──────── */}
+      <div className="border-t border-slate-200 dark:border-slate-700" />
 
       {/* ──────── Email templates section ──────── */}
       <div className="space-y-3">
